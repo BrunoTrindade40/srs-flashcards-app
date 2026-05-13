@@ -4,6 +4,7 @@ import { ConfigModule } from '@nestjs/config';
 import { GraphQLModule } from '@nestjs/graphql';
 import { join } from 'path';
 import { PrismaModule } from '../prisma/prisma.module';
+import { FlashcardModule } from './flashcard/flashcard.module';
 import { UserModule } from './user/user.module';
 
 @Module({
@@ -25,6 +26,7 @@ import { UserModule } from './user/user.module';
     // 3. Módulos de Domínio
     PrismaModule,
     UserModule,
+    FlashcardModule,
   ],
 })
 export class AppModule {}
