@@ -4,13 +4,13 @@ import eslintPluginPrettierRecommended from 'eslint-plugin-prettier/recommended'
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
-export default tseslint.config(
+// Exportamos um Array nativo do JavaScript, ignorando a função wrapper obsoleta.
+export default [
   {
     ignores: ['eslint.config.mjs'],
   },
   eslint.configs.recommended,
-  // O operador spread (...) foi removido. A API v8+ aceita o array nativamente.
-  tseslint.configs.recommendedTypeChecked,
+  ...tseslint.configs.recommendedTypeChecked,
   eslintPluginPrettierRecommended,
   {
     languageOptions: {
@@ -30,7 +30,8 @@ export default tseslint.config(
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-floating-promises': 'warn',
       '@typescript-eslint/no-unsafe-argument': 'warn',
-      'prettier/prettier': ['error', { endOfLine: 'auto' }],
+      // Delegamos todas as regras de formatação estritamente para o .prettierrc
+      'prettier/prettier': 'error',
     },
   },
-);
+];
