@@ -11,10 +11,10 @@ export class Flashcard {
   @Field()
   back!: string;
 
-  @Field({ nullable: true })
+  // Declaração explícita do tipo String para propriedades anuláveis
+  @Field(() => String, { nullable: true })
   sourceContext?: string | null;
 
-  // Representa o CardStatus do banco (NEW, LEARNING, REVIEW, RELEARNING)
   @Field()
   status!: string;
 
@@ -39,7 +39,8 @@ export class CreateFlashcardInput {
   @Field()
   back!: string;
 
-  @Field({ nullable: true })
+  // Declaração explícita do tipo String para o InputType
+  @Field(() => String, { nullable: true })
   sourceContext?: string | null;
 
   @Field(() => ID)

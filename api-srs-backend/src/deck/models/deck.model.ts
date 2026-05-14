@@ -8,13 +8,14 @@ export class Deck {
   @Field()
   title!: string;
 
-  @Field({ nullable: true })
+  // Declaração explícita do tipo escalar String para o GraphQL
+  @Field(() => String, { nullable: true })
   description?: string | null;
 
-  @Field({ nullable: true })
+  @Field(() => String, { nullable: true })
   sourceLanguage?: string | null;
 
-  @Field({ nullable: true })
+  @Field(() => String, { nullable: true })
   targetLanguage?: string | null;
 
   @Field()
@@ -35,13 +36,14 @@ export class CreateDeckInput {
   @Field()
   title!: string;
 
-  @Field({ nullable: true })
+  // Declaração explícita do tipo escalar String para o InputType
+  @Field(() => String, { nullable: true })
   description?: string | null;
 
-  @Field({ nullable: true, defaultValue: 'pt-BR' })
+  @Field(() => String, { nullable: true, defaultValue: 'pt-BR' })
   sourceLanguage?: string | null;
 
-  @Field({ nullable: true })
+  @Field(() => String, { nullable: true })
   targetLanguage?: string | null;
 }
 

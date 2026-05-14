@@ -37,7 +37,11 @@ export class FlashcardService {
     }
 
     return this.prisma.flashcard.findMany({
-      where: { deckId, isArchived: false },
+      // O Filtro rigoroso: Ignora cartões anonimizados
+      where: {
+        deckId,
+        front: { not: '[DADO_ANONIMIZADO]' },
+      },
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -70,14 +74,13 @@ export class FlashcardService {
       throw new NotFoundException('Flashcard não encontrado ou acesso negado.');
     }
 
-    // Fluxo de Anonimização Irreversível: Destrói o conteúdo textual para conformidade,
-    // mas mantém o ID intacto para não quebrar a integridade referencial dos logs do FSRS.
+    // Fluxo de Anonimização Irreversível garantindo a conformidade sem 'isArchived'
     return this.prisma.flashcard.update({
       where: { id },
       data: {
         front: '[DADO_ANONIMIZADO]',
         back: '[DADO_ANONIMIZADO]',
-        isArchived: true,
+        sourceContext: null,
       },
     });
   }
