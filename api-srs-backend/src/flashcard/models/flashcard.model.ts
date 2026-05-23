@@ -18,9 +18,6 @@ export class Flashcard {
   @Field()
   status!: string;
 
-  @Field()
-  due!: Date;
-
   @Field(() => ID)
   deckId!: string;
 

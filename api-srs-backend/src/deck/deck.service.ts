@@ -4,15 +4,14 @@ import { CreateDeckInput, UpdateDeckInput } from './models/deck.model';
 
 @Injectable()
 export class DeckService {
-  constructor(private readonly prisma: PrismaService) {}
+  // eslint-disable-next-line prettier/prettier
+  constructor(private readonly prisma: PrismaService) { }
 
   async createDeck(userId: string, data: CreateDeckInput) {
     return this.prisma.deck.create({
       data: {
         ...data,
-        creator: {
-          connect: { id: userId },
-        },
+        creatorId: userId,
       },
     });
   }

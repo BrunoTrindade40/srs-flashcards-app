@@ -1,21 +1,21 @@
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { Route, Routes } from "react-router-dom";
+import { CreateDeck } from "../pages/CreateDeck";
 import Dashboard from "../pages/Dashboard";
+import { DeckDetails } from "../pages/DeckDetails";
+import { Login } from "../pages/Login";
 
 export function AppRoutes() {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/login" element={<div>Tela de Login (Em breve)</div>} />
+    <Routes>
+      <Route path="/login" element={<Login />} />
 
-        {/* Rota renderizando o novo componente Dashboard */}
-        <Route path="/dashboard" element={<Dashboard />} />
+      {/* Rota renderizando o novo componente Dashboard */}
+      <Route path="/" element={<Dashboard />} />
 
-        <Route
-          path="/deck/:id"
-          element={<div>Detalhes do Deck: Flashcards</div>}
-        />
-        <Route path="*" element={<Navigate to="/dashboard" replace />} />
-      </Routes>
-    </BrowserRouter>
+      <Route path="/deck/new" element={<CreateDeck />} />
+
+      {/* Rota dinâmica recebendo o UUID do Deck */}
+      <Route path="/deck/:id" element={<DeckDetails />} />
+    </Routes>
   );
 }

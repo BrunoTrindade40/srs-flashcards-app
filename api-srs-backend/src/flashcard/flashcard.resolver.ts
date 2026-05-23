@@ -12,7 +12,8 @@ import {
 @Resolver(() => Flashcard)
 @UseGuards(GqlAuthGuard)
 export class FlashcardResolver {
-  constructor(private readonly flashcardService: FlashcardService) {}
+  // eslint-disable-next-line prettier/prettier
+  constructor(private readonly flashcardService: FlashcardService) { }
 
   @Mutation(() => Flashcard)
   async createFlashcard(

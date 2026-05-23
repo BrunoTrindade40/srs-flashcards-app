@@ -30,7 +30,7 @@ enum DeviceType {
 // --- Modelos de Dados ---
 
 model User {
-  id                    String         @id @default(uuid())
+  id                    String         @id @default(uuid()) @db.Uuid
   authId                String         @unique // Vínculo com Supabase Auth
   name                  String?
   email                 String         @unique
@@ -59,7 +59,7 @@ model User {
 }
 
 model Deck {
-  id              String         @id @default(uuid())
+  id              String         @id @default(uuid()) @db.Uuid
   title           String
   description     String?
   sourceLanguage  String?        @default("pt-BR")
@@ -67,8 +67,7 @@ model Deck {
   isArchived      Boolean        @default(false)
 
   // Metadados
-  creatorId       String
-  creator         User           @relation(fields: [creatorId], references: [id])
+  creatorId       String         @db.Uuid
 
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
@@ -77,37 +76,36 @@ model Deck {
   flashcards      Flashcard[]
   tags            DeckTag[]
 
+  creator    User        @relation(fields: [creatorId], references: [id], onDelete: Cascade)
   @@map("decks")
 }
 
 model Flashcard {
-  id              String         @id @default(uuid())
+  id              String         @id @default(uuid()) @db.Uuid // UUID
   front           String         @db.Text
   back            String         @db.Text
   sourceContext   String?        @db.Text // Referencial original/contexto
 
   status          CardStatus     @default(NEW)
-  due             DateTime       @default(now()) // Data da próxima revisão
 
-  deckId          String
-  deck            Deck           @relation(fields: [deckId], references: [id], onDelete: Cascade)
+  deckId          String         @db.Uuid
 
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 
   // Relacionamentos
-  fsrsData        CardFSRSData?
+  fsrsData        CardFSRSData?  // Relacionamento 1:1 com os metadados cognitivos
   reviewLogs      ReviewLog[]
   tags            FlashcardTag[]
 
+  deck            Deck           @relation(fields: [deckId], references: [id], onDelete: Cascade)
   // Índice B-Tree crucial para o desempenho do Modo Chaos (O(log n))
-  @@index([due])
   @@map("flashcards")
 }
 
 model CardFSRSData {
-  flashcardId     String         @id
-  flashcard       Flashcard      @relation(fields: [flashcardId], references: [id], onDelete: Cascade)
+  id              String         @id @default(uuid()) @db.Uuid
+  flashcardId     String         @unique @db.Uuid // Garante a compatibilidade com o ID do Flashcard
 
   // Atributos do Algoritmo FSRS
   stability       Float          @default(0)
@@ -116,14 +114,24 @@ model CardFSRSData {
   scheduledDays   Int            @default(0)
   reps            Int            @default(0)
   lapses          Int            @default(0)
-  state           Int            @default(0) // Estado interno do FSRS
+  state           Int            @default(0) // 0: NEW, 1: LEARNING, 2: REVIEW, 3: RELEARNING
   lastReview      DateTime?
+  due             DateTime       @default(now()) // Inicializa pendente para o dia atual
 
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  flashcard       Flashcard      @relation(fields: [flashcardId], references: [id], onDelete: Cascade)
+  @@index([due]) // Índice B-Tree vital para otimizar a query do "Modo Chaos" para O(log n)
   @@map("card_fsrs_data")
 }
 
 model ReviewLog {
   id                String       @id @default(uuid())
+  // Relacionamentos
+  flashcardId       String       @db.Uuid
+  userId            String       @db.Uuid
+
   rating            Int          // 1: Errei, 2: Difícil, 3: Bom, 4: Fácil
   reviewDurationMs  Int          // Latência de resposta para telemetria
 
@@ -135,17 +143,13 @@ model ReviewLog {
 
   createdAt         DateTime     @default(now())
 
-  // Relacionamentos
-  flashcardId       String
   flashcard         Flashcard    @relation(fields: [flashcardId], references: [id], onDelete: Cascade)
-  userId            String
-  user              User         @relation(fields: [userId], references: [id])
-
+  user              User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   @@map("review_logs")
 }
 
 model StudySession {
-  id                String       @id @default(uuid())
+  id                String       @id @default(uuid()) @db.Uuid
   startAt           DateTime     @default(now())
   finishAt          DateTime?
   deviceType        DeviceType   @default(WEB)
@@ -157,8 +161,10 @@ model StudySession {
   wrongCount        Int          @default(0)
   xpEarned          Int          @default(0)
 
-  userId            String
-  user              User         @relation(fields: [userId], references: [id])
+  userId            String       @db.Uuid
+  user              User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  biometricLogs BiometricLog[]
 
   @@map("study_sessions")
 }
@@ -166,7 +172,7 @@ model StudySession {
 // --- Tabelas de Categorização ---
 
 model Tag {
-  id          String         @id @default(uuid())
+  id          String         @id @default(uuid()) @db.Uuid
   name        String         @unique
   decks       DeckTag[]
   flashcards  FlashcardTag[]
@@ -175,21 +181,36 @@ model Tag {
 }
 
 model DeckTag {
-  deckId String
-  tagId  String
-  deck   Deck @relation(fields: [deckId], references: [id], onDelete: Cascade)
-  tag    Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  deckId          String         @db.Uuid
+  tagId           String         @db.Uuid
+  deck            Deck @relation(fields: [deckId], references: [id], onDelete: Cascade)
+  tag             Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
 
   @@id([deckId, tagId])
   @@map("deck_tags")
 }
 
 model FlashcardTag {
-  flashcardId String
-  tagId       String
-  flashcard   Flashcard @relation(fields: [flashcardId], references: [id], onDelete: Cascade)
-  tag         Tag       @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  flashcardId     String          @db.Uuid
+  tagId           String          @db.Uuid
+  flashcard       Flashcard       @relation(fields: [flashcardId], references: [id], onDelete: Cascade)
+  tag             Tag             @relation(fields: [tagId], references: [id], onDelete: Cascade)
 
   @@id([flashcardId, tagId])
   @@map("flashcard_tags")
+}
+
+model BiometricLog {
+  id           String      @id @default(uuid()) @db.Uuid
+
+  // OBRIGATÓRIO: Paridade com StudySession.id
+  sessionId    String      @db.Uuid
+
+  fatigueLevel Float?
+  bpm          Int?
+  recordedAt   DateTime    @default(now())
+
+  session      StudySession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@map("biometric_logs")
 }

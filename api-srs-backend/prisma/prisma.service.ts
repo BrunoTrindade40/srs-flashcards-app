@@ -1,10 +1,6 @@
 /* eslint-disable prettier/prettier */
-import {
-  Injectable,
-  Logger,
-  OnModuleDestroy,
-  OnModuleInit,
-} from '@nestjs/common';
+import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 import { Pool } from 'pg';
@@ -13,34 +9,40 @@ import { Pool } from 'pg';
 export class PrismaService
   extends PrismaClient
   implements OnModuleInit, OnModuleDestroy {
-  private readonly logger = new Logger(PrismaService.name);
-
-  constructor() {
-    const connectionString = process.env.DIRECT_URL;
+  constructor(private readonly configService: ConfigService) {
+    // 1. Captura dinâmica da URL de conexão em tempo de execução
+    const connectionString =
+      configService.get<string>('DIRECT_URL') ||
+      configService.get<string>('DATABASE_URL');
 
     if (!connectionString) {
       throw new Error(
-        'A variável de ambiente DIRECT_URL não está definida no .env',
+        'Falha Crítica de Infraestrutura: DIRECT_URL ausente no ambiente de execução.',
       );
     }
 
-    // O max: 10 define o limite do Pool interno do Node.js
-    const pool = new Pool({ connectionString, max: 10 });
+    // 2. Inicialização do Pool nativo do Node-Postgres
+    // CORREÇÃO: Força explicitamente o node-postgres a negociar uma conexão TLS/SSL.
+    // Sem o objeto 'ssl' configurado, o Supabase encerra o socket de forma abrupta.
+    const pool = new Pool({
+      connectionString,
+      ssl: {
+        rejectUnauthorized: false, // Permite a criptografia sem exigir o bundle do certificado local
+      },
+    });
+
+    // 3. Acoplamento do Adaptador PG ao motor do Prisma
     const adapter = new PrismaPg(pool);
 
-    // Em versões >= 7.0, a passagem do adaptador instanciado é obrigatória
+    // 4. Delegação da infraestrutura de rede para a classe pai
     super({ adapter });
   }
 
   async onModuleInit() {
     await this.$connect();
-    this.logger.log(
-      'Conexão com o banco de dados PostgreSQL (Supabase) estabelecida via pg-adapter.',
-    );
   }
 
   async onModuleDestroy() {
     await this.$disconnect();
-    this.logger.log('Conexão com o banco de dados encerrada.');
   }
 }

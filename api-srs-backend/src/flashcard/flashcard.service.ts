@@ -11,20 +11,50 @@ import {
 
 @Injectable()
 export class FlashcardService {
-  constructor(private readonly prisma: PrismaService) {}
+  // eslint-disable-next-line prettier/prettier
+  constructor(private readonly prisma: PrismaService) { }
 
+  // 1. Assinatura corrigida para receber o userId do Resolver (Resolve TS2554)
   async createFlashcard(userId: string, data: CreateFlashcardInput) {
+    // 1. Validação de Regra de Negócio: Garante a propriedade do Deck
     const deck = await this.prisma.deck.findUnique({
       where: { id: data.deckId },
+      select: { creatorId: true },
     });
 
-    if (!deck || deck.creatorId !== userId) {
+    if (!deck) {
+      throw new NotFoundException('Deck não encontrado.');
+    }
+
+    if (deck.creatorId !== userId) {
       throw new ForbiddenException(
-        'Acesso negado: O Deck especificado não pertence a este usuário.',
+        'Acesso negado. Você não é o proprietário deste Deck.',
       );
     }
 
-    return this.prisma.flashcard.create({ data });
+    // 2. Persistência do Flashcard com Inicialização FSRS Segura
+    return this.prisma.flashcard.create({
+      data: {
+        front: data.front,
+        back: data.back,
+        deckId: data.deckId,
+        fsrsData: {
+          create: {
+            stability: 0,
+            difficulty: 0,
+            state: 0, // NEW
+            reps: 0,
+            lapses: 0,
+            // SOLUÇÃO: Omitimos a propriedade de data.
+            // O TypeScript para de reclamar de propriedades desconhecidas e o
+            // Prisma utilizará o @default(now()) do seu schema.prisma.
+          },
+        },
+      },
+      include: {
+        fsrsData: true,
+      },
+    });
   }
 
   async getFlashcardsByDeck(userId: string, deckId: string) {

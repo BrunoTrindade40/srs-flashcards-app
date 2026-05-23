@@ -1,8 +1,21 @@
+import React from "react";
+// Importação do núcleo (Framework-agnostic)
 import { gql } from "@apollo/client";
+// Importação estrita dos Hooks para React (Nova arquitetura v4.x)
 import { useQuery } from "@apollo/client/react";
-import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CreateDeckModal } from "../components/CreateDeckModal"; // Importação do Modal
+
+interface Deck {
+  id: string;
+  title: string;
+  description?: string | null;
+  createdAt: string;
+  isArchived: boolean;
+}
+
+interface GetMyDecksData {
+  myDecks: Deck[];
+}
 
 const GET_MY_DECKS = gql`
   query GetMyDecks {
@@ -10,170 +23,146 @@ const GET_MY_DECKS = gql`
       id
       title
       description
-      targetLanguage
       createdAt
+      isArchived
     }
   }
 `;
 
-interface Deck {
-  id: string;
-  title: string;
-  description: string | null;
-  targetLanguage: string | null;
-  createdAt: string;
-}
+export const Dashboard: React.FC = () => {
+  const navigate = useNavigate(); // Inicialize o hook
+  const { data, loading, error } = useQuery<GetMyDecksData>(GET_MY_DECKS, {
+    fetchPolicy: "cache-and-network",
+  });
 
-export default function Dashboard() {
-  const { loading, error, data } = useQuery<{ myDecks: Deck[] }>(GET_MY_DECKS);
-  const navigate = useNavigate();
+  // Arquitetura de UI baseada puramente em FlexBox
+  const containerStyle: React.CSSProperties = {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    width: "100%",
+    padding: "2rem",
+    boxSizing: "border-box",
+  };
 
-  // Estado para controle de visibilidade do Modal
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const headerStyle: React.CSSProperties = {
+    display: "flex",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    width: "100%",
+    maxWidth: "900px",
+    marginBottom: "2rem",
+  };
+
+  const listContainerStyle: React.CSSProperties = {
+    display: "flex",
+    flexDirection: "column",
+    gap: "1.25rem",
+    width: "100%",
+    maxWidth: "900px",
+  };
+
+  const cardStyle: React.CSSProperties = {
+    display: "flex",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: "1.5rem",
+    backgroundColor: "#ffffff",
+    borderRadius: "8px",
+    boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
+    border: "1px solid #e4e4e7",
+  };
+
+  const cardContentStyle: React.CSSProperties = {
+    display: "flex",
+    flexDirection: "column",
+    gap: "0.5rem",
+  };
 
   if (loading)
     return (
-      <div style={styles.centerContainer}>A carregar os seus decks...</div>
+      <div style={containerStyle}>
+        <h2>Sincronizando conhecimento...</h2>
+      </div>
     );
   if (error)
     return (
-      <div style={styles.centerContainer}>
-        Erro ao carregar os dados: {error.message}
+      <div style={containerStyle}>
+        <h2>Erro ao carregar os Decks: {error.message}</h2>
       </div>
     );
 
   return (
-    <div style={styles.container}>
-      <header style={styles.header}>
-        <h1 style={styles.title}>Os Meus Decks</h1>
-        {/* Disparo de abertura do Modal */}
+    <div style={containerStyle}>
+      <header style={headerStyle}>
+        <h1 style={{ margin: 0, fontSize: "1.5rem", color: "#18181b" }}>
+          Visão Geral
+        </h1>
         <button
-          style={styles.primaryButton}
-          onClick={() => setIsModalOpen(true)}
+          style={{
+            padding: "0.5rem 1rem",
+            cursor: "pointer",
+            backgroundColor: "#2563eb",
+            color: "#fff",
+            border: "none",
+            borderRadius: "4px",
+            fontWeight: "bold",
+          }}
         >
           + Novo Deck
         </button>
       </header>
 
-      <div style={styles.listContainer}>
-        {data?.myDecks.length === 0 ? (
-          <div style={styles.emptyState}>
-            <p>Ainda não possui nenhum deck. Crie um para começar!</p>
+      <main style={listContainerStyle}>
+        {!data?.myDecks || data.myDecks.length === 0 ? (
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "center",
+              padding: "3rem",
+            }}
+          >
+            <p style={{ color: "#71717a" }}>
+              Seu repositório está vazio. Crie seu primeiro Deck.
+            </p>
           </div>
         ) : (
-          data?.myDecks.map((deck) => (
-            <div
-              key={deck.id}
-              style={styles.card}
-              onClick={() => navigate(`/deck/${deck.id}`)}
-            >
-              <h3 style={styles.cardTitle}>{deck.title}</h3>
-              {deck.description && (
-                <p style={styles.cardDescription}>{deck.description}</p>
-              )}
-              <div style={styles.cardFooter}>
-                <span style={styles.badge}>
-                  {deck.targetLanguage || "Geral"}
+          // Tipagem explícita '(deck: Deck)' para satisfazer o strictMode do TypeScript
+          data.myDecks.map((deck: Deck) => (
+            <article key={deck.id} style={cardStyle}>
+              <div style={cardContentStyle}>
+                <h3 style={{ margin: 0, color: "#09090b" }}>{deck.title}</h3>
+                <span style={{ fontSize: "0.9rem", color: "#71717a" }}>
+                  {deck.description || "Sem descrição"}
                 </span>
               </div>
-            </div>
+
+              <div
+                style={{ display: "flex", gap: "1rem", alignItems: "center" }}
+              >
+                <span style={{ fontSize: "0.8rem", color: "#a1a1aa" }}>
+                  {new Date(deck.createdAt).toLocaleDateString("pt-BR")}
+                </span>
+                <button
+                  onClick={() => navigate(`/deck/${deck.id}`)}
+                  style={{
+                    padding: "0.5rem 1rem",
+                    cursor: "pointer",
+                    border: "1px solid #e4e4e7",
+                    backgroundColor: "transparent",
+                    borderRadius: "4px",
+                  }}
+                >
+                  Acessar
+                </button>
+              </div>
+            </article>
           ))
         )}
-      </div>
-
-      {/* Renderização condicional gerenciada pelo componente */}
-      <CreateDeckModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onSuccess={() => setIsModalOpen(false)}
-      />
+      </main>
     </div>
   );
-}
-
-// Estilos Flexbox mantidos e aprimorados para a listagem
-const styles: Record<string, React.CSSProperties> = {
-  centerContainer: {
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    height: "100%",
-    width: "100%",
-  },
-  container: {
-    display: "flex",
-    flexDirection: "column",
-    padding: "2rem",
-    width: "100%",
-    maxWidth: "1200px",
-    margin: "0 auto",
-  },
-  header: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: "2rem",
-  },
-  title: {
-    fontSize: "2rem",
-    fontWeight: "bold",
-  },
-  primaryButton: {
-    padding: "0.75rem 1.5rem",
-    backgroundColor: "#007BFF",
-    color: "#FFF",
-    border: "none",
-    borderRadius: "8px",
-    cursor: "pointer",
-    fontWeight: "bold",
-  },
-  listContainer: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: "1.5rem",
-    width: "100%",
-  },
-  emptyState: {
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    width: "100%",
-    padding: "4rem",
-    backgroundColor: "#FFF",
-    borderRadius: "12px",
-    color: "#666",
-    border: "1px dashed #CCC",
-  },
-  card: {
-    display: "flex",
-    flexDirection: "column",
-    width: "calc(33.333% - 1rem)",
-    minWidth: "280px",
-    padding: "1.5rem",
-    backgroundColor: "#FFF",
-    borderRadius: "12px",
-    boxShadow: "0 4px 6px rgba(0,0,0,0.1)",
-    cursor: "pointer",
-    transition: "transform 0.2s",
-  },
-  cardTitle: {
-    fontSize: "1.25rem",
-    marginBottom: "0.5rem",
-  },
-  cardDescription: {
-    color: "#666",
-    flexGrow: 1,
-    marginBottom: "1rem",
-  },
-  cardFooter: {
-    display: "flex",
-    justifyContent: "flex-start",
-  },
-  badge: {
-    padding: "0.25rem 0.75rem",
-    backgroundColor: "#E0E0E0",
-    borderRadius: "16px",
-    fontSize: "0.875rem",
-    fontWeight: "500",
-  },
 };
+export default Dashboard;

@@ -1,57 +1,96 @@
-import { Field, ID, InputType, ObjectType, PartialType } from '@nestjs/graphql';
+import { Field, ID, InputType, ObjectType } from '@nestjs/graphql';
+import {
+  IsBoolean,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  MaxLength,
+} from 'class-validator';
 
 @ObjectType()
 export class Deck {
   @Field(() => ID)
   id!: string;
 
-  @Field()
+  @Field(() => String)
   title!: string;
 
-  // Declaração explícita do tipo escalar String para o GraphQL
+  // Correção: Tipagem explícita com null para espelhar o comportamento do Prisma
   @Field(() => String, { nullable: true })
-  description?: string | null;
+  description!: string | null;
+
+  @Field(() => String, { defaultValue: 'pt-BR' })
+  sourceLanguage!: string | null;
 
   @Field(() => String, { nullable: true })
-  sourceLanguage?: string | null;
+  targetLanguage!: string | null;
 
-  @Field(() => String, { nullable: true })
-  targetLanguage?: string | null;
-
-  @Field()
+  @Field(() => Boolean)
   isArchived!: boolean;
 
-  @Field()
-  creatorId!: string;
-
-  @Field()
+  @Field(() => Date)
   createdAt!: Date;
 
-  @Field()
+  @Field(() => Date)
   updatedAt!: Date;
 }
 
 @InputType()
 export class CreateDeckInput {
-  @Field()
+  @Field(() => String)
+  @IsString()
+  @IsNotEmpty({ message: 'O título do Deck não pode estar vazio.' })
+  @MaxLength(100, { message: 'O título deve ter no máximo 100 caracteres.' })
   title!: string;
 
-  // Declaração explícita do tipo escalar String para o InputType
   @Field(() => String, { nullable: true })
-  description?: string | null;
+  @IsString()
+  @IsOptional()
+  @MaxLength(500, { message: 'A descrição não pode exceder 500 caracteres.' })
+  description?: string;
 
   @Field(() => String, { nullable: true, defaultValue: 'pt-BR' })
-  sourceLanguage?: string | null;
+  @IsString()
+  @IsOptional()
+  sourceLanguage?: string;
 
   @Field(() => String, { nullable: true })
-  targetLanguage?: string | null;
+  @IsString()
+  @IsOptional()
+  targetLanguage?: string;
 }
 
 @InputType()
-export class UpdateDeckInput extends PartialType(CreateDeckInput) {
+export class UpdateDeckInput {
   @Field(() => ID)
+  @IsString()
+  @IsNotEmpty()
   id!: string;
 
-  @Field({ nullable: true })
+  @Field(() => String, { nullable: true })
+  @IsString()
+  @IsOptional()
+  @MaxLength(100)
+  title?: string;
+
+  @Field(() => String, { nullable: true })
+  @IsString()
+  @IsOptional()
+  @MaxLength(500)
+  description?: string;
+
+  @Field(() => String, { nullable: true })
+  @IsString()
+  @IsOptional()
+  sourceLanguage?: string;
+
+  @Field(() => String, { nullable: true })
+  @IsString()
+  @IsOptional()
+  targetLanguage?: string;
+
+  @Field(() => Boolean, { nullable: true })
+  @IsBoolean()
+  @IsOptional()
   isArchived?: boolean;
 }

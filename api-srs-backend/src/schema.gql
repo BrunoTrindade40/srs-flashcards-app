@@ -6,10 +6,9 @@ type Deck {
   id: ID!
   title: String!
   description: String
-  sourceLanguage: String
+  sourceLanguage: String!
   targetLanguage: String
   isArchived: Boolean!
-  creatorId: String!
   createdAt: DateTime!
   updatedAt: DateTime!
 }
@@ -25,7 +24,6 @@ type Flashcard {
   back: String!
   sourceContext: String
   status: String!
-  due: DateTime!
   deckId: ID!
   createdAt: DateTime!
   updatedAt: DateTime!
@@ -70,11 +68,11 @@ input CreateDeckInput {
 }
 
 input UpdateDeckInput {
+  id: ID!
   title: String
   description: String
-  sourceLanguage: String = "pt-BR"
+  sourceLanguage: String
   targetLanguage: String
-  id: ID!
   isArchived: Boolean
 }
 
