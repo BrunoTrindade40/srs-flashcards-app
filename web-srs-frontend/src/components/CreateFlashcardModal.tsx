@@ -2,7 +2,6 @@ import { gql } from "@apollo/client";
 import { useMutation } from "@apollo/client/react";
 import React, { useState } from "react";
 
-// 1. Contratos Estritos da Mutação
 interface Flashcard {
   id: string;
   front: string;
@@ -47,7 +46,6 @@ export const CreateFlashcardModal: React.FC<CreateFlashcardModalProps> = ({
   const [front, setFront] = useState("");
   const [back, setBack] = useState("");
 
-  // 2. Execução da Mutação e Atualização do Cache Local (Sem Refetch)
   const [createFlashcard, { loading }] = useMutation<
     CreateFlashcardData,
     CreateFlashcardVars
@@ -55,14 +53,14 @@ export const CreateFlashcardModal: React.FC<CreateFlashcardModalProps> = ({
     update(cache, { data }) {
       if (!data) return;
 
-      // Identificamos o Deck específico no Cache do Apollo
-      const deckCacheId = cache.identify({ __typename: "Deck", id: deckId });
-
+      // Modificamos diretamente o cache da Root Query 'deckFlashcards'
       cache.modify({
-        id: deckCacheId,
         fields: {
-          // Modificamos apenas o array de flashcards deste Deck
-          flashcards(existingFlashcards = []) {
+          deckFlashcards(existingFlashcards = [], { storeFieldName }) {
+            // A verificação via storeFieldName garante que o flashcard será injetado
+            // apenas se os parâmetros do cache coincidem com o deckId que estamos visualizando.
+            if (!storeFieldName.includes(deckId)) return existingFlashcards;
+
             const newFlashcardRef = cache.writeFragment({
               data: data.createFlashcard,
               fragment: gql`
@@ -74,7 +72,6 @@ export const CreateFlashcardModal: React.FC<CreateFlashcardModalProps> = ({
                 }
               `,
             });
-            // Adicionamos o novo cartão ao final da lista
             return [...existingFlashcards, newFlashcardRef];
           },
         },
@@ -104,7 +101,6 @@ export const CreateFlashcardModal: React.FC<CreateFlashcardModalProps> = ({
 
   if (!isOpen) return null;
 
-  // 3. UI Estritamente Baseada em Flexbox
   const overlayStyle: React.CSSProperties = {
     position: "fixed",
     top: 0,
