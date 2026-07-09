@@ -1,8 +1,6 @@
-import React from "react";
-// Importação do núcleo (Framework-agnostic)
 import { gql } from "@apollo/client";
-// Importação estrita dos Hooks para React (Nova arquitetura v4.x)
 import { useQuery } from "@apollo/client/react";
+import React from "react";
 import { useNavigate } from "react-router-dom";
 
 interface Deck {
@@ -30,12 +28,11 @@ const GET_MY_DECKS = gql`
 `;
 
 export const Dashboard: React.FC = () => {
-  const navigate = useNavigate(); // Inicialize o hook
+  const navigate = useNavigate();
   const { data, loading, error } = useQuery<GetMyDecksData>(GET_MY_DECKS, {
     fetchPolicy: "cache-and-network",
   });
 
-  // Arquitetura de UI baseada puramente em FlexBox
   const containerStyle: React.CSSProperties = {
     display: "flex",
     flexDirection: "column",
@@ -101,6 +98,7 @@ export const Dashboard: React.FC = () => {
           Visão Geral
         </h1>
         <button
+          onClick={() => navigate("/deck/new")}
           style={{
             padding: "0.5rem 1rem",
             cursor: "pointer",
@@ -129,7 +127,6 @@ export const Dashboard: React.FC = () => {
             </p>
           </div>
         ) : (
-          // Tipagem explícita '(deck: Deck)' para satisfazer o strictMode do TypeScript
           data.myDecks.map((deck: Deck) => (
             <article key={deck.id} style={cardStyle}>
               <div style={cardContentStyle}>
@@ -139,24 +136,43 @@ export const Dashboard: React.FC = () => {
                 </span>
               </div>
 
+              {/* Contêiner FlexBox alinhando os botões de ação e a data */}
               <div
-                style={{ display: "flex", gap: "1rem", alignItems: "center" }}
+                style={{ display: "flex", gap: "1.5rem", alignItems: "center" }}
               >
                 <span style={{ fontSize: "0.8rem", color: "#a1a1aa" }}>
                   {new Date(deck.createdAt).toLocaleDateString("pt-BR")}
                 </span>
-                <button
-                  onClick={() => navigate(`/deck/${deck.id}`)}
-                  style={{
-                    padding: "0.5rem 1rem",
-                    cursor: "pointer",
-                    border: "1px solid #e4e4e7",
-                    backgroundColor: "transparent",
-                    borderRadius: "4px",
-                  }}
-                >
-                  Acessar
-                </button>
+
+                <div style={{ display: "flex", gap: "0.5rem" }}>
+                  {/* Novo botão de acesso à Sessão de Estudos */}
+                  <button
+                    onClick={() => navigate(`/study/${deck.id}`)}
+                    style={{
+                      padding: "0.5rem 1rem",
+                      cursor: "pointer",
+                      backgroundColor: "#10b981", // Verde para indicar ação primária/positiva
+                      color: "#fff",
+                      border: "none",
+                      borderRadius: "4px",
+                      fontWeight: "bold",
+                    }}
+                  >
+                    Estudar
+                  </button>
+                  <button
+                    onClick={() => navigate(`/deck/${deck.id}`)}
+                    style={{
+                      padding: "0.5rem 1rem",
+                      cursor: "pointer",
+                      border: "1px solid #e4e4e7",
+                      backgroundColor: "transparent",
+                      borderRadius: "4px",
+                    }}
+                  >
+                    Acessar
+                  </button>
+                </div>
               </div>
             </article>
           ))
