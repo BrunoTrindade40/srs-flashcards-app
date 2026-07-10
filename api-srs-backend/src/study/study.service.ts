@@ -1,134 +1,120 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { Flashcard as PrismaFlashcard } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
-
-export enum ReviewRating {
-  AGAIN = 1,
-  HARD = 2,
-  GOOD = 3,
-  EASY = 4,
-}
-
-// Enumeração baseada no padrão numérico do algoritmo FSRS
-export enum CardState {
-  NEW = 0,
-  LEARNING = 1,
-  REVIEW = 2,
-  RELEARNING = 3,
-}
 
 @Injectable()
 export class StudyService {
   // eslint-disable-next-line prettier/prettier
   constructor(private readonly prisma: PrismaService) { }
 
-  async getDueFlashcards(deckId: string, requestUserId: string) {
+  /**
+   * Busca cartões devidos para revisão hoje, ignorando os excluídos (anonimizados).
+   */
+  async dueFlashcards(
+    userId: string,
+    deckId: string,
+  ): Promise<PrismaFlashcard[]> {
+    const deck = await this.prisma.deck.findUnique({
+      where: { id: deckId },
+      select: { creatorId: true },
+    });
+
+    if (!deck) throw new NotFoundException('Deck não encontrado.');
+    if (deck.creatorId !== userId)
+      throw new ForbiddenException('Acesso negado.');
+
     const now = new Date();
 
     return this.prisma.flashcard.findMany({
       where: {
-        deckId,
-        deck: {
-          creatorId: requestUserId,
+        deckId: deckId,
+        // CORREÇÃO: Ignora ativamente os cartões excluídos no Frontend
+        front: { not: '[DADO_ANONIMIZADO]' },
+        // A data 'due' deve ser menor ou igual a hoje
+        fsrsData: {
+          due: { lte: now },
         },
-        OR: [{ fsrsData: { due: { lte: now } } }, { fsrsData: null }],
       },
-      include: { fsrsData: true },
-      orderBy: { createdAt: 'asc' },
+      orderBy: {
+        fsrsData: { due: 'asc' },
+      },
     });
   }
 
+  /**
+   * Registra a avaliação do usuário, recalcula o intervalo e grava a telemetria.
+   */
   async submitReview(
+    userId: string,
     flashcardId: string,
-    requestUserId: string,
-    rating: ReviewRating,
-  ) {
-    const flashcard = await this.prisma.flashcard.findFirst({
-      where: {
-        id: flashcardId,
-        deck: {
-          creatorId: requestUserId,
-        },
-      },
-      include: { fsrsData: true },
+    rating: number,
+  ): Promise<boolean> {
+    const flashcard = await this.prisma.flashcard.findUnique({
+      where: { id: flashcardId },
+      include: { deck: true },
     });
 
-    if (!flashcard) {
-      throw new NotFoundException(
-        'Flashcard não encontrado ou violação de Tenant.',
-      );
+    if (!flashcard || flashcard.deck.creatorId !== userId) {
+      throw new ForbiddenException('Cartão não encontrado ou acesso negado.');
     }
 
-    const now = new Date();
-    const nextDue = new Date();
+    // Busca os dados FSRS atuais (Necessário para a telemetria do TCC 2)
+    const fsrsData = await this.prisma.cardFSRSData.findUnique({
+      where: { flashcardId },
+    });
 
-    // 1. Captura de Snapshots Prévios (Before)
-    // Se fsrsData for nulo, trata-se de um cartão virgem (estado inicial 0)
-    const stabilityBefore = flashcard.fsrsData?.stability ?? 0;
-    const difficultyBefore = flashcard.fsrsData?.difficulty ?? 0;
-
-    // 2. Simulação de Cálculo FSRS (After) - MVP
-    // Nota: Em produção, estas variáveis receberão o retorno da equação matemática do FSRS
-    const stabilityAfter =
-      rating >= ReviewRating.GOOD ? stabilityBefore + 1 : stabilityBefore;
-    const difficultyAfter =
-      rating === ReviewRating.AGAIN ? difficultyBefore + 1 : difficultyBefore;
-
-    // 3. Regras de Intervalo Temporário (MVP)
-    switch (rating) {
-      case ReviewRating.AGAIN:
-        nextDue.setMinutes(now.getMinutes() + 1);
-        break;
-      case ReviewRating.HARD:
-        nextDue.setMinutes(now.getMinutes() + 10);
-        break;
-      case ReviewRating.GOOD:
-        nextDue.setDate(now.getDate() + 1);
-        break;
-      case ReviewRating.EASY:
-        nextDue.setDate(now.getDate() + 4);
-        break;
+    if (!fsrsData) {
+      throw new NotFoundException('Dados de agendamento não encontrados.');
     }
 
-    const nextState =
-      rating === ReviewRating.AGAIN ? CardState.RELEARNING : CardState.LEARNING;
+    // Lógica MVP de Agendamento (Base Simples para Evolução FSRS)
+    // CORREÇÃO: Separação estrita de variáveis mutáveis (let) e imutáveis (const).
+    // Isso satisfaz o verificador do TypeScript e as regras do ESLint.
+    const { difficulty } = fsrsData;
+    let { stability, reps, state } = fsrsData;
+    const stabilityBefore = stability;
+    const difficultyBefore = difficulty;
 
-    return this.prisma.$transaction(async (tx) => {
-      // 4. Atualização do Motor FSRS com os novos valores (After)
-      const updatedFsrsData = await tx.cardFSRSData.upsert({
+    if (rating === 1) {
+      // Errou: reseta a estabilidade
+      stability = 1;
+      state = 3; // RELEARNING
+    } else {
+      // Acertou: expande o intervalo
+      stability = stability === 0 ? 1 : stability * rating;
+      state = 2; // REVIEW
+    }
+
+    reps += 1;
+
+    const due = new Date();
+    due.setDate(due.getDate() + stability);
+
+    // TRANSAÇÃO ATÔMICA: Garante que os pesos e o Log sejam salvos simultaneamente.
+    // Se o Log falhar, a atualização do Card também é revertida.
+    await this.prisma.$transaction([
+      this.prisma.cardFSRSData.update({
         where: { flashcardId },
-        create: {
-          flashcardId,
-          due: nextDue,
-          stability: stabilityAfter,
-          difficulty: difficultyAfter,
-          reps: 1,
-          state: CardState.LEARNING,
-        },
-        update: {
-          due: nextDue,
-          reps: { increment: 1 },
-          state: nextState,
-          stability: stabilityAfter,
-          difficulty: difficultyAfter,
-        },
-      });
-
-      // 5. Registro Imutável para o Dataset (Logs FSRS)
-      await tx.reviewLog.create({
+        data: { stability, difficulty, reps, state, due },
+      }),
+      this.prisma.reviewLog.create({
         data: {
           flashcardId,
-          userId: requestUserId,
+          userId,
           rating,
-          reviewDurationMs: 0,
-          // Implementação das propriedades exigidas pelo Prisma Client
+          reviewDurationMs: 0, // MVP: O frontend enviará o timing exato no futuro
           stabilityBefore,
           difficultyBefore,
-          stabilityAfter,
-          difficultyAfter,
+          stabilityAfter: stability,
+          difficultyAfter: difficulty,
         },
-      });
+      }),
+    ]);
 
-      return updatedFsrsData;
-    });
+    return true;
   }
 }

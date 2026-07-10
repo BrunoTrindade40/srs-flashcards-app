@@ -2,10 +2,8 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateDeckInput, UpdateDeckInput } from './models/deck.model';
 
-// 1. Importamos o tipo gerado automaticamente pelo Prisma
 import { Deck as PrismaDeck } from '@prisma/client';
 
-// 2. Criamos uma interface tipada (Zero 'any') que une o Deck do Prisma com o _count gerado pelo JOIN
 export type DeckWithCount = PrismaDeck & {
   _count: {
     flashcards: number;
@@ -17,7 +15,7 @@ export class DeckService {
   // eslint-disable-next-line prettier/prettier
   constructor(private readonly prisma: PrismaService) { }
 
-  async createDeck(userId: string, data: CreateDeckInput) {
+  async createDeck(userId: string, data: CreateDeckInput): Promise<PrismaDeck> {
     return this.prisma.deck.create({
       data: {
         ...data,
@@ -26,26 +24,38 @@ export class DeckService {
     });
   }
 
-  async getUserDecks(userId: string) {
+  async getUserDecks(userId: string): Promise<DeckWithCount[]> {
     return this.prisma.deck.findMany({
       where: { creatorId: userId, isArchived: false },
       orderBy: { createdAt: 'desc' },
-      // 1. Instruímos o Prisma a agregar a contagem de Flashcards para cada Deck
       include: {
         _count: {
-          select: { flashcards: true },
+          select: {
+            flashcards: {
+              // CORREÇÃO: O Prisma agora ignora os cartões anonimizados na contagem
+              where: {
+                front: { not: '[DADO_ANONIMIZADO]' },
+              },
+            },
+          },
         },
       },
     });
   }
 
-  async getDeckById(userId: string, deckId: string) {
+  async getDeckById(userId: string, deckId: string): Promise<DeckWithCount> {
     const deck = await this.prisma.deck.findFirst({
       where: { id: deckId, creatorId: userId },
-      // 2. Incluímos a mesma lógica ao procurar um Deck específico
       include: {
         _count: {
-          select: { flashcards: true },
+          select: {
+            flashcards: {
+              // CORREÇÃO: O Prisma agora ignora os cartões anonimizados na contagem
+              where: {
+                front: { not: '[DADO_ANONIMIZADO]' },
+              },
+            },
+          },
         },
       },
     });
@@ -57,10 +67,8 @@ export class DeckService {
     return deck;
   }
 
-  async updateDeck(userId: string, data: UpdateDeckInput) {
+  async updateDeck(userId: string, data: UpdateDeckInput): Promise<PrismaDeck> {
     const { id, ...updateData } = data;
-
-    // Valida a existência e a posse do Deck antes de atualizar
     await this.getDeckById(userId, id);
 
     return this.prisma.deck.update({
@@ -69,7 +77,7 @@ export class DeckService {
     });
   }
 
-  async archiveDeck(userId: string, deckId: string) {
+  async archiveDeck(userId: string, deckId: string): Promise<PrismaDeck> {
     await this.getDeckById(userId, deckId);
 
     return this.prisma.deck.update({

@@ -1,12 +1,17 @@
 import { useMutation } from "@apollo/client/react";
 import React, { useState } from "react";
 import { GET_DECK } from "../lib/graphql/deck";
-import { CREATE_FLASHCARD } from "../lib/graphql/flashcard";
+import {
+  CREATE_FLASHCARD,
+  GET_DECK_FLASHCARDS,
+} from "../lib/graphql/flashcard";
 
 import type { GetDeckResponse, GetDeckVariables } from "../lib/graphql/deck";
 import type {
   CreateFlashcardResponse,
   CreateFlashcardVariables,
+  GetDeckFlashcardsResponse,
+  GetDeckFlashcardsVariables,
 } from "../lib/graphql/flashcard";
 
 interface CreateFlashcardModalProps {
@@ -28,14 +33,16 @@ export const CreateFlashcardModal: React.FC<CreateFlashcardModalProps> = ({
     CreateFlashcardResponse,
     CreateFlashcardVariables
   >(CREATE_FLASHCARD, {
-    // Manipulação direta do Cache para atualizar o ecrã instantaneamente
-    update(cache) {
+    update(cache, { data }) {
+      if (!data?.createFlashcard) return;
+
+      // 1. Atualiza Contador do Deck
       const existingDeck = cache.readQuery<GetDeckResponse, GetDeckVariables>({
         query: GET_DECK,
         variables: { id: deckId },
       });
 
-      if (existingDeck && existingDeck.deck) {
+      if (existingDeck?.deck) {
         cache.writeQuery<GetDeckResponse, GetDeckVariables>({
           query: GET_DECK,
           variables: { id: deckId },
@@ -48,6 +55,30 @@ export const CreateFlashcardModal: React.FC<CreateFlashcardModalProps> = ({
             },
           },
         });
+      }
+
+      // 2. Injeta o Cartão na Lista (CORREÇÃO APLICADA AQUI)
+      const existingCards = cache.readQuery<
+        GetDeckFlashcardsResponse,
+        GetDeckFlashcardsVariables
+      >({
+        query: GET_DECK_FLASHCARDS,
+        variables: { deckId },
+      });
+
+      if (existingCards?.deckFlashcards) {
+        cache.writeQuery<GetDeckFlashcardsResponse, GetDeckFlashcardsVariables>(
+          {
+            query: GET_DECK_FLASHCARDS,
+            variables: { deckId },
+            data: {
+              deckFlashcards: [
+                data.createFlashcard,
+                ...existingCards.deckFlashcards,
+              ],
+            },
+          },
+        );
       }
     },
   });

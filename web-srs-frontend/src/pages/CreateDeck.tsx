@@ -75,7 +75,7 @@ export const CreateDeck: React.FC = () => {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-100 p-4 font-sans">
+    <div className="flex flex-1 items-center justify-center p-4">
       <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8">
         <div className="mb-6">
           <h2 className="text-2xl font-bold text-gray-800">Criar Novo Deck</h2>

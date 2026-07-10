@@ -1,24 +1,38 @@
-import { Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router-dom";
 import { CreateDeck } from "../pages/CreateDeck";
 import { Dashboard } from "../pages/Dashboard";
 import { DeckDetails } from "../pages/DeckDetails";
 import { Login } from "../pages/Login";
 import { StudySession } from "../pages/StudySession";
 
+import { MainLayout } from "../components/MainLayout";
+import { ProtectedRoute } from "../components/ProtectedRoute";
+import { RootRedirect } from "../components/RootRedirect";
+
 export function AppRoutes() {
   return (
     <Routes>
+      {/* 1. Tratamento da URL raiz (http://localhost:5173/) */}
+      <Route path="/" element={<RootRedirect />} />
+
+      {/* 2. Rota Pública de Autenticação */}
       <Route path="/login" element={<Login />} />
 
-      {/* Rota renderizando o componente Dashboard */}
-      <Route path="/dashboard" element={<Dashboard />} />
+      {/* 3. Bloco de Rotas Protegidas por Software */}
+      <Route element={<ProtectedRoute />}>
+        {/* Sub-bloco com o Header de Navegação Global */}
+        <Route element={<MainLayout />}>
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/create-deck" element={<CreateDeck />} />
+          <Route path="/deck/:deckId" element={<DeckDetails />} />
+        </Route>
 
-      <Route path="/create-deck" element={<CreateDeck />} />
+        {/* Rota de Foco Profundo (Sem Header para imersão total) */}
+        <Route path="/study/:deckId" element={<StudySession />} />
+      </Route>
 
-      {/* CORREÇÃO: O parâmetro dinâmico foi renomeado de :id para :deckId */}
-      <Route path="/deck/:deckId" element={<DeckDetails />} />
-
-      <Route path="/study/:deckId" element={<StudySession />} />
+      {/* 4. Captura de rotas inexistentes (Fallback de Segurança) */}
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }
