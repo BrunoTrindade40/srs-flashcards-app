@@ -1,4 +1,4 @@
-import { Field, ID, InputType, ObjectType } from '@nestjs/graphql';
+import { Field, ID, InputType, Int, ObjectType } from '@nestjs/graphql';
 import {
   IsBoolean,
   IsNotEmpty,
@@ -6,6 +6,13 @@ import {
   IsString,
   MaxLength,
 } from 'class-validator';
+
+// 1. Criamos um tipo específico para mapear as contagens geradas pelo Prisma
+@ObjectType()
+export class DeckCount {
+  @Field(() => Int)
+  flashcards!: number;
+}
 
 @ObjectType()
 export class Deck {
@@ -33,6 +40,10 @@ export class Deck {
 
   @Field(() => Date)
   updatedAt!: Date;
+
+  // 2. Expomos o campo _count ao GraphQL, tornando-o opcional para não quebrar outras queries
+  @Field(() => DeckCount, { nullable: true })
+  _count?: DeckCount;
 }
 
 @InputType()

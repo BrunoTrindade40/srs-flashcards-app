@@ -2,6 +2,16 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateDeckInput, UpdateDeckInput } from './models/deck.model';
 
+// 1. Importamos o tipo gerado automaticamente pelo Prisma
+import { Deck as PrismaDeck } from '@prisma/client';
+
+// 2. Criamos uma interface tipada (Zero 'any') que une o Deck do Prisma com o _count gerado pelo JOIN
+export type DeckWithCount = PrismaDeck & {
+  _count: {
+    flashcards: number;
+  };
+};
+
 @Injectable()
 export class DeckService {
   // eslint-disable-next-line prettier/prettier
@@ -20,12 +30,24 @@ export class DeckService {
     return this.prisma.deck.findMany({
       where: { creatorId: userId, isArchived: false },
       orderBy: { createdAt: 'desc' },
+      // 1. Instruímos o Prisma a agregar a contagem de Flashcards para cada Deck
+      include: {
+        _count: {
+          select: { flashcards: true },
+        },
+      },
     });
   }
 
   async getDeckById(userId: string, deckId: string) {
     const deck = await this.prisma.deck.findFirst({
       where: { id: deckId, creatorId: userId },
+      // 2. Incluímos a mesma lógica ao procurar um Deck específico
+      include: {
+        _count: {
+          select: { flashcards: true },
+        },
+      },
     });
 
     if (!deck) {

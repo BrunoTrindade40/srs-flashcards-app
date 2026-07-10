@@ -1,184 +1,117 @@
-import { gql } from "@apollo/client";
 import { useQuery } from "@apollo/client/react";
 import React from "react";
 import { useNavigate } from "react-router-dom";
 
-interface Deck {
-  id: string;
-  title: string;
-  description?: string | null;
-  createdAt: string;
-  isArchived: boolean;
-}
-
-interface GetMyDecksData {
-  myDecks: Deck[];
-}
-
-const GET_MY_DECKS = gql`
-  query GetMyDecks {
-    myDecks {
-      id
-      title
-      description
-      createdAt
-      isArchived
-    }
-  }
-`;
+import type { GetMyDecksResponse } from "../lib/graphql/deck";
+import { GET_MY_DECKS } from "../lib/graphql/deck";
 
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
-  const { data, loading, error } = useQuery<GetMyDecksData>(GET_MY_DECKS, {
+
+  const { data, loading, error } = useQuery<GetMyDecksResponse>(GET_MY_DECKS, {
     fetchPolicy: "cache-and-network",
   });
 
-  const containerStyle: React.CSSProperties = {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    width: "100%",
-    padding: "2rem",
-    boxSizing: "border-box",
-  };
-
-  const headerStyle: React.CSSProperties = {
-    display: "flex",
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    width: "100%",
-    maxWidth: "900px",
-    marginBottom: "2rem",
-  };
-
-  const listContainerStyle: React.CSSProperties = {
-    display: "flex",
-    flexDirection: "column",
-    gap: "1.25rem",
-    width: "100%",
-    maxWidth: "900px",
-  };
-
-  const cardStyle: React.CSSProperties = {
-    display: "flex",
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: "1.5rem",
-    backgroundColor: "#ffffff",
-    borderRadius: "8px",
-    boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
-    border: "1px solid #e4e4e7",
-  };
-
-  const cardContentStyle: React.CSSProperties = {
-    display: "flex",
-    flexDirection: "column",
-    gap: "0.5rem",
-  };
-
-  if (loading)
+  if (loading) {
     return (
-      <div style={containerStyle}>
-        <h2>Sincronizando conhecimento...</h2>
+      <div className="flex min-h-screen items-center justify-center bg-gray-50">
+        {/* Ajuste de contraste: text-gray-700 */}
+        <p className="text-lg font-medium text-gray-700">
+          Carregando seus baralhos...
+        </p>
       </div>
     );
-  if (error)
+  }
+
+  if (error) {
     return (
-      <div style={containerStyle}>
-        <h2>Erro ao carregar os Decks: {error.message}</h2>
+      <div className="flex min-h-screen flex-col items-center justify-center bg-gray-50 text-red-600">
+        <h2 className="text-2xl font-bold mb-2">Erro de Conexão</h2>
+        <p>{error.message}</p>
       </div>
     );
+  }
+
+  const decks = data?.myDecks ?? [];
 
   return (
-    <div style={containerStyle}>
-      <header style={headerStyle}>
-        <h1 style={{ margin: 0, fontSize: "1.5rem", color: "#18181b" }}>
-          Visão Geral
-        </h1>
-        <button
-          onClick={() => navigate("/deck/new")}
-          style={{
-            padding: "0.5rem 1rem",
-            cursor: "pointer",
-            backgroundColor: "#2563eb",
-            color: "#fff",
-            border: "none",
-            borderRadius: "4px",
-            fontWeight: "bold",
-          }}
-        >
-          + Novo Deck
-        </button>
-      </header>
-
-      <main style={listContainerStyle}>
-        {!data?.myDecks || data.myDecks.length === 0 ? (
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "center",
-              padding: "3rem",
-            }}
+    <div className="min-h-screen bg-gray-100 p-8 font-sans">
+      <div className="max-w-6xl mx-auto">
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-800">Meus Decks</h1>
+            {/* Ajuste de contraste: text-gray-600 */}
+            <p className="text-gray-600 mt-1 font-medium">
+              Gerencie seu conhecimento e inicie suas sessões de estudo.
+            </p>
+          </div>
+          <button
+            onClick={() => navigate("/create-deck")}
+            className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg shadow hover:bg-blue-700 transition-colors"
           >
-            <p style={{ color: "#71717a" }}>
-              Seu repositório está vazio. Crie seu primeiro Deck.
+            + Novo Deck
+          </button>
+        </div>
+
+        {decks.length === 0 ? (
+          <div className="flex flex-col items-center justify-center bg-white rounded-2xl shadow-sm p-12 text-center">
+            <h3 className="text-xl font-semibold text-gray-800 mb-2">
+              Você ainda não possui nenhum Deck
+            </h3>
+            {/* Ajuste de contraste: text-gray-600 */}
+            <p className="text-gray-600 font-medium">
+              Crie seu primeiro baralho para começar a adicionar cartões e
+              estudar.
             </p>
           </div>
         ) : (
-          data.myDecks.map((deck: Deck) => (
-            <article key={deck.id} style={cardStyle}>
-              <div style={cardContentStyle}>
-                <h3 style={{ margin: 0, color: "#09090b" }}>{deck.title}</h3>
-                <span style={{ fontSize: "0.9rem", color: "#71717a" }}>
-                  {deck.description || "Sem descrição"}
-                </span>
-              </div>
-
-              {/* Contêiner FlexBox alinhando os botões de ação e a data */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {decks.map((deck) => (
               <div
-                style={{ display: "flex", gap: "1.5rem", alignItems: "center" }}
+                key={deck.id}
+                className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 flex flex-col hover:shadow-md transition-shadow"
               >
-                <span style={{ fontSize: "0.8rem", color: "#a1a1aa" }}>
-                  {new Date(deck.createdAt).toLocaleDateString("pt-BR")}
-                </span>
+                <div className="flex-1 mb-4">
+                  <h2
+                    className="text-xl font-bold text-gray-800 mb-2 truncate"
+                    title={deck.title}
+                  >
+                    {deck.title}
+                  </h2>
+                  {/* Ajuste de contraste: text-gray-600 */}
+                  <p className="text-sm text-gray-600 line-clamp-2 font-medium">
+                    {deck.description || "Sem descrição."}
+                  </p>
+                </div>
 
-                <div style={{ display: "flex", gap: "0.5rem" }}>
-                  {/* Novo botão de acesso à Sessão de Estudos */}
+                <div className="text-sm font-bold text-blue-700 bg-blue-50 py-1 px-3 rounded-full inline-block mb-6 w-max border border-blue-100">
+                  {deck._count?.flashcards || 0} Cartões
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 mt-auto">
+                  <button
+                    onClick={() => navigate(`/deck/${deck.id}`)}
+                    className="py-2 px-4 rounded-lg font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors"
+                  >
+                    Gerenciar
+                  </button>
                   <button
                     onClick={() => navigate(`/study/${deck.id}`)}
-                    style={{
-                      padding: "0.5rem 1rem",
-                      cursor: "pointer",
-                      backgroundColor: "#10b981", // Verde para indicar ação primária/positiva
-                      color: "#fff",
-                      border: "none",
-                      borderRadius: "4px",
-                      fontWeight: "bold",
-                    }}
+                    disabled={!deck._count?.flashcards}
+                    className={`py-2 px-4 rounded-lg font-bold text-white transition-colors ${
+                      deck._count?.flashcards
+                        ? "bg-green-600 hover:bg-green-700 shadow-sm"
+                        : "bg-green-300 cursor-not-allowed"
+                    }`}
                   >
                     Estudar
                   </button>
-                  <button
-                    onClick={() => navigate(`/deck/${deck.id}`)}
-                    style={{
-                      padding: "0.5rem 1rem",
-                      cursor: "pointer",
-                      border: "1px solid #e4e4e7",
-                      backgroundColor: "transparent",
-                      borderRadius: "4px",
-                    }}
-                  >
-                    Acessar
-                  </button>
                 </div>
               </div>
-            </article>
-          ))
+            ))}
+          </div>
         )}
-      </main>
+      </div>
     </div>
   );
 };
-export default Dashboard;

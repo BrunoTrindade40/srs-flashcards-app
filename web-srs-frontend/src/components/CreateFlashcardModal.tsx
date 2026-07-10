@@ -1,36 +1,13 @@
-import { gql } from "@apollo/client";
 import { useMutation } from "@apollo/client/react";
 import React, { useState } from "react";
+import { GET_DECK } from "../lib/graphql/deck";
+import { CREATE_FLASHCARD } from "../lib/graphql/flashcard";
 
-interface Flashcard {
-  id: string;
-  front: string;
-  back: string;
-  createdAt: string;
-}
-
-interface CreateFlashcardData {
-  createFlashcard: Flashcard;
-}
-
-interface CreateFlashcardVars {
-  data: {
-    deckId: string;
-    front: string;
-    back: string;
-  };
-}
-
-const CREATE_FLASHCARD_MUTATION = gql`
-  mutation CreateFlashcard($data: CreateFlashcardInput!) {
-    createFlashcard(data: $data) {
-      id
-      front
-      back
-      createdAt
-    }
-  }
-`;
+import type { GetDeckResponse, GetDeckVariables } from "../lib/graphql/deck";
+import type {
+  CreateFlashcardResponse,
+  CreateFlashcardVariables,
+} from "../lib/graphql/flashcard";
 
 interface CreateFlashcardModalProps {
   isOpen: boolean;
@@ -43,181 +20,132 @@ export const CreateFlashcardModal: React.FC<CreateFlashcardModalProps> = ({
   onClose,
   deckId,
 }) => {
-  const [front, setFront] = useState("");
-  const [back, setBack] = useState("");
+  const [front, setFront] = useState<string>("");
+  const [back, setBack] = useState<string>("");
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const [createFlashcard, { loading }] = useMutation<
-    CreateFlashcardData,
-    CreateFlashcardVars
-  >(CREATE_FLASHCARD_MUTATION, {
-    update(cache, { data }) {
-      if (!data) return;
-
-      // Modificamos diretamente o cache da Root Query 'deckFlashcards'
-      cache.modify({
-        fields: {
-          deckFlashcards(existingFlashcards = [], { storeFieldName }) {
-            // A verificação via storeFieldName garante que o flashcard será injetado
-            // apenas se os parâmetros do cache coincidem com o deckId que estamos visualizando.
-            if (!storeFieldName.includes(deckId)) return existingFlashcards;
-
-            const newFlashcardRef = cache.writeFragment({
-              data: data.createFlashcard,
-              fragment: gql`
-                fragment NewFlashcard on Flashcard {
-                  id
-                  front
-                  back
-                  createdAt
-                }
-              `,
-            });
-            return [...existingFlashcards, newFlashcardRef];
-          },
-        },
+    CreateFlashcardResponse,
+    CreateFlashcardVariables
+  >(CREATE_FLASHCARD, {
+    // Manipulação direta do Cache para atualizar o ecrã instantaneamente
+    update(cache) {
+      const existingDeck = cache.readQuery<GetDeckResponse, GetDeckVariables>({
+        query: GET_DECK,
+        variables: { id: deckId },
       });
-    },
-    onCompleted: () => {
-      setFront("");
-      setBack("");
-      onClose();
+
+      if (existingDeck && existingDeck.deck) {
+        cache.writeQuery<GetDeckResponse, GetDeckVariables>({
+          query: GET_DECK,
+          variables: { id: deckId },
+          data: {
+            deck: {
+              ...existingDeck.deck,
+              _count: {
+                flashcards: (existingDeck.deck._count?.flashcards || 0) + 1,
+              },
+            },
+          },
+        });
+      }
     },
   });
 
-  const handleSubmit: React.FormEventHandler<HTMLFormElement> = async (e) => {
-    e.preventDefault();
-    if (!front.trim() || !back.trim()) return;
-
-    await createFlashcard({
-      variables: {
-        data: {
-          deckId,
-          front,
-          back,
-        },
-      },
-    });
-  };
-
   if (!isOpen) return null;
 
-  const overlayStyle: React.CSSProperties = {
-    position: "fixed",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    zIndex: 1000,
-  };
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg(null);
 
-  const modalStyle: React.CSSProperties = {
-    display: "flex",
-    flexDirection: "column",
-    gap: "1.5rem",
-    width: "500px",
-    backgroundColor: "#ffffff",
-    padding: "2rem",
-    borderRadius: "8px",
-    boxShadow: "0 10px 15px rgba(0,0,0,0.1)",
-  };
+    if (!front.trim() || !back.trim()) {
+      setErrorMsg("A frente e o verso são obrigatórios.");
+      return;
+    }
 
-  const labelStyle: React.CSSProperties = {
-    fontSize: "0.9rem",
-    fontWeight: "bold",
-    color: "#18181b",
-  };
-  const inputStyle: React.CSSProperties = {
-    padding: "0.75rem",
-    borderRadius: "4px",
-    border: "1px solid #d4d4d8",
-    fontSize: "1rem",
-    fontFamily: "inherit",
-    resize: "vertical",
+    try {
+      await createFlashcard({
+        variables: {
+          data: {
+            front: front.trim(),
+            back: back.trim(),
+            deckId,
+          },
+        },
+      });
+
+      // Limpa os campos e permite criar mais cartões em sequência, sem fechar o modal
+      setFront("");
+      setBack("");
+    } catch (err) {
+      console.error("Falha ao criar o cartão:", err);
+      setErrorMsg("Ocorreu um erro no servidor. Tente novamente.");
+    }
   };
 
   return (
-    <div style={overlayStyle}>
-      <div style={modalStyle}>
-        <h2 style={{ margin: 0, color: "#09090b" }}>Novo Flashcard</h2>
-
-        <form
-          onSubmit={handleSubmit}
-          style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}
-        >
-          <div
-            style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-xl font-bold text-gray-800">Novo Flashcard</h2>
+          <button
+            onClick={onClose}
+            className="text-gray-500 hover:text-gray-700 font-bold text-xl"
           >
-            <label htmlFor="front" style={labelStyle}>
-              Frente (Pergunta / Estímulo)
+            &times;
+          </button>
+        </div>
+
+        {errorMsg && (
+          <div className="mb-4 p-3 bg-red-50 text-red-700 text-sm rounded-lg">
+            {errorMsg}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-800 mb-1">
+              Frente (Pergunta)
             </label>
             <textarea
-              id="front"
+              rows={3}
+              className="w-full px-4 py-2 rounded-lg bg-gray-50 border border-gray-200 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+              placeholder="Ex: O que é a Mitocôndria?"
               value={front}
               onChange={(e) => setFront(e.target.value)}
-              rows={3}
-              placeholder="Ex: O que é o Efeito de Espaçamento?"
-              required
-              style={inputStyle}
+              disabled={loading}
             />
           </div>
 
-          <div
-            style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}
-          >
-            <label htmlFor="back" style={labelStyle}>
-              Verso (Resposta / Explicação)
+          <div>
+            <label className="block text-sm font-medium text-gray-800 mb-1">
+              Verso (Resposta)
             </label>
             <textarea
-              id="back"
+              rows={3}
+              className="w-full px-4 py-2 rounded-lg bg-gray-50 border border-gray-200 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+              placeholder="Ex: É o organelo responsável pela respiração celular e produção de energia."
               value={back}
               onChange={(e) => setBack(e.target.value)}
-              rows={4}
-              placeholder="Ex: Fenômeno cognitivo onde a retenção melhora quando as revisões são distribuídas ao longo do tempo."
-              required
-              style={inputStyle}
+              disabled={loading}
             />
           </div>
 
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "flex-end",
-              gap: "0.75rem",
-              marginTop: "0.5rem",
-            }}
-          >
+          <div className="flex justify-end space-x-3 pt-4 border-t border-gray-100">
             <button
               type="button"
               onClick={onClose}
-              style={{
-                padding: "0.5rem 1rem",
-                cursor: "pointer",
-                border: "1px solid #d4d4d8",
-                backgroundColor: "transparent",
-                borderRadius: "4px",
-                fontWeight: "500",
-              }}
+              disabled={loading}
+              className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg font-medium transition"
             >
-              Cancelar
+              Concluído
             </button>
             <button
               type="submit"
               disabled={loading}
-              style={{
-                padding: "0.5rem 1rem",
-                cursor: "pointer",
-                backgroundColor: "#2563eb",
-                color: "#ffffff",
-                border: "none",
-                borderRadius: "4px",
-                fontWeight: "500",
-              }}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-sm transition"
             >
-              {loading ? "Salvando..." : "Adicionar Cartão"}
+              {loading ? "A salvar..." : "Salvar e Adicionar Outro"}
             </button>
           </div>
         </form>

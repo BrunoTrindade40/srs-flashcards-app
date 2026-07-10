@@ -2,6 +2,10 @@
 # THIS FILE WAS AUTOMATICALLY GENERATED (DO NOT MODIFY)
 # ------------------------------------------------------
 
+type DeckCount {
+  flashcards: Int!
+}
+
 type Deck {
   id: ID!
   title: String!
@@ -11,6 +15,7 @@ type Deck {
   isArchived: Boolean!
   createdAt: DateTime!
   updatedAt: DateTime!
+  _count: DeckCount
 }
 
 """
@@ -48,6 +53,7 @@ type Query {
   myDecks: [Deck!]!
   deck(id: ID!): Deck!
   deckFlashcards(deckId: ID!): [Flashcard!]!
+  dueFlashcards(deckId: String!): [Flashcard!]!
 }
 
 type Mutation {
@@ -58,6 +64,7 @@ type Mutation {
   createFlashcard(data: CreateFlashcardInput!): Flashcard!
   updateFlashcard(data: UpdateFlashcardInput!): Flashcard!
   removeFlashcard(id: ID!): Flashcard!
+  submitReview(flashcardId: String!, rating: Int!): Boolean!
 }
 
 input CreateDeckInput {
