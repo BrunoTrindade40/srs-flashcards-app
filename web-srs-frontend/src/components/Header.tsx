@@ -1,21 +1,23 @@
-import React from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 // Importação estrita do hook do Apollo v4.1.9 para acessar a instância do cliente
 import { useApolloClient } from "@apollo/client/react";
 import { supabase } from "../lib/supabaseClient";
+import { SettingsModal } from "./SettingsModal";
 
 export const Header: React.FC = () => {
   const navigate = useNavigate();
   const client = useApolloClient();
 
+  // Gerenciamento de Estado do Modal
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
   const handleLogout = async () => {
     try {
       // 1. Invalida a sessão JWT no provedor de identidade (Supabase)
       await supabase.auth.signOut();
-
       // 2. Limpa o cache em memória do Apollo Client para evitar vazamento de dados
       await client.clearStore();
-
       // 3. Redireciona o usuário de volta para a tela de login
       navigate("/login");
     } catch (error) {
@@ -41,11 +43,21 @@ export const Header: React.FC = () => {
             </span>
           </button>
 
-          {/* Área de Ações do Usuário */}
-          <div className="flex items-center space-x-6">
+          {/* Área de Ações do Usuário - Construída 100% com Flexbox */}
+          <div className="flex items-center space-x-4 md:space-x-6">
             <span className="text-sm font-bold text-gray-600 hidden md:block">
               Área do Estudante
             </span>
+
+            {/* Novo Gatilho Adicionado: Botão para abrir o Modal */}
+            <button
+              onClick={() => setIsSettingsOpen(true)}
+              className="px-4 py-2 text-sm font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors border border-gray-200 shadow-sm"
+              aria-label="Abrir configurações da conta"
+            >
+              Configurações
+            </button>
+
             <button
               onClick={handleLogout}
               className="px-5 py-2 text-sm font-bold text-red-700 bg-red-50 hover:bg-red-100 rounded-lg transition-colors border border-red-100 shadow-sm"
@@ -56,6 +68,12 @@ export const Header: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Instanciação Corrigida do Componente: Note a ausência das aspas duplas */}
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+      />
     </header>
   );
 };

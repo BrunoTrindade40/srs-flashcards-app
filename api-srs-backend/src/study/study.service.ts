@@ -12,7 +12,7 @@ export class StudyService {
   constructor(private readonly prisma: PrismaService) { }
 
   /**
-   * Busca cartões devidos para revisão hoje, ignorando os excluídos (anonimizados).
+   * Busca cartões devidos para revisão, aplicando o limite de Rollover (Efeito Bola de Neve).
    */
   async dueFlashcards(
     userId: string,
@@ -27,22 +27,46 @@ export class StudyService {
     if (deck.creatorId !== userId)
       throw new ForbiddenException('Acesso negado.');
 
+    // 1. Busca os limites do estudante diretamente na tabela User
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { dailyNewCardLimit: true, maxDailyReviews: true },
+    });
+
+    const dailyNewCardLimit = user?.dailyNewCardLimit ?? 20;
+    const maxDailyReviews = user?.maxDailyReviews ?? 100;
     const now = new Date();
 
-    return this.prisma.flashcard.findMany({
+    // 2. Busca Cartões NOVOS (state: 0) com limite estrito
+    const newCards = await this.prisma.flashcard.findMany({
       where: {
         deckId: deckId,
-        // CORREÇÃO: Ignora ativamente os cartões excluídos no Frontend
         front: { not: '[DADO_ANONIMIZADO]' },
-        // A data 'due' deve ser menor ou igual a hoje
         fsrsData: {
           due: { lte: now },
+          state: 0, // 0 = Cartão Novo
         },
       },
-      orderBy: {
-        fsrsData: { due: 'asc' },
-      },
+      orderBy: { fsrsData: { due: 'asc' } },
+      take: dailyNewCardLimit,
     });
+
+    // 3. Busca Cartões de REVISÃO (state > 0) com limite estrito
+    const reviewCards = await this.prisma.flashcard.findMany({
+      where: {
+        deckId: deckId,
+        front: { not: '[DADO_ANONIMIZADO]' },
+        fsrsData: {
+          due: { lte: now },
+          state: { gt: 0 }, // 1=LEARNING, 2=REVIEW, 3=RELEARNING
+        },
+      },
+      orderBy: { fsrsData: { due: 'asc' } },
+      take: maxDailyReviews,
+    });
+
+    // 4. Retorna primeiro as revisões atrasadas, depois os novos cartões
+    return [...reviewCards, ...newCards];
   }
 
   /**

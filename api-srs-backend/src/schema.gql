@@ -34,37 +34,46 @@ type Flashcard {
   updatedAt: DateTime!
 }
 
-"""Representa o Estudante no sistema SRS"""
 type User {
   id: ID!
-
-  """Identificador único vinculado ao Supabase Auth"""
-  authId: String!
-  name: String
   email: String!
-
-  """Acúmulo de pontos de experiência (Gamificação)"""
+  name: String
+  isAnonymized: Boolean!
   totalXp: Int!
+  lastDataExportAt: DateTime
+  lastNotificationSentAt: DateTime
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  dailyNewCardLimit: Int!
+  maxDailyReviews: Int!
   currentStreak: Int!
+  longestStreak: Int!
+  pillReminderTime: String
 }
 
 type Query {
-  me(authId: String!): User
+  me: User!
   myDecks: [Deck!]!
   deck(id: ID!): Deck!
   deckFlashcards(deckId: ID!): [Flashcard!]!
-  dueFlashcards(deckId: String!): [Flashcard!]!
+  dueFlashcards(deckId: ID!): [Flashcard!]!
 }
 
 type Mutation {
-  syncIdentity(authId: String!, email: String!, name: String): User!
+  updateMySettings(data: UpdateUserSettingsInput!): User!
   createDeck(data: CreateDeckInput!): Deck!
   updateDeck(data: UpdateDeckInput!): Deck!
   archiveDeck(id: ID!): Deck!
   createFlashcard(data: CreateFlashcardInput!): Flashcard!
   updateFlashcard(data: UpdateFlashcardInput!): Flashcard!
   removeFlashcard(id: ID!): Flashcard!
-  submitReview(flashcardId: String!, rating: Int!): Boolean!
+  submitReview(flashcardId: ID!, rating: Int!): Boolean!
+}
+
+input UpdateUserSettingsInput {
+  dailyNewCardLimit: Int
+  maxDailyReviews: Int
+  pillReminderTime: String
 }
 
 input CreateDeckInput {
