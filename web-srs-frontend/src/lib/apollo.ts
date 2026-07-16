@@ -1,4 +1,3 @@
-// src/lib/apollo.ts
 import { ApolloClient, HttpLink, InMemoryCache } from '@apollo/client';
 import { SetContextLink } from '@apollo/client/link/context';
 import { supabase } from './supabaseClient';
@@ -13,7 +12,7 @@ const httpLink = new HttpLink({
  * Isto permite que o compilador infira nativamente as interfaces internas da biblioteca,
  * erradicando o erro de incompatibilidade com o 'ContextSetter'.
  */
-const authLink = new SetContextLink(async (operation, prevContext) => {
+const authLink = new SetContextLink(async (_operation, prevContext) => {
   try {
     // Recupera a sessão ativa delegada ao Supabase Auth
     const { data, error } = await supabase.auth.getSession();
@@ -25,7 +24,6 @@ const authLink = new SetContextLink(async (operation, prevContext) => {
     const token = data?.session?.access_token;
 
     // Proteção contra o tipo 'any': mapeamos o contexto para uma estrutura estrita conhecida.
-    // Isto atende às configurações restritas do seu tsconfig sem violar a segurança do sistema.
     const typedContext = prevContext as { headers?: Record<string, string> };
     const currentHeaders = typedContext?.headers || {};
 
@@ -43,7 +41,21 @@ const authLink = new SetContextLink(async (operation, prevContext) => {
 
 export const client = new ApolloClient({
   link: authLink.concat(httpLink),
-  cache: new InMemoryCache(),
+  // CORREÇÃO: Aplicação das typePolicies para silenciar o alerta e garantir a fusão segura do agregador
+  cache: new InMemoryCache({
+    typePolicies: {
+      Deck: {
+        fields: {
+          _count: {
+            merge(existing, incoming) {
+              // Mescla de forma segura os dados agregados antigos com a nova carga do backend
+              return { ...existing, ...incoming };
+            },
+          },
+        },
+      },
+    },
+  }),
   defaultOptions: {
     watchQuery: {
       fetchPolicy: 'cache-and-network',

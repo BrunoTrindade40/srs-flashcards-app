@@ -1,4 +1,3 @@
-// src/components/SettingsModal.tsx
 import { useMutation, useQuery } from "@apollo/client/react";
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -28,7 +27,6 @@ const SettingsForm: React.FC<{
 }> = ({ initialData, onClose }) => {
   const navigate = useNavigate();
 
-  // O estado local inicializa síncrono com as nomenclaturas exatas do Prisma
   const [dailyNewCardLimit, setDailyNewCardLimit] = useState<number>(
     initialData.dailyNewCardLimit,
   );
@@ -52,7 +50,8 @@ const SettingsForm: React.FC<{
     },
   });
 
-  const handleSaveSettings: React.FormEventHandler<HTMLFormElement> = async (
+  // CORREÇÃO: Substituição de FormEventHandler por SubmitEventHandler
+  const handleSaveSettings: React.SubmitEventHandler<HTMLFormElement> = async (
     e,
   ) => {
     e.preventDefault();
@@ -244,7 +243,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             Não foi possível carregar os seus dados de configuração no momento.
           </div>
         ) : data?.me ? (
-          // Injeção da variável correta advinda da query 'me'
           <SettingsForm initialData={data.me} onClose={onClose} />
         ) : null}
       </div>

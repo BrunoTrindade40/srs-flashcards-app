@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { Flashcard as PrismaFlashcard } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   CreateFlashcardInput,
@@ -14,9 +15,10 @@ export class FlashcardService {
   // eslint-disable-next-line prettier/prettier
   constructor(private readonly prisma: PrismaService) { }
 
-  // 1. Assinatura corrigida para receber o userId do Resolver (Resolve TS2554)
-  async createFlashcard(userId: string, data: CreateFlashcardInput) {
-    // 1. Validação de Regra de Negócio: Garante a propriedade do Deck
+  async createFlashcard(
+    userId: string,
+    data: CreateFlashcardInput,
+  ): Promise<PrismaFlashcard> {
     const deck = await this.prisma.deck.findUnique({
       where: { id: data.deckId },
       select: { creatorId: true },
@@ -32,11 +34,11 @@ export class FlashcardService {
       );
     }
 
-    // 2. Persistência do Flashcard com Inicialização FSRS Segura
     return this.prisma.flashcard.create({
       data: {
         front: data.front,
         back: data.back,
+        sourceContext: data.sourceContext,
         deckId: data.deckId,
         fsrsData: {
           create: {
@@ -45,9 +47,6 @@ export class FlashcardService {
             state: 0, // NEW
             reps: 0,
             lapses: 0,
-            // SOLUÇÃO: Omitimos a propriedade de data.
-            // O TypeScript para de reclamar de propriedades desconhecidas e o
-            // Prisma utilizará o @default(now()) do seu schema.prisma.
           },
         },
       },
@@ -57,9 +56,13 @@ export class FlashcardService {
     });
   }
 
-  async getFlashcardsByDeck(userId: string, deckId: string) {
+  async getFlashcardsByDeck(
+    userId: string,
+    deckId: string,
+  ): Promise<PrismaFlashcard[]> {
     const deck = await this.prisma.deck.findUnique({
       where: { id: deckId },
+      select: { creatorId: true },
     });
 
     if (!deck || deck.creatorId !== userId) {
@@ -67,16 +70,19 @@ export class FlashcardService {
     }
 
     return this.prisma.flashcard.findMany({
-      // O Filtro rigoroso: Ignora cartões anonimizados
       where: {
         deckId,
         front: { not: '[DADO_ANONIMIZADO]' },
       },
       orderBy: { createdAt: 'desc' },
+      take: 1000, // Limite de segurança para evitar estrangulamento de memória (OOM)
     });
   }
 
-  async updateFlashcard(userId: string, data: UpdateFlashcardInput) {
+  async updateFlashcard(
+    userId: string,
+    data: UpdateFlashcardInput,
+  ): Promise<PrismaFlashcard> {
     const { id, ...updateData } = data;
 
     const flashcard = await this.prisma.flashcard.findUnique({
@@ -94,7 +100,10 @@ export class FlashcardService {
     });
   }
 
-  async anonymizeFlashcard(userId: string, id: string) {
+  async anonymizeFlashcard(
+    userId: string,
+    id: string,
+  ): Promise<PrismaFlashcard> {
     const flashcard = await this.prisma.flashcard.findUnique({
       where: { id },
       include: { deck: true },
@@ -104,7 +113,6 @@ export class FlashcardService {
       throw new NotFoundException('Flashcard não encontrado ou acesso negado.');
     }
 
-    // Fluxo de Anonimização Irreversível garantindo a conformidade sem 'isArchived'
     return this.prisma.flashcard.update({
       where: { id },
       data: {

@@ -1,12 +1,16 @@
 import { useQuery } from "@apollo/client/react";
-import React from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
+// Preservadas as suas importações originais
+import { CreateDeckModal } from "../components/CreateDeckModal";
 import type { GetMyDecksResponse } from "../lib/graphql/deck";
 import { GET_MY_DECKS } from "../lib/graphql/deck";
 
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
+  // Novo estado para controlar a abertura do modal nativamente
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
   const { data, loading, error } = useQuery<GetMyDecksResponse>(GET_MY_DECKS, {
     fetchPolicy: "cache-and-network",
@@ -34,18 +38,19 @@ export const Dashboard: React.FC = () => {
   const decks = data?.myDecks ?? [];
 
   return (
-    // CORREÇÃO: Remoção do min-h-screen e bg-gray-100 (agora delegados ao MainLayout)
-    <div className="p-6 md:p-8 w-full max-w-6xl mx-auto">
+    <div className="p-6 md:p-8 w-full max-w-6xl mx-auto flex flex-col flex-1">
+      {/* Cabeçalho 100% Flexbox */}
       <div className="flex justify-between items-center mb-8">
-        <div>
+        <div className="flex flex-col">
           <h1 className="text-3xl font-extrabold text-slate-900">Meus Decks</h1>
           <p className="text-gray-600 mt-1 font-medium">
             Gerencie seu conhecimento e inicie suas sessões de estudo.
           </p>
         </div>
         <button
-          onClick={() => navigate("/create-deck")}
-          className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg shadow hover:bg-blue-700 transition-colors"
+          // Aciona o Modal ao invés de navegar para uma rota externa
+          onClick={() => setIsCreateModalOpen(true)}
+          className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg shadow hover:bg-blue-700 transition-colors shrink-0"
         >
           + Novo Deck
         </button>
@@ -62,14 +67,15 @@ export const Dashboard: React.FC = () => {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        /* CORREÇÃO ARQUITETURAL: Grid substituído por Flexbox + flex-wrap */
+        <div className="flex flex-wrap gap-6">
           {decks.map((deck) => (
             <div
               key={deck.id}
-              className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 flex flex-col hover:shadow-md transition-shadow"
+              /* Calculo de largura Flexbox (w-[calc(...)]) substitui as colunas do Grid */
+              className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 flex flex-col w-full md:w-[calc(50%-0.75rem)] lg:w-[calc(33.333%-1rem)] hover:shadow-md transition-shadow"
             >
-              <div className="flex-1 mb-4">
-                {/* CORREÇÃO: Contraste absoluto com text-slate-900 e font-extrabold */}
+              <div className="flex flex-col flex-1 mb-4">
                 <h2
                   className="text-xl font-extrabold text-slate-900 mb-2 truncate"
                   title={deck.title}
@@ -81,21 +87,21 @@ export const Dashboard: React.FC = () => {
                 </p>
               </div>
 
-              <div className="text-sm font-bold text-blue-800 bg-blue-50 py-1 px-3 rounded-full inline-block mb-6 w-max border border-blue-100">
+              <div className="flex items-center justify-center text-sm font-bold text-blue-800 bg-blue-50 py-1 px-3 rounded-full mb-6 w-max border border-blue-100">
                 {deck._count?.flashcards || 0} Cartões
               </div>
 
-              <div className="grid grid-cols-2 gap-3 mt-auto">
+              <div className="flex gap-3 mt-auto w-full">
                 <button
                   onClick={() => navigate(`/deck/${deck.id}`)}
-                  className="py-2 px-4 rounded-lg font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors"
+                  className="flex-1 py-2 px-4 rounded-lg font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors text-center"
                 >
                   Gerenciar
                 </button>
                 <button
                   onClick={() => navigate(`/study/${deck.id}`)}
                   disabled={!deck._count?.flashcards}
-                  className={`py-2 px-4 rounded-lg font-bold text-white transition-colors ${
+                  className={`flex-1 py-2 px-4 rounded-lg font-bold text-white transition-colors text-center ${
                     deck._count?.flashcards
                       ? "bg-green-600 hover:bg-green-700 shadow-sm"
                       : "bg-green-300 cursor-not-allowed"
@@ -108,6 +114,12 @@ export const Dashboard: React.FC = () => {
           ))}
         </div>
       )}
+
+      {/* Instância do Modal Injetada via Interpolação Dinâmica JSX */}
+      <CreateDeckModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+      />
     </div>
   );
 };

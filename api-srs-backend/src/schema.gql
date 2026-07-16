@@ -2,19 +2,42 @@
 # THIS FILE WAS AUTOMATICALLY GENERATED (DO NOT MODIFY)
 # ------------------------------------------------------
 
+"""Agregador de contagem de relações do baralho"""
 type DeckCount {
+  """Quantidade total de flashcards associados a este baralho"""
   flashcards: Int!
 }
 
+"""Modelo principal do baralho de estudos"""
 type Deck {
+  """Identificador único do baralho (UUID)"""
   id: ID!
+
+  """Título identificador do baralho"""
   title: String!
+
+  """Descrição opcional do propósito do baralho"""
   description: String
-  sourceLanguage: String!
+
+  """Idioma de origem do conteúdo"""
+  sourceLanguage: String
+
+  """Idioma alvo do aprendizado"""
   targetLanguage: String
+
+  """Sinalizador de arquivamento lógico do baralho"""
   isArchived: Boolean!
+
+  """Vínculo com o identificador único do utilizador criador"""
+  creatorId: ID!
+
+  """Timestamp de criação do registo"""
   createdAt: DateTime!
+
+  """Timestamp da última modificação do registo"""
   updatedAt: DateTime!
+
+  """Agregador com contagem de relações"""
   _count: DeckCount
 }
 
@@ -53,7 +76,11 @@ type User {
 
 type Query {
   me: User!
+
+  """Lista todos os baralhos ativos pertencentes ao estudante autenticado"""
   myDecks: [Deck!]!
+
+  """Obtém detalhes de um baralho específico por ID"""
   deck(id: ID!): Deck!
   deckFlashcards(deckId: ID!): [Flashcard!]!
   dueFlashcards(deckId: ID!): [Flashcard!]!
@@ -61,9 +88,17 @@ type Query {
 
 type Mutation {
   updateMySettings(data: UpdateUserSettingsInput!): User!
+
+  """Cria um novo baralho de estudos associado ao usuário logado"""
   createDeck(data: CreateDeckInput!): Deck!
+
+  """Atualiza os dados estruturais de um baralho existente"""
   updateDeck(data: UpdateDeckInput!): Deck!
-  archiveDeck(id: ID!): Deck!
+
+  """
+  Exclui definitivamente um baralho e seus flashcards associados do sistema
+  """
+  removeDeck(id: ID!): Boolean!
   createFlashcard(data: CreateFlashcardInput!): Flashcard!
   updateFlashcard(data: UpdateFlashcardInput!): Flashcard!
   removeFlashcard(id: ID!): Flashcard!
@@ -84,6 +119,7 @@ input CreateDeckInput {
 }
 
 input UpdateDeckInput {
+  """ID do baralho que sofrerá a mutação"""
   id: ID!
   title: String
   description: String

@@ -1,51 +1,66 @@
 import { UseGuards } from '@nestjs/common';
 import { Args, ID, Mutation, Query, Resolver } from '@nestjs/graphql';
-import * as Prisma from '@prisma/client'; // Correção para isolatedModules
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { GqlAuthGuard } from '../auth/guards/gql-auth.guard';
 import { DeckService } from './deck.service';
-import { CreateDeckInput, Deck, UpdateDeckInput } from './models/deck.model';
+import { CreateDeckInput } from './dto/create-deck.input';
+import { UpdateDeckInput } from './dto/update-deck.input';
+import { Deck } from './models/deck.model';
 
 @Resolver(() => Deck)
-@UseGuards(GqlAuthGuard)
+@UseGuards(GqlAuthGuard) // Garante a proteção perimetral de todas as operações do controlador
 export class DeckResolver {
   // eslint-disable-next-line prettier/prettier
   constructor(private readonly deckService: DeckService) { }
 
-  @Mutation(() => Deck)
+  @Mutation(() => Deck, {
+    description: 'Cria um novo baralho de estudos associado ao usuário logado',
+  })
   async createDeck(
-    @CurrentUser() user: Prisma.User, // Utilização segura do tipo via Namespace
-    @Args('data') data: CreateDeckInput,
+    @Args('data') createDeckInput: CreateDeckInput,
+    @CurrentUser() user: { id: string },
   ): Promise<Deck> {
-    return this.deckService.createDeck(user.id, data);
+    return this.deckService.create(createDeckInput, user.id);
   }
 
-  @Query(() => [Deck], { name: 'myDecks' })
-  async getMyDecks(@CurrentUser() user: Prisma.User): Promise<Deck[]> {
-    return this.deckService.getUserDecks(user.id);
+  @Query(() => [Deck], {
+    name: 'myDecks',
+    description:
+      'Lista todos os baralhos ativos pertencentes ao estudante autenticado',
+  })
+  async getMyDecks(@CurrentUser() user: { id: string }): Promise<Deck[]> {
+    return this.deckService.findAllByUser(user.id);
   }
 
-  @Query(() => Deck, { name: 'deck' })
+  @Query(() => Deck, {
+    name: 'deck',
+    description: 'Obtém detalhes de um baralho específico por ID',
+  })
   async getDeck(
-    @CurrentUser() user: Prisma.User,
     @Args('id', { type: () => ID }) id: string,
+    @CurrentUser() user: { id: string },
   ): Promise<Deck> {
-    return this.deckService.getDeckById(user.id, id);
+    return this.deckService.findOne(id, user.id);
   }
 
-  @Mutation(() => Deck)
+  @Mutation(() => Deck, {
+    description: 'Atualiza os dados estruturais de um baralho existente',
+  })
   async updateDeck(
-    @CurrentUser() user: Prisma.User,
-    @Args('data') data: UpdateDeckInput,
+    @Args('data') updateDeckInput: UpdateDeckInput,
+    @CurrentUser() user: { id: string },
   ): Promise<Deck> {
-    return this.deckService.updateDeck(user.id, data);
+    return this.deckService.update(updateDeckInput, user.id);
   }
 
-  @Mutation(() => Deck)
-  async archiveDeck(
-    @CurrentUser() user: Prisma.User,
+  @Mutation(() => Boolean, {
+    description:
+      'Exclui definitivamente um baralho e seus flashcards associados do sistema',
+  })
+  async removeDeck(
     @Args('id', { type: () => ID }) id: string,
-  ): Promise<Deck> {
-    return this.deckService.archiveDeck(user.id, id);
+    @CurrentUser() user: { id: string },
+  ): Promise<boolean> {
+    return this.deckService.remove(id, user.id);
   }
 }

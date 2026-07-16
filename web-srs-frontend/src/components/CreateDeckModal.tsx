@@ -1,38 +1,12 @@
 import { gql } from "@apollo/client";
-import { useMutation } from "@apollo/client/react"; // A sua correção manual aplicada
+import { useMutation } from "@apollo/client/react";
 import React, { useState } from "react";
 
-// 1. Contratos Estritos da Mutação
-interface Deck {
-  id: string;
-  title: string;
-  description?: string | null;
-  createdAt: string;
-  isArchived: boolean;
-}
-
-interface CreateDeckData {
-  createDeck: Deck;
-}
-
-interface CreateDeckVars {
-  data: {
-    title: string;
-    description?: string | null;
-  };
-}
-
-const CREATE_DECK_MUTATION = gql`
-  mutation CreateDeck($data: CreateDeckInput!) {
-    createDeck(data: $data) {
-      id
-      title
-      description
-      createdAt
-      isArchived
-    }
-  }
-`;
+import type {
+  CreateDeckResponse,
+  CreateDeckVariables,
+} from "../lib/graphql/deck";
+import { CREATE_DECK } from "../lib/graphql/deck";
 
 interface CreateDeckModalProps {
   isOpen: boolean;
@@ -45,104 +19,88 @@ export const CreateDeckModal: React.FC<CreateDeckModalProps> = ({
 }) => {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [serverError, setServerError] = useState<string | null>(null);
 
-  // 2. Injeção de Generics: O TS agora sabe exatamente o formato de 'data' e 'variables'
-  const [createDeck, { loading }] = useMutation<CreateDeckData, CreateDeckVars>(
-    CREATE_DECK_MUTATION,
-    {
-      update(cache, { data }) {
-        // Barreira de segurança para garantir que a mutação retornou dados válidos
-        if (!data) return;
+  const [createDeck, { loading }] = useMutation<
+    CreateDeckResponse,
+    CreateDeckVariables
+  >(CREATE_DECK, {
+    update(cache, { data }) {
+      if (!data?.createDeck) return;
 
-        cache.modify({
-          fields: {
-            myDecks(existingDecks = []) {
-              const newDeckRef = cache.writeFragment({
-                data: data.createDeck, // Acesso 100% seguro reconhecido pelo compilador
-                fragment: gql`
-                  fragment NewDeck on Deck {
-                    id
-                    title
-                    description
-                    createdAt
-                    isArchived
+      cache.modify({
+        fields: {
+          myDecks(existingDecks = []) {
+            const newDeckRef = cache.writeFragment({
+              data: data.createDeck,
+              fragment: gql`
+                fragment NewDeck on Deck {
+                  id
+                  title
+                  description
+                  _count {
+                    flashcards
                   }
-                `,
-              });
-              return [newDeckRef, ...existingDecks];
-            },
+                }
+              `,
+            });
+            return [newDeckRef, ...existingDecks];
           },
-        });
-      },
-      onCompleted: () => {
-        setTitle("");
-        setDescription("");
-        onClose();
-      },
+        },
+      });
     },
-  );
+  });
 
-  // 3. Resolução do Deprecated: Utilização do manipulador de eventos explícito do React 19
-  const handleSubmit: React.FormEventHandler<HTMLFormElement> = async (e) => {
+  // CORREÇÃO: Substituição de FormEventHandler por SubmitEventHandler
+  const handleSubmit: React.SubmitEventHandler<HTMLFormElement> = async (e) => {
     e.preventDefault();
     if (!title.trim()) return;
+    setServerError(null);
 
-    await createDeck({
-      variables: {
-        data: {
-          title,
-          description: description || null,
+    try {
+      await createDeck({
+        variables: {
+          data: {
+            title,
+            description: description || undefined,
+          },
         },
-      },
-    });
+      });
+
+      setTitle("");
+      setDescription("");
+      onClose();
+    } catch (error) {
+      console.error("Falha ao criar o baralho:", error);
+      setServerError("Não foi possível criar o baralho. Tente novamente.");
+    }
   };
 
   if (!isOpen) return null;
 
-  // 4. Arquitetura Visual (Flexbox Puro)
-  const overlayStyle: React.CSSProperties = {
-    position: "fixed",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    zIndex: 1000,
-  };
-
-  const modalStyle: React.CSSProperties = {
-    display: "flex",
-    flexDirection: "column",
-    gap: "1.5rem",
-    width: "400px",
-    backgroundColor: "#ffffff",
-    padding: "2rem",
-    borderRadius: "8px",
-    boxShadow: "0 10px 15px rgba(0,0,0,0.1)",
-  };
-
   return (
-    <div style={overlayStyle}>
-      <div style={modalStyle}>
-        <h2 style={{ margin: 0, color: "#09090b" }}>Novo Deck</h2>
-        <form
-          onSubmit={handleSubmit}
-          style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}
-        >
-          <div
-            style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md flex flex-col p-6">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-xl font-extrabold text-slate-900">Novo Deck</h2>
+          <button
+            onClick={onClose}
+            disabled={loading}
+            className="text-gray-400 hover:text-gray-700 font-bold text-2xl transition-colors"
           >
-            <label
-              htmlFor="title"
-              style={{
-                fontSize: "0.9rem",
-                fontWeight: "bold",
-                color: "#18181b",
-              }}
-            >
+            &times;
+          </button>
+        </div>
+
+        {serverError && (
+          <div className="mb-4 p-3 bg-red-50 text-red-700 text-sm font-medium rounded-lg border border-red-100 flex">
+            {serverError}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+          <div className="flex flex-col gap-2">
+            <label htmlFor="title" className="text-sm font-bold text-gray-700">
               Título
             </label>
             <input
@@ -152,25 +110,15 @@ export const CreateDeckModal: React.FC<CreateDeckModalProps> = ({
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Ex: Padrões de Arquitetura"
               required
-              style={{
-                padding: "0.75rem",
-                borderRadius: "4px",
-                border: "1px solid #d4d4d8",
-                fontSize: "1rem",
-              }}
+              disabled={loading}
+              className="w-full px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
             />
           </div>
 
-          <div
-            style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}
-          >
+          <div className="flex flex-col gap-2">
             <label
               htmlFor="description"
-              style={{
-                fontSize: "0.9rem",
-                fontWeight: "bold",
-                color: "#18181b",
-              }}
+              className="text-sm font-bold text-gray-700"
             >
               Descrição (Opcional)
             </label>
@@ -179,53 +127,30 @@ export const CreateDeckModal: React.FC<CreateDeckModalProps> = ({
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
-              style={{
-                padding: "0.75rem",
-                borderRadius: "4px",
-                border: "1px solid #d4d4d8",
-                resize: "none",
-                fontSize: "1rem",
-                fontFamily: "inherit",
-              }}
+              disabled={loading}
+              className="w-full px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors resize-none"
             />
           </div>
 
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "flex-end",
-              gap: "0.75rem",
-              marginTop: "0.5rem",
-            }}
-          >
+          <div className="flex justify-end gap-3 mt-2">
             <button
               type="button"
               onClick={onClose}
-              style={{
-                padding: "0.5rem 1rem",
-                cursor: "pointer",
-                border: "1px solid #d4d4d8",
-                backgroundColor: "transparent",
-                borderRadius: "4px",
-                fontWeight: "500",
-              }}
+              disabled={loading}
+              className="px-5 py-2.5 text-gray-700 bg-gray-100 hover:bg-gray-200 font-bold rounded-lg transition-colors"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={loading}
-              style={{
-                padding: "0.5rem 1rem",
-                cursor: "pointer",
-                backgroundColor: "#2563eb",
-                color: "#ffffff",
-                border: "none",
-                borderRadius: "4px",
-                fontWeight: "500",
-              }}
+              className={`px-5 py-2.5 text-white font-bold rounded-lg shadow-sm transition-colors flex items-center justify-center ${
+                loading
+                  ? "bg-blue-400 cursor-not-allowed"
+                  : "bg-blue-600 hover:bg-blue-700"
+              }`}
             >
-              {loading ? "Salvando..." : "Salvar"}
+              {loading ? "Salvando..." : "Salvar Deck"}
             </button>
           </div>
         </form>

@@ -1,36 +1,27 @@
+import { useMutation, useQuery } from "@apollo/client/react";
 import React, { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-// Importação estrita de hooks compatível com Apollo Client v4.1.9
-import { useMutation, useQuery } from "@apollo/client/react";
-
-import { CreateFlashcardModal } from "../components/CreateFlashcardModal";
-
-//Importação de Valores Executáveis
-import { GET_DECK } from "../lib/graphql/deck";
-import {
-  GET_DECK_FLASHCARDS,
-  REMOVE_FLASHCARD,
-} from "../lib/graphql/flashcard";
-
-//Importação Exclusiva de Tipos (Vite verbatimModuleSyntax)
 import { ConfirmModal } from "../components/ConfirmModal";
+import { CreateFlashcardModal } from "../components/CreateFlashcardModal";
 import type { GetDeckResponse, GetDeckVariables } from "../lib/graphql/deck";
+import { GET_DECK } from "../lib/graphql/deck";
 import type {
   GetDeckFlashcardsResponse,
   GetDeckFlashcardsVariables,
   RemoveFlashcardResponse,
   RemoveFlashcardVariables,
 } from "../lib/graphql/flashcard";
+import {
+  GET_DECK_FLASHCARDS,
+  REMOVE_FLASHCARD,
+} from "../lib/graphql/flashcard";
 
 export const DeckDetails: React.FC = () => {
   const { deckId } = useParams<{ deckId: string }>();
   const navigate = useNavigate();
-
   const [isModalOpen, setIsModalOpen] = useState(false);
-  //Estados para controlar o Modal de Confirmação
   const [cardToDelete, setCardToDelete] = useState<string | null>(null);
 
-  // --- QUERIES ---
   const {
     data: deckData,
     loading: loadingDeck,
@@ -49,7 +40,6 @@ export const DeckDetails: React.FC = () => {
     fetchPolicy: "cache-and-network",
   });
 
-  // --- MUTATIONS ---
   const [removeFlashcard, { loading: isDeleting }] = useMutation<
     RemoveFlashcardResponse,
     RemoveFlashcardVariables
@@ -57,7 +47,6 @@ export const DeckDetails: React.FC = () => {
     update(cache, { data }, { variables }) {
       if (!data?.removeFlashcard || !variables?.id) return;
 
-      // 1. Remove o cartão visualmente da Lista em cache
       const existingCards = cache.readQuery<
         GetDeckFlashcardsResponse,
         GetDeckFlashcardsVariables
@@ -80,7 +69,6 @@ export const DeckDetails: React.FC = () => {
         );
       }
 
-      // 2. Decrementa o Contador Total do Deck
       const existingDeck = cache.readQuery<GetDeckResponse, GetDeckVariables>({
         query: GET_DECK,
         variables: { id: deckId ?? "" },
@@ -106,12 +94,11 @@ export const DeckDetails: React.FC = () => {
     },
   });
 
-  // --- HANDLERS ---
   const confirmDeletion = async () => {
     if (!cardToDelete) return;
     try {
       await removeFlashcard({ variables: { id: cardToDelete } });
-      setCardToDelete(null); // Fecha o modal após sucesso
+      setCardToDelete(null);
     } catch (err) {
       console.error("Erro ao excluir cartão:", err);
       alert("Não foi possível excluir o cartão no momento.");
@@ -119,7 +106,6 @@ export const DeckDetails: React.FC = () => {
     }
   };
 
-  // --- RENDERIZAÇÃO DE ESTADOS ---
   if (loadingDeck) {
     return (
       <div className="flex flex-1 items-center justify-center">
@@ -148,15 +134,13 @@ export const DeckDetails: React.FC = () => {
 
   const { deck } = deckData;
 
-  // --- INTERFACE PRINCIPAL ---
   return (
-    <div className="p-6 md:p-8 w-full max-w-4xl mx-auto space-y-6">
-      {/* Bloco de Cabeçalho do Deck */}
+    <div className="p-6 md:p-8 w-full max-w-4xl mx-auto space-y-6 flex flex-col">
       <div className="bg-white rounded-2xl shadow-sm p-8 flex flex-col md:flex-row md:justify-between md:items-center border border-gray-200">
-        <div className="mb-6 md:mb-0">
+        <div className="mb-6 md:mb-0 flex flex-col">
           <button
             onClick={() => navigate("/dashboard")}
-            className="text-blue-600 text-sm font-bold hover:underline mb-2 block"
+            className="text-blue-600 text-sm font-bold hover:underline mb-2 self-start"
           >
             &larr; Voltar para Decks
           </button>
@@ -167,7 +151,6 @@ export const DeckDetails: React.FC = () => {
             {deck.description || "Nenhuma descrição atribuída."}
           </p>
         </div>
-
         <div className="flex space-x-3">
           <button
             onClick={() => navigate(`/study/${deck.id}`)}
@@ -183,9 +166,9 @@ export const DeckDetails: React.FC = () => {
         </div>
       </div>
 
-      {/* Bloco de Métricas e Ações */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white rounded-2xl shadow-sm p-6 border border-gray-200">
+      {/* Refatoração: Substituição do Grid por Flexbox */}
+      <div className="flex flex-col md:flex-row flex-wrap gap-6 w-full">
+        <div className="bg-white rounded-2xl shadow-sm p-6 border border-gray-200 flex flex-col w-full md:w-[calc(50%-0.75rem)]">
           <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4">
             Métricas do Deck
           </h3>
@@ -194,8 +177,7 @@ export const DeckDetails: React.FC = () => {
           </div>
           <p className="text-gray-600 font-bold">Cartões Totais</p>
         </div>
-
-        <div className="bg-white rounded-2xl shadow-sm p-6 border border-gray-200 flex flex-col justify-center items-center text-center">
+        <div className="bg-white rounded-2xl shadow-sm p-6 border border-gray-200 flex flex-col justify-center items-center text-center w-full md:w-[calc(50%-0.75rem)]">
           <h3 className="text-lg font-bold text-slate-900 mb-2">
             Construir Conhecimento
           </h3>
@@ -211,16 +193,14 @@ export const DeckDetails: React.FC = () => {
         </div>
       </div>
 
-      {/* Bloco de Listagem de Flashcards */}
-      <div className="mt-12 pt-6 border-t border-gray-200">
+      <div className="mt-12 pt-6 border-t border-gray-200 flex flex-col">
         <h2 className="text-2xl font-extrabold text-slate-900 mb-6">
           Conteúdo do Deck
         </h2>
-
         {loadingCards ? (
           <p className="text-gray-600 font-medium">Sincronizando cartões...</p>
         ) : flashcardsData?.deckFlashcards.length === 0 ? (
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 text-center">
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 flex flex-col items-center text-center">
             <p className="text-gray-600 font-medium">
               Nenhum cartão cadastrado. Crie o seu primeiro flashcard para
               começar os estudos!
@@ -233,14 +213,13 @@ export const DeckDetails: React.FC = () => {
                 key={card.id}
                 className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 hover:shadow-md transition-shadow"
               >
-                <div className="flex-1 w-full">
+                <div className="flex flex-col flex-1 w-full">
                   <h4 className="text-xs font-extrabold text-gray-500 uppercase tracking-widest mb-1">
                     Frente
                   </h4>
                   <p className="text-slate-900 font-bold mb-4 whitespace-pre-wrap">
                     {card.front}
                   </p>
-
                   <h4 className="text-xs font-extrabold text-green-700 uppercase tracking-widest mb-1">
                     Verso
                   </h4>
@@ -248,12 +227,10 @@ export const DeckDetails: React.FC = () => {
                     {card.back}
                   </p>
                 </div>
-
-                <div className="flex w-full md:w-auto md:flex-col justify-end space-y-0 space-x-2 md:space-x-0 md:space-y-2">
+                <div className="flex flex-col w-full md:w-auto justify-end">
                   <button
-                    // Em vez de chamar delete direto, abrimos o Modal
                     onClick={() => setCardToDelete(card.id)}
-                    className="px-4 py-2 w-full bg-red-50 text-red-700 font-bold rounded-lg hover:bg-red-100 transition-colors border border-red-100"
+                    className="px-4 py-2 w-full md:w-auto bg-red-50 text-red-700 font-bold rounded-lg hover:bg-red-100 transition-colors border border-red-100"
                   >
                     Excluir
                   </button>
@@ -269,7 +246,7 @@ export const DeckDetails: React.FC = () => {
         onClose={() => setIsModalOpen(false)}
         deckId={deck.id}
       />
-      {/* Renderização do Modal de Confirmação */}
+
       <ConfirmModal
         isOpen={!!cardToDelete}
         title="Excluir Flashcard"

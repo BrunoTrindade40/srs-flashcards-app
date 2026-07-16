@@ -1,17 +1,16 @@
 import { useMutation } from "@apollo/client/react";
 import React, { useState } from "react";
-import { GET_DECK } from "../lib/graphql/deck";
-import {
-  CREATE_FLASHCARD,
-  GET_DECK_FLASHCARDS,
-} from "../lib/graphql/flashcard";
-
 import type { GetDeckResponse, GetDeckVariables } from "../lib/graphql/deck";
+import { GET_DECK } from "../lib/graphql/deck";
 import type {
   CreateFlashcardResponse,
   CreateFlashcardVariables,
   GetDeckFlashcardsResponse,
   GetDeckFlashcardsVariables,
+} from "../lib/graphql/flashcard";
+import {
+  CREATE_FLASHCARD,
+  GET_DECK_FLASHCARDS,
 } from "../lib/graphql/flashcard";
 
 interface CreateFlashcardModalProps {
@@ -36,7 +35,6 @@ export const CreateFlashcardModal: React.FC<CreateFlashcardModalProps> = ({
     update(cache, { data }) {
       if (!data?.createFlashcard) return;
 
-      // 1. Atualiza Contador do Deck
       const existingDeck = cache.readQuery<GetDeckResponse, GetDeckVariables>({
         query: GET_DECK,
         variables: { id: deckId },
@@ -57,7 +55,6 @@ export const CreateFlashcardModal: React.FC<CreateFlashcardModalProps> = ({
         });
       }
 
-      // 2. Injeta o Cartão na Lista (CORREÇÃO APLICADA AQUI)
       const existingCards = cache.readQuery<
         GetDeckFlashcardsResponse,
         GetDeckFlashcardsVariables
@@ -105,7 +102,6 @@ export const CreateFlashcardModal: React.FC<CreateFlashcardModalProps> = ({
         },
       });
 
-      // Limpa os campos e permite criar mais cartões em sequência, sem fechar o modal
       setFront("");
       setBack("");
     } catch (err) {
@@ -116,7 +112,7 @@ export const CreateFlashcardModal: React.FC<CreateFlashcardModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 flex flex-col">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-xl font-bold text-gray-800">Novo Flashcard</h2>
           <button
@@ -128,18 +124,19 @@ export const CreateFlashcardModal: React.FC<CreateFlashcardModalProps> = ({
         </div>
 
         {errorMsg && (
-          <div className="mb-4 p-3 bg-red-50 text-red-700 text-sm rounded-lg">
+          <div className="mb-4 p-3 bg-red-50 text-red-700 text-sm rounded-lg flex">
             {errorMsg}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
+        <form onSubmit={handleSubmit} className="flex flex-col space-y-4">
+          <div className="flex flex-col">
             <label className="block text-sm font-medium text-gray-800 mb-1">
               Frente (Pergunta)
             </label>
             <textarea
               rows={3}
+              maxLength={2000}
               className="w-full px-4 py-2 rounded-lg bg-gray-50 border border-gray-200 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
               placeholder="Ex: O que é a Mitocôndria?"
               value={front}
@@ -148,12 +145,13 @@ export const CreateFlashcardModal: React.FC<CreateFlashcardModalProps> = ({
             />
           </div>
 
-          <div>
+          <div className="flex flex-col">
             <label className="block text-sm font-medium text-gray-800 mb-1">
               Verso (Resposta)
             </label>
             <textarea
               rows={3}
+              maxLength={3000}
               className="w-full px-4 py-2 rounded-lg bg-gray-50 border border-gray-200 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
               placeholder="Ex: É o organelo responsável pela respiração celular e produção de energia."
               value={back}
@@ -169,7 +167,7 @@ export const CreateFlashcardModal: React.FC<CreateFlashcardModalProps> = ({
               disabled={loading}
               className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg font-medium transition"
             >
-              Concluído
+              Concluir
             </button>
             <button
               type="submit"
