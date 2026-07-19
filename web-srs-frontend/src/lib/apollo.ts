@@ -44,11 +44,19 @@ export const client = new ApolloClient({
   // CORREÇÃO: Aplicação das typePolicies para silenciar o alerta e garantir a fusão segura do agregador
   cache: new InMemoryCache({
     typePolicies: {
+      Query: {
+        fields: {
+          deckFlashcards: {
+            merge(_existing, incoming) {
+              return incoming;
+            },
+          },
+        },
+      },
       Deck: {
         fields: {
           _count: {
-            merge(existing, incoming) {
-              // Mescla de forma segura os dados agregados antigos com a nova carga do backend
+            merge(existing = {}, incoming) {
               return { ...existing, ...incoming };
             },
           },
