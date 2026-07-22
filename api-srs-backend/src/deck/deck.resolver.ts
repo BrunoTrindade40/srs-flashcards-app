@@ -11,7 +11,7 @@ import { Deck } from './models/deck.model';
 @UseGuards(GqlAuthGuard) // Garante a proteção perimetral de todas as operações do controlador
 export class DeckResolver {
   // eslint-disable-next-line prettier/prettier
-  constructor(private readonly deckService: DeckService) { }
+  constructor(private readonly deckService: DeckService) {}
 
   @Mutation(() => Deck, {
     description: 'Cria um novo baralho de estudos associado ao usuário logado',

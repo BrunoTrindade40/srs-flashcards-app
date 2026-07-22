@@ -12,7 +12,6 @@ import {
 
 @Injectable()
 export class FlashcardService {
-  // eslint-disable-next-line prettier/prettier
   constructor(private readonly prisma: PrismaService) { }
 
   async createFlashcard(
@@ -34,24 +33,18 @@ export class FlashcardService {
       );
     }
 
+    // CORREÇÃO: A variável 'cognitiveDelayOffset' foi deletada.
+    // O módulo de Flashcard agora apenas cadastra o conteúdo no banco.
+
     return this.prisma.flashcard.create({
       data: {
         front: data.front,
         back: data.back,
         sourceContext: data.sourceContext,
         deckId: data.deckId,
-        fsrsData: {
-          create: {
-            stability: 0,
-            difficulty: 0,
-            state: 0, // NEW
-            reps: 0,
-            lapses: 0,
-          },
-        },
-      },
-      include: {
-        fsrsData: true,
+        // Caso seu CreateFlashcardInput já contenha os campos multimídia:
+        // imageUrl: data.imageUrl,
+        // audioUrl: data.audioUrl,
       },
     });
   }
@@ -72,31 +65,30 @@ export class FlashcardService {
     return this.prisma.flashcard.findMany({
       where: {
         deckId,
-        front: { not: '[DADO_ANONIMIZADO]' },
+        front: { not: '[DADO_ANONIMIZADO]' }, // Mantido: Conformidade estrita com LGPD
       },
       orderBy: { createdAt: 'desc' },
-      take: 1000, // Limite de segurança para evitar estrangulamento de memória (OOM)
+      take: 1000,
     });
   }
 
-  async updateFlashcard(
-    userId: string,
-    data: UpdateFlashcardInput,
-  ): Promise<PrismaFlashcard> {
-    const { id, ...updateData } = data;
-
-    const flashcard = await this.prisma.flashcard.findUnique({
-      where: { id },
+  async updateFlashcard(userId: string, data: UpdateFlashcardInput) {
+    const existingCard = await this.prisma.flashcard.findUnique({
+      where: { id: data.id },
       include: { deck: true },
     });
 
-    if (!flashcard || flashcard.deck.creatorId !== userId) {
-      throw new NotFoundException('Flashcard não encontrado ou acesso negado.');
+    if (!existingCard || existingCard.deck.creatorId !== userId) {
+      throw new ForbiddenException('Flashcard não encontrado ou acesso negado.');
     }
 
     return this.prisma.flashcard.update({
-      where: { id },
-      data: updateData,
+      where: { id: data.id },
+      data: {
+        front: data.front,
+        back: data.back,
+        sourceContext: data.sourceContext,
+      },
     });
   }
 
@@ -113,12 +105,15 @@ export class FlashcardService {
       throw new NotFoundException('Flashcard não encontrado ou acesso negado.');
     }
 
+    // Mantido: Fluxo de Anonimização Irreversível.
     return this.prisma.flashcard.update({
       where: { id },
       data: {
         front: '[DADO_ANONIMIZADO]',
         back: '[DADO_ANONIMIZADO]',
         sourceContext: null,
+        imageUrl: null,
+        audioUrl: null,
       },
     });
   }

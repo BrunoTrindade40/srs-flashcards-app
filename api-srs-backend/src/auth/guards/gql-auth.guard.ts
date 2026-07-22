@@ -53,10 +53,20 @@ export class GqlAuthGuard implements CanActivate {
       );
     }
 
-    const token = authHeader.replace('Bearer ', '');
+    // EXTRAÇÃO ROBUSTA: Protege contra erros de digitação e case sensitivity no Sandbox
+    const parts = authHeader.split(' ');
+    if (parts.length !== 2 || parts[0].toLowerCase() !== 'bearer') {
+      throw new UnauthorizedException(
+        'Formato de token inválido. O formato correto é: Bearer <token>',
+      );
+    }
+
+    const token = parts[1];
     const { data, error } = await this.supabase.auth.getUser(token);
 
     if (error !== null || !data.user) {
+      // LOG DE DEPURAÇÃO: Exibe no console do NestJS o motivo exato da falha do Supabase
+      console.error('[Supabase Auth Error]:', error?.message);
       throw new UnauthorizedException(
         'Sessão inválida ou expirada no provedor.',
       );

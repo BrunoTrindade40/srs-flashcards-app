@@ -9,4 +9,4 @@ import { StudyService } from './study.service';
   exports: [StudyService],
 })
 // eslint-disable-next-line prettier/prettier
-export class StudyModule { }
+export class StudyModule {}

@@ -8,7 +8,7 @@ export class UserService {
   private readonly logger = new Logger(UserService.name);
 
   // eslint-disable-next-line prettier/prettier
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(private readonly prisma: PrismaService) {}
 
   /**
    * Sincroniza o usuário logado via Supabase com o banco de dados interno.

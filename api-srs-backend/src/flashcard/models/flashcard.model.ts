@@ -1,4 +1,12 @@
-import { Field, ID, InputType, ObjectType, PartialType } from '@nestjs/graphql';
+import {
+  Field,
+  Float,
+  ID,
+  InputType,
+  Int,
+  ObjectType,
+  PartialType,
+} from '@nestjs/graphql';
 import {
   IsNotEmpty,
   IsOptional,
@@ -6,6 +14,28 @@ import {
   IsUUID,
   MaxLength,
 } from 'class-validator';
+
+// 1. Definição do Objeto de Telemetria FSRS
+@ObjectType()
+export class CardFSRSData {
+  @Field(() => Float)
+  stability!: number;
+
+  @Field(() => Float)
+  difficulty!: number;
+
+  @Field(() => Int)
+  reps!: number;
+
+  @Field(() => Int)
+  lapses!: number;
+
+  @Field(() => Int)
+  state!: number;
+
+  @Field()
+  due!: Date;
+}
 
 @ObjectType()
 export class Flashcard {
@@ -18,11 +48,15 @@ export class Flashcard {
   @Field()
   back!: string;
 
+  // CORREÇÃO: Adicionado o operador '!' (Definite Assignment Assertion)
   @Field(() => String, { nullable: true })
-  sourceContext?: string | null;
+  sourceContext!: string | null;
 
-  @Field()
-  status!: string;
+  @Field(() => String, { nullable: true })
+  imageUrl!: string | null;
+
+  @Field(() => String, { nullable: true })
+  audioUrl!: string | null;
 
   @Field(() => ID)
   deckId!: string;
@@ -32,6 +66,10 @@ export class Flashcard {
 
   @Field()
   updatedAt!: Date;
+
+  // CORREÇÃO: Adicionado o operador '!' aqui também
+  @Field(() => CardFSRSData, { nullable: true })
+  fsrsData?: CardFSRSData | null;
 }
 
 @InputType()

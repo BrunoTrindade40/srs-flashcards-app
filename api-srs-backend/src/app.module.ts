@@ -1,3 +1,4 @@
+import { ApolloServerPluginLandingPageLocalDefault } from '@apollo/server/plugin/landingPage/default';
 import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
@@ -22,7 +23,9 @@ import { UserModule } from './user/user.module';
     GraphQLModule.forRoot<ApolloDriverConfig>({
       driver: ApolloDriver,
       autoSchemaFile: join(process.cwd(), 'src/schema.gql'),
-      playground: true,
+      // CORREÇÃO: Desliga o Playground legado e injeta o Apollo Sandbox
+      playground: false,
+      plugins: [ApolloServerPluginLandingPageLocalDefault()],
       // Esta linha é crucial: mapeia a requisição HTTP para o contexto do GraphQL
       context: ({ req }: { req: Request }) => ({ req }),
     }),
@@ -35,5 +38,4 @@ import { UserModule } from './user/user.module';
   controllers: [AppController],
   providers: [AppService],
 })
-// eslint-disable-next-line prettier/prettier
 export class AppModule { }

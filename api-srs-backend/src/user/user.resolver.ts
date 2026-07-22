@@ -14,7 +14,7 @@ export interface AuthUserPayload {
 @Resolver(() => User)
 export class UserResolver {
   // eslint-disable-next-line prettier/prettier
-  constructor(private readonly userService: UserService) { }
+  constructor(private readonly userService: UserService) {}
 
   @Query(() => User, { name: 'me' })
   @UseGuards(GqlAuthGuard)

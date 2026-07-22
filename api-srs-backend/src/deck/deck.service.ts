@@ -7,7 +7,7 @@ import { UpdateDeckInput } from './dto/update-deck.input';
 @Injectable()
 export class DeckService {
   // eslint-disable-next-line prettier/prettier
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(private readonly prisma: PrismaService) {}
 
   // Cria o baralho e retorna a projeção de dados incluindo contagem zerada
   async create(
