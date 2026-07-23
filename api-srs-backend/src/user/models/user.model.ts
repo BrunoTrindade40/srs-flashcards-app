@@ -18,6 +18,10 @@ export class User {
   @Field(() => Int)
   totalXp!: number;
 
+  // 🔴 CORREÇÃO: Alinhamento exato com o schema.prisma (Rollver Temporal)
+  @Field(() => String)
+  timezone!: string;
+
   @Field(() => Date, { nullable: true })
   lastDataExportAt?: Date | null;
 
@@ -43,8 +47,6 @@ export class User {
   @Field(() => Int)
   longestStreak!: number;
 
-  @Field(() => String, { nullable: true })
-  pillReminderTime?: string | null;
 }
 
 @InputType()
@@ -63,8 +65,10 @@ export class UpdateUserSettingsInput {
   @Max(1000)
   maxDailyReviews?: number;
 
+  // 🔴 CORREÇÃO CRÍTICA: Exposição da propriedade real do banco de dados (timezone)
+  // Substitui o pillReminderTime que causaria falha transacional no Prisma.
   @Field(() => String, { nullable: true })
   @IsOptional()
   @IsString()
-  pillReminderTime?: string;
+  timezone?: string;
 }

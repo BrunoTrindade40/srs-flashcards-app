@@ -5,6 +5,7 @@ import {
   InputType,
   Int,
   ObjectType,
+  OmitType,
   PartialType,
 } from '@nestjs/graphql';
 import {
@@ -14,8 +15,8 @@ import {
   IsUUID,
   MaxLength,
 } from 'class-validator';
+import { Deck } from '../../deck/models/deck.model';
 
-// 1. Definição do Objeto de Telemetria FSRS
 @ObjectType()
 export class CardFSRSData {
   @Field(() => Float)
@@ -48,7 +49,6 @@ export class Flashcard {
   @Field()
   back!: string;
 
-  // CORREÇÃO: Adicionado o operador '!' (Definite Assignment Assertion)
   @Field(() => String, { nullable: true })
   sourceContext!: string | null;
 
@@ -61,15 +61,19 @@ export class Flashcard {
   @Field(() => ID)
   deckId!: string;
 
+  @Field(() => Deck, { nullable: true })
+  deck?: Deck;
+
   @Field()
   createdAt!: Date;
 
   @Field()
   updatedAt!: Date;
 
-  // CORREÇÃO: Adicionado o operador '!' aqui também
-  @Field(() => CardFSRSData, { nullable: true })
-  fsrsData?: CardFSRSData | null;
+  // 🔴 CORREÇÃO CRÍTICA: O contrato agora espera um Array de objetos FSRS,
+  // possuindo paridade exata 1:1 com o relacionamento 'CardFSRSData[]' do Prisma.
+  @Field(() => [CardFSRSData], { nullable: true })
+  fsrsData?: CardFSRSData[] | null;
 }
 
 @InputType()
@@ -103,7 +107,10 @@ export class CreateFlashcardInput {
 }
 
 @InputType()
-export class UpdateFlashcardInput extends PartialType(CreateFlashcardInput) {
+export class UpdateFlashcardInput extends PartialType(
+  // 🟡 CORREÇÃO ALERTA: Retira a falsa promessa de edição do deckId
+  OmitType(CreateFlashcardInput, ['deckId'] as const),
+) {
   @Field(() => ID)
   @IsUUID('4')
   @IsNotEmpty()

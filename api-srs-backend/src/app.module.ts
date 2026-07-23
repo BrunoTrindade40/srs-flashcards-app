@@ -6,8 +6,6 @@ import { GraphQLModule } from '@nestjs/graphql';
 import { Request } from 'express';
 import { join } from 'path';
 import { PrismaModule } from '../prisma/prisma.module';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
 import { DeckModule } from './deck/deck.module';
 import { FlashcardModule } from './flashcard/flashcard.module';
 import { StudyModule } from './study/study.module';
@@ -35,7 +33,5 @@ import { UserModule } from './user/user.module';
     FlashcardModule,
     StudyModule,
   ],
-  controllers: [AppController],
-  providers: [AppService],
 })
 export class AppModule { }

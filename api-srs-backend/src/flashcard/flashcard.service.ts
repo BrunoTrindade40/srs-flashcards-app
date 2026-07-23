@@ -4,7 +4,11 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Flashcard as PrismaFlashcard } from '@prisma/client';
+// Importação corrigida: createEmptyCard e Card são importados diretamente
+import { Card, createEmptyCard } from 'ts-fsrs';
 import { PrismaService } from '../../prisma/prisma.service';
+// 🟡 CORREÇÃO ALERTA: Importação da fonte de verdade da constante de negócio
+import { ANONYMIZED_PAYLOAD } from '../common/constants/domain.constants';
 import {
   CreateFlashcardInput,
   UpdateFlashcardInput,
@@ -18,33 +22,49 @@ export class FlashcardService {
     userId: string,
     data: CreateFlashcardInput,
   ): Promise<PrismaFlashcard> {
+    const emptyCard: Card = createEmptyCard();
+
     const deck = await this.prisma.deck.findUnique({
       where: { id: data.deckId },
-      select: { creatorId: true },
+      // 🔴 CORREÇÃO CRÍTICA: Traciona a verificação de exclusão lógica do pai
+      select: { creatorId: true, isArchived: true },
     });
 
     if (!deck) {
       throw new NotFoundException('Deck não encontrado.');
     }
 
-    if (deck.creatorId !== userId) {
+    // Bloqueia a injeção caso o baralho esteja arquivado
+    if (deck.creatorId !== userId || deck.isArchived) {
       throw new ForbiddenException(
-        'Acesso negado. Você não é o proprietário deste Deck.',
+        'Acesso negado. Você não é o proprietário ou o baralho foi excluído.',
       );
     }
 
-    // CORREÇÃO: A variável 'cognitiveDelayOffset' foi deletada.
-    // O módulo de Flashcard agora apenas cadastra o conteúdo no banco.
-
+    // 3. Persistência Atômica via Nested Writes
     return this.prisma.flashcard.create({
       data: {
         front: data.front,
         back: data.back,
         sourceContext: data.sourceContext,
         deckId: data.deckId,
-        // Caso seu CreateFlashcardInput já contenha os campos multimídia:
-        // imageUrl: data.imageUrl,
-        // audioUrl: data.audioUrl,
+        // Encadeamento obrigatório do metadado de aprendizado inicial
+        fsrsData: {
+          create: {
+            userId: userId,
+            stability: emptyCard.stability,
+            difficulty: emptyCard.difficulty,
+            // 🔴 CORREÇÃO CRÍTICA: Restauração do mapeamento em snake_case.
+            // O aviso visual de depreciação gerado pelo TypeScript deve ser ignorado.
+            elapsedDays: emptyCard.elapsed_days,
+            scheduledDays: emptyCard.scheduled_days,
+            reps: emptyCard.reps,
+            lapses: emptyCard.lapses,
+            state: emptyCard.state,
+            due: emptyCard.due,
+            lastReview: emptyCard.last_review || null,
+          },
+        },
       },
     });
   }
@@ -65,7 +85,8 @@ export class FlashcardService {
     return this.prisma.flashcard.findMany({
       where: {
         deckId,
-        front: { not: '[DADO_ANONIMIZADO]' }, // Mantido: Conformidade estrita com LGPD
+        // Aplicação no filtro de leitura
+        front: { not: ANONYMIZED_PAYLOAD },
       },
       orderBy: { createdAt: 'desc' },
       take: 1000,
@@ -78,8 +99,14 @@ export class FlashcardService {
       include: { deck: true },
     });
 
-    if (!existingCard || existingCard.deck.creatorId !== userId) {
-      throw new ForbiddenException('Flashcard não encontrado ou acesso negado.');
+    // 🔴 CORREÇÃO CRÍTICA: Impede atualização de cartão de um baralho excluído
+    if (!existingCard || existingCard.deck.creatorId !== userId || existingCard.deck.isArchived) {
+      throw new ForbiddenException('Flashcard não encontrado, acesso negado ou baralho excluído.');
+    }
+
+    // 🔴 CORREÇÃO CRÍTICA: Bloqueia a adulteração de registros logicamente excluídos
+    if (existingCard.front === ANONYMIZED_PAYLOAD) {
+      throw new ForbiddenException('Não é possível modificar um flashcard anonimizado.');
     }
 
     return this.prisma.flashcard.update({
@@ -101,16 +128,17 @@ export class FlashcardService {
       include: { deck: true },
     });
 
-    if (!flashcard || flashcard.deck.creatorId !== userId) {
-      throw new NotFoundException('Flashcard não encontrado ou acesso negado.');
+    // 🔴 CORREÇÃO CRÍTICA: Impede re-anonimização inútil caso o baralho já esteja morto
+    if (!flashcard || flashcard.deck.creatorId !== userId || flashcard.deck.isArchived) {
+      throw new NotFoundException('Flashcard não encontrado, acesso negado ou baralho já excluído.');
     }
 
-    // Mantido: Fluxo de Anonimização Irreversível.
     return this.prisma.flashcard.update({
       where: { id },
       data: {
-        front: '[DADO_ANONIMIZADO]',
-        back: '[DADO_ANONIMIZADO]',
+        // Aplicação na mutação de dados para anonimização LGPD
+        front: ANONYMIZED_PAYLOAD,
+        back: ANONYMIZED_PAYLOAD,
         sourceContext: null,
         imageUrl: null,
         audioUrl: null,

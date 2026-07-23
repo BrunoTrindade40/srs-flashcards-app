@@ -56,6 +56,34 @@ export const Dashboard: React.FC = () => {
         </button>
       </div>
 
+      {/* BANNER DO MODO CHAOS */}
+      <div className="mb-10 bg-gradient-to-br from-slate-900 to-indigo-950 rounded-3xl p-8 md:p-10 text-white shadow-xl flex flex-col md:flex-row items-center justify-between gap-8 relative overflow-hidden">
+        <div className="z-10 max-w-2xl">
+          <span className="inline-block bg-purple-500/20 text-purple-200 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider mb-4 border border-purple-400/30">
+            Dificuldades Desejáveis (Interleaving)
+          </span>
+          <h3 className="text-3xl md:text-4xl font-bold mb-3 flex items-center gap-3">
+            Modo Chaos 🌪️
+          </h3>
+          <p className="text-indigo-200 mb-8 text-base md:text-lg leading-relaxed">
+            Potencialize sua memória a longo prazo. Misture revisões atrasadas
+            de todas as suas matérias em uma única sessão imersiva de alto
+            impacto.
+          </p>
+          <button
+            onClick={() => navigate("/chaos")}
+            className="bg-white text-indigo-950 font-bold py-4 px-8 rounded-2xl shadow-lg hover:scale-105 hover:shadow-indigo-500/50 transition-all duration-300"
+          >
+            Iniciar Sessão Global
+          </button>
+        </div>
+
+        {/* Elementos decorativos de fundo do Banner */}
+        <div className="absolute top-0 right-0 w-64 h-64 bg-purple-600 rounded-full mix-blend-screen filter blur-[80px] opacity-40"></div>
+        <div className="absolute -bottom-10 right-20 w-64 h-64 bg-indigo-500 rounded-full mix-blend-screen filter blur-[80px] opacity-40"></div>
+      </div>
+      {/* FIM DO BANNER DO MODO CHAOS */}
+
       {decks.length === 0 ? (
         <div className="flex flex-col items-center justify-center bg-white rounded-2xl shadow-sm p-12 text-center border border-gray-200">
           <h3 className="text-xl font-bold text-slate-900 mb-2">

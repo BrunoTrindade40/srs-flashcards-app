@@ -4,6 +4,8 @@ import { Dashboard } from "../pages/Dashboard";
 import { DeckDetails } from "../pages/DeckDetails";
 import { Login } from "../pages/Login";
 import { StudySession } from "../pages/StudySession";
+// 1. NOVO IMPORT: Trazemos a página do Modo Chaos
+import { ChaosStudyPage } from "../pages/ChaosStudyPage";
 
 import { MainLayout } from "../components/MainLayout";
 import { ProtectedRoute } from "../components/ProtectedRoute";
@@ -29,6 +31,8 @@ export function AppRoutes() {
 
         {/* Rota de Foco Profundo (Sem Header para imersão total) */}
         <Route path="/study/:deckId" element={<StudySession />} />
+        {/* 2. NOVA ROTA: Modo Chaos (Interleaving - Fora do MainLayout) */}
+        <Route path="/chaos" element={<ChaosStudyPage />} />
       </Route>
 
       {/* 4. Captura de rotas inexistentes (Fallback de Segurança) */}
