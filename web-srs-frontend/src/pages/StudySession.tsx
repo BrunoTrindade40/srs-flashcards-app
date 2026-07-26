@@ -1,60 +1,39 @@
 import { useMutation, useQuery } from "@apollo/client/react";
-import React, { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useCallback, useState } from "react";
+import { Link, useParams } from "react-router-dom";
+import { useStudyKeyboard } from "../hooks/useStudyKeyboard";
+import { useToast } from "../hooks/useToast";
 import {
   GET_DUE_FLASHCARDS,
   SUBMIT_REVIEW,
-  type GetDueFlashcardsResponse,
-  type GetDueFlashcardsVariables,
+  type FlashcardDue,
 } from "../lib/graphql/study";
 
-export const StudySession: React.FC = () => {
+export function StudySession() {
   const { deckId } = useParams<{ deckId: string }>();
-  const navigate = useNavigate();
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [showAnswer, setShowAnswer] = useState(false);
+  const [sessionFinished, setSessionFinished] = useState(false);
+  const [answerShownAt, setAnswerShownAt] = useState<number | null>(null);
 
-  const [currentIndex, setCurrentIndex] = useState<number>(0);
-  const [isFlipped, setIsFlipped] = useState<boolean>(false);
+  const { showToast } = useToast();
 
-  // NOVO ESTADO: UI06 - Microcopy Afetivo e Gamificação
-  const [sessionCompleted, setSessionCompleted] = useState<boolean>(false);
-
-  // Pureza de Componente: useRef evita renders em cascata ao capturar o tempo
-  const startTimeRef = useRef<number>(0);
-
-  const { data, loading, error } = useQuery<
-    GetDueFlashcardsResponse,
-    GetDueFlashcardsVariables
-  >(GET_DUE_FLASHCARDS, {
-    variables: { deckId: deckId ?? "" },
+  const { data, loading, error, refetch } = useQuery(GET_DUE_FLASHCARDS, {
+    variables: { deckId: deckId || "" },
     skip: !deckId,
     fetchPolicy: "network-only",
   });
 
-  const [submitReview, { loading: isSubmitting }] = useMutation(SUBMIT_REVIEW);
+  const [submitReview, { loading: submitting }] = useMutation(SUBMIT_REVIEW);
 
-  const flashcards = data?.dueFlashcards ?? [];
-  const currentCard = flashcards[currentIndex];
+  const cards: FlashcardDue[] = data?.dueFlashcards || [];
+  const currentCard = cards[currentIndex];
 
-  useEffect(() => {
-    startTimeRef.current = Date.now();
-  }, [currentIndex]);
-
-  // Função para avançar o Card (Adaptada para evitar o alert)
-  const handleNextCard = useCallback(() => {
-    if (currentIndex < flashcards.length - 1) {
-      setCurrentIndex((prev) => prev + 1);
-      setIsFlipped(false);
-    } else {
-      // Ativa o End State comemorativo
-      setSessionCompleted(true);
-    }
-  }, [currentIndex, flashcards.length]);
-
-  const handleRatingSubmit = useCallback(
+  const handleRating = useCallback(
     async (rating: number) => {
-      if (isSubmitting || !currentCard) return;
+      if (!currentCard || submitting) return;
 
-      const reviewDurationMs = Date.now() - startTimeRef.current;
+      const reviewDurationMs = answerShownAt ? Date.now() - answerShownAt : 0;
 
       try {
         await submitReview({
@@ -65,245 +44,183 @@ export const StudySession: React.FC = () => {
           },
         });
 
-        handleNextCard();
-      } catch (err) {
-        console.error("Falha na telemetria de revisão:", err);
-        // O alert é mantido EXCLUSIVAMENTE para erros catastróficos (queda de rede)
-        alert("Erro de conexão ao registrar resposta. Tente novamente.");
+        if (currentIndex + 1 < cards.length) {
+          setCurrentIndex((prev) => prev + 1);
+          setShowAnswer(false);
+          setAnswerShownAt(null);
+        } else {
+          setSessionFinished(true);
+        }
+      } catch (err: unknown) {
+        console.error("Erro ao registrar avaliação:", err);
+        showToast("Falha ao salvar revisão no servidor.", "error");
       }
     },
-    [isSubmitting, currentCard, submitReview, handleNextCard],
+    [
+      currentCard,
+      submitting,
+      answerShownAt,
+      submitReview,
+      currentIndex,
+      cards.length,
+      showToast,
+    ],
   );
 
-  // Acessibilidade e Prevenção de Fadiga de Decisão (Fogg Behavior Model)
-  useEffect(() => {
-    const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      if (["INPUT", "TEXTAREA"].includes((e.target as HTMLElement).tagName))
-        return;
+  const handleShowAnswerClick = useCallback(() => {
+    setShowAnswer(true);
+    setAnswerShownAt(Date.now());
+  }, []);
 
-      // Se a sessão acabou, ignoramos o teclado para evitar cliques falsos
-      if (!currentCard || isSubmitting || sessionCompleted) return;
+  useStudyKeyboard({
+    showAnswer,
+    disabled: sessionFinished || !currentCard || submitting,
+    onRevealAnswer: handleShowAnswerClick,
+    onRating: handleRating,
+  });
 
-      if (!isFlipped) {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          setIsFlipped(true);
-        }
-      } else {
-        if (["1", "2", "3", "4"].includes(e.key)) {
-          e.preventDefault();
-          handleRatingSubmit(parseInt(e.key, 10));
-        }
-      }
-    };
-    window.addEventListener("keydown", handleGlobalKeyDown);
-    return () => window.removeEventListener("keydown", handleGlobalKeyDown);
-  }, [
-    isFlipped,
-    currentCard,
-    isSubmitting,
-    sessionCompleted,
-    handleRatingSubmit,
-  ]);
-
-  // UX de Carregamento
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-b-4 border-blue-500 mb-4 mr-4"></div>
-        <p className="text-lg font-medium text-gray-600">
-          Sincronizando foco no deck...
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <p className="text-slate-400 font-medium">
+          Carregando sessão de estudos...
         </p>
       </div>
     );
   }
 
-  // UX de Erro
-  if (error || !deckId) {
+  if (error) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-gray-50 text-red-600">
-        <h2 className="text-2xl font-bold mb-2">Erro de Sincronização</h2>
-        <p>{error?.message || "Identificador do Deck ausente."}</p>
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+        <p className="text-rose-400 font-medium">
+          Erro ao carregar sessão de estudos.
+        </p>
         <button
-          onClick={() => navigate(-1)}
-          className="mt-4 px-6 py-2 bg-gray-200 text-gray-800 font-bold rounded-xl hover:bg-gray-300"
+          onClick={() => refetch()}
+          className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-sm transition"
         >
-          Voltar
+          Tentar Novamente
         </button>
       </div>
     );
   }
 
-  // UX Passivo Zerado desde o Início
-  if (flashcards.length === 0) {
+  if (cards.length === 0 || sessionFinished) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-gray-50">
-        <div className="bg-white p-10 rounded-3xl shadow-lg flex flex-col items-center text-center max-w-md w-full">
-          <div className="text-6xl mb-4">🏆</div>
-          <h2 className="text-2xl font-bold text-green-700 mb-2">
-            Deck em Dia!
-          </h2>
-          <p className="text-gray-600 mb-8 font-medium">
-            Você não possui cartões vencidos neste tema hoje. Bom descanso!
-          </p>
-          <button
-            onClick={() => navigate("/dashboard")}
-            className="w-full flex justify-center py-4 px-4 bg-blue-600 text-white font-bold rounded-xl shadow-md hover:bg-blue-700 transition-colors"
-          >
-            Retornar ao Dashboard
-          </button>
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 text-center max-w-md mx-auto px-4">
+        <div className="w-16 h-16 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 text-2xl mb-2">
+          🎉
         </div>
+        <h2 className="text-2xl font-bold text-slate-100">
+          Sessão Finalizada!
+        </h2>
+        <p className="text-slate-400 text-sm">
+          Você revisou todos os cartões agendados para este baralho no dia de
+          hoje.
+        </p>
+        <Link
+          to="/dashboard"
+          className="mt-2 px-6 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-semibold rounded-xl text-sm transition"
+        >
+          Voltar ao Dashboard
+        </Link>
       </div>
     );
   }
 
-  // --- NOVA TELA: MICROCOPY AFETIVO PARA SESSÃO ESPECÍFICA (UI06) ---
-  if (sessionCompleted) {
-    const effortLevel = flashcards.length;
-    let affectiveTitle = "Sessão Concluída!";
-    let affectiveMessage = "Um passo a mais na consolidação da sua memória.";
-
-    // Gamificação baseada no esforço pontual em um único deck
-    if (effortLevel >= 40) {
-      affectiveTitle = "Foco Inabalável! 🔥";
-      affectiveMessage = `Você dominou ${effortLevel} conceitos deste baralho. Isso é o estado da arte do aprendizado ativo!`;
-    } else if (effortLevel >= 15) {
-      affectiveTitle = "Excelente Consistência! 🧠";
-      affectiveMessage = `Você avançou significativamente neste tema com ${effortLevel} cartões revisados.`;
-    }
-
-    return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-gray-50 animate-fade-in p-4">
-        <div className="bg-white p-10 rounded-3xl shadow-xl flex flex-col items-center text-center max-w-md w-full border-t-4 border-blue-500">
-          <div className="text-7xl mb-6">✨</div>
-          <h2 className="text-3xl font-extrabold text-gray-800 mb-4">
-            {affectiveTitle}
-          </h2>
-          <p className="text-gray-600 mb-8 font-medium text-lg leading-relaxed">
-            {affectiveMessage}
-          </p>
-          <button
-            onClick={() => navigate("/dashboard")}
-            className="w-full flex justify-center py-4 px-4 bg-blue-600 text-white font-bold rounded-xl shadow-md hover:bg-blue-700 transition-transform hover:-translate-y-1"
-          >
-            Voltar ao Dashboard
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // --- RENDERIZAÇÃO DO FLASHCARD INDIVIDUAL ---
   return (
-    <div className="flex min-h-screen flex-col items-center bg-gray-100 p-4 font-sans">
-      <div className="w-full max-w-3xl flex justify-between items-center mb-6 mt-4">
-        <button
-          onClick={() => navigate("/dashboard")}
-          className="text-gray-500 hover:text-gray-800 transition-colors font-medium flex items-center gap-1"
-        >
-          ← Sair
-        </button>
-        <div className="text-sm font-bold text-gray-500 uppercase tracking-wide">
-          Sessão Focada • {currentIndex + 1} / {flashcards.length}
+    <div className="max-w-2xl mx-auto px-4 py-6 flex flex-col gap-6">
+      {/* Cabeçalho */}
+      <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+        <div>
+          <span className="text-xs font-semibold uppercase tracking-wider text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-md border border-emerald-500/20">
+            Sessão Padrão
+          </span>
+          <h1 className="text-lg font-bold text-slate-200 mt-2">
+            Deck: {currentCard.deck?.title || "Estudo Diário"}
+          </h1>
         </div>
-      </div>
-
-      <div className="w-full max-w-3xl bg-gray-200 rounded-full h-2 mb-8 overflow-hidden shadow-inner">
-        <div
-          className="bg-blue-500 h-2 transition-all duration-500 ease-out"
-          style={{ width: `${(currentIndex / flashcards.length) * 100}%` }}
-        ></div>
-      </div>
-
-      <div
-        className={`w-full max-w-3xl min-h-[400px] flex flex-col bg-white rounded-3xl shadow-xl transition-all duration-300 ease-in-out ${!isFlipped ? "cursor-pointer hover:shadow-2xl hover:-translate-y-1" : ""}`}
-        onClick={() => !isFlipped && setIsFlipped(true)}
-      >
-        <div className="flex-1 flex flex-col items-center justify-center p-10 text-center border-b border-gray-100">
-          <h3 className="text-xs font-extrabold uppercase tracking-widest text-gray-400 mb-6">
-            Frente (Pergunta)
-          </h3>
-          <p
-            className={`font-medium text-gray-900 whitespace-pre-wrap leading-relaxed transition-all duration-300 ${isFlipped ? "text-xl text-gray-500" : "text-3xl"}`}
-          >
-            {currentCard.front}
+        <div className="text-right">
+          <span className="text-xs text-slate-400">Progresso</span>
+          <p className="text-sm font-semibold text-slate-200">
+            {currentIndex + 1} / {cards.length}
           </p>
         </div>
+      </div>
 
-        {isFlipped ? (
-          <div className="flex-1 flex flex-col p-8 bg-gray-50 rounded-b-3xl animate-fade-in">
-            <div className="flex-1 flex flex-col items-center justify-center text-center mb-8">
-              <h3 className="text-xs font-extrabold uppercase tracking-widest text-green-700 mb-6">
-                Verso (Resposta)
-              </h3>
-              <p className="text-2xl text-gray-800 font-medium whitespace-pre-wrap leading-relaxed">
-                {currentCard.back}
-              </p>
-            </div>
+      {/* Visualizador do Card */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 min-h-65 flex flex-col justify-between shadow-lg">
+        <div className="flex flex-col gap-2">
+          <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">
+            Frente (Pergunta)
+          </span>
+          <div className="text-lg text-slate-100 font-medium whitespace-pre-wrap">
+            {currentCard.front}
+          </div>
+        </div>
 
-            <hr className="border-gray-200 w-full mb-6" />
-
-            <div className="flex flex-wrap justify-between gap-3 w-full">
-              <button
-                disabled={isSubmitting}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleRatingSubmit(1);
-                }}
-                className="py-4 flex flex-col items-center justify-center rounded-2xl font-bold text-red-800 bg-red-100 hover:bg-red-200 transition-colors shadow-sm w-[calc(50%-0.5rem)] md:w-[calc(25%-0.75rem)]"
-              >
-                Errei{" "}
-                <span className="text-xs font-medium text-red-600 mt-1 opacity-80">
-                  Tecla 1
-                </span>
-              </button>
-              <button
-                disabled={isSubmitting}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleRatingSubmit(2);
-                }}
-                className="py-4 flex flex-col items-center justify-center rounded-2xl font-bold text-orange-800 bg-orange-100 hover:bg-orange-200 transition-colors shadow-sm w-[calc(50%-0.5rem)] md:w-[calc(25%-0.75rem)]"
-              >
-                Difícil{" "}
-                <span className="text-xs font-medium text-orange-600 mt-1 opacity-80">
-                  Tecla 2
-                </span>
-              </button>
-              <button
-                disabled={isSubmitting}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleRatingSubmit(3);
-                }}
-                className="py-4 flex flex-col items-center justify-center rounded-2xl font-bold text-green-800 bg-green-100 hover:bg-green-200 transition-colors shadow-sm w-[calc(50%-0.5rem)] md:w-[calc(25%-0.75rem)]"
-              >
-                Bom{" "}
-                <span className="text-xs font-medium text-green-600 mt-1 opacity-80">
-                  Tecla 3
-                </span>
-              </button>
-              <button
-                disabled={isSubmitting}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleRatingSubmit(4);
-                }}
-                className="py-4 flex flex-col items-center justify-center rounded-2xl font-bold text-blue-800 bg-blue-100 hover:bg-blue-200 transition-colors shadow-sm w-[calc(50%-0.5rem)] md:w-[calc(25%-0.75rem)]"
-              >
-                Fácil{" "}
-                <span className="text-xs font-medium text-blue-600 mt-1 opacity-80">
-                  Tecla 4
-                </span>
-              </button>
+        {showAnswer ? (
+          <div className="flex flex-col gap-2 pt-6 border-t border-slate-800/80 mt-6">
+            <span className="text-xs font-medium text-amber-400 uppercase tracking-wider">
+              Verso (Resposta)
+            </span>
+            <div className="text-base text-slate-200 whitespace-pre-wrap">
+              {currentCard.back}
             </div>
           </div>
         ) : (
-          <div className="flex items-center justify-center py-6 bg-gray-50 rounded-b-3xl text-gray-500 font-semibold tracking-wide text-sm">
-            Pressione ESPAÇO ou CLIQUE para revelar a resposta
+          <div className="pt-6 border-t border-slate-800/50 mt-6 text-center">
+            <button
+              onClick={handleShowAnswerClick}
+              className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium rounded-xl text-sm transition border border-slate-700/50"
+            >
+              Revelar Resposta (Espaço / Enter)
+            </button>
           </div>
         )}
       </div>
+
+      {/* Botões de Avaliação (Flexbox) */}
+      {showAnswer && (
+        <div className="flex flex-wrap w-full gap-3 pt-2">
+          <button
+            onClick={() => handleRating(1)}
+            disabled={submitting}
+            className="flex-1 min-w-[calc(50%-0.375rem)] sm:min-w-0 flex flex-col items-center justify-center p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 hover:bg-rose-500/20 active:scale-95 transition disabled:opacity-50"
+          >
+            <span className="font-semibold text-sm">Errei</span>
+            <span className="text-xs text-rose-400/70 mt-0.5">Teclado: 1</span>
+          </button>
+          <button
+            onClick={() => handleRating(2)}
+            disabled={submitting}
+            className="flex-1 min-w-[calc(50%-0.375rem)] sm:min-w-0 flex flex-col items-center justify-center p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 hover:bg-amber-500/20 active:scale-95 transition disabled:opacity-50"
+          >
+            <span className="font-semibold text-sm">Difícil</span>
+            <span className="text-xs text-amber-400/70 mt-0.5">Teclado: 2</span>
+          </button>
+          <button
+            onClick={() => handleRating(3)}
+            disabled={submitting}
+            className="flex-1 min-w-[calc(50%-0.375rem)] sm:min-w-0 flex flex-col items-center justify-center p-3 rounded-xl bg-blue-500/10 border border-blue-500/30 text-blue-300 hover:bg-blue-500/20 active:scale-95 transition disabled:opacity-50"
+          >
+            <span className="font-semibold text-sm">Bom</span>
+            <span className="text-xs text-blue-400/70 mt-0.5">Teclado: 3</span>
+          </button>
+          <button
+            onClick={() => handleRating(4)}
+            disabled={submitting}
+            className="flex-1 min-w-[calc(50%-0.375rem)] sm:min-w-0 flex flex-col items-center justify-center p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20 active:scale-95 transition disabled:opacity-50"
+          >
+            <span className="font-semibold text-sm">Fácil</span>
+            <span className="text-xs text-emerald-400/70 mt-0.5">
+              Teclado: 4
+            </span>
+          </button>
+        </div>
+      )}
     </div>
   );
-};
+}
+
+export default StudySession;

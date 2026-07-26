@@ -1,16 +1,15 @@
-import React from "react";
 import { Outlet } from "react-router-dom";
 import { Header } from "./Header";
 
-export const MainLayout: React.FC = () => {
+export function MainLayout() {
   return (
-    // Alterado para bg-gray-50 para uma integração perfeita com os cards brancos
-    <div className="min-h-screen flex flex-col bg-gray-50 font-sans">
+    <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100">
       <Header />
-
-      <main className="flex-1 w-full">
+      <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <Outlet />
       </main>
     </div>
   );
-};
+}
+
+export default MainLayout;

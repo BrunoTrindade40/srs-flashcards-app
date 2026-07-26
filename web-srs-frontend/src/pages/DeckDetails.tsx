@@ -1,260 +1,216 @@
 import { useMutation, useQuery } from "@apollo/client/react";
-import React, { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { ConfirmModal } from "../components/ConfirmModal";
 import { CreateFlashcardModal } from "../components/CreateFlashcardModal";
-import type { GetDeckResponse, GetDeckVariables } from "../lib/graphql/deck";
-import { GET_DECK } from "../lib/graphql/deck";
-import type {
-  GetDeckFlashcardsResponse,
-  GetDeckFlashcardsVariables,
-  RemoveFlashcardResponse,
-  RemoveFlashcardVariables,
-} from "../lib/graphql/flashcard";
-import {
-  GET_DECK_FLASHCARDS,
-  REMOVE_FLASHCARD,
-} from "../lib/graphql/flashcard";
+import { useToast } from "../hooks/useToast";
+import { DELETE_DECK, GET_DECK_DETAILS } from "../lib/graphql/deck";
+import { REMOVE_FLASHCARD } from "../lib/graphql/flashcard"; // CORRIGIDO!
 
-export const DeckDetails: React.FC = () => {
+export function DeckDetails() {
   const { deckId } = useParams<{ deckId: string }>();
   const navigate = useNavigate();
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [cardToDelete, setCardToDelete] = useState<string | null>(null);
+  const { showToast } = useToast();
 
-  const {
-    data: deckData,
-    loading: loadingDeck,
-    error: deckError,
-  } = useQuery<GetDeckResponse, GetDeckVariables>(GET_DECK, {
-    variables: { id: deckId ?? "" },
+  const [isCardModalOpen, setIsCardModalOpen] = useState(false);
+  const [isDeleteDeckModalOpen, setIsDeleteDeckModalOpen] = useState(false);
+  const [cardToDeleteId, setCardToDeleteId] = useState<string | null>(null);
+
+  const { data, loading, error, refetch } = useQuery(GET_DECK_DETAILS, {
+    variables: { id: deckId || "" },
     skip: !deckId,
   });
 
-  const { data: flashcardsData, loading: loadingCards } = useQuery<
-    GetDeckFlashcardsResponse,
-    GetDeckFlashcardsVariables
-  >(GET_DECK_FLASHCARDS, {
-    variables: { deckId: deckId ?? "" },
-    skip: !deckId,
-    fetchPolicy: "cache-and-network",
-  });
+  const [deleteDeck, { loading: deletingDeck }] = useMutation(DELETE_DECK);
+  // CORRIGIDO: Passando a utilizar REMOVE_FLASHCARD conforme declarado no seu schema
+  const [deleteFlashcard, { loading: deletingCard }] =
+    useMutation(REMOVE_FLASHCARD);
 
-  const [removeFlashcard, { loading: isDeleting }] = useMutation<
-    RemoveFlashcardResponse,
-    RemoveFlashcardVariables
-  >(REMOVE_FLASHCARD, {
-    update(cache, { data }, { variables }) {
-      if (!data?.removeFlashcard || !variables?.id) return;
+  const deck = data?.deck;
 
-      const existingCards = cache.readQuery<
-        GetDeckFlashcardsResponse,
-        GetDeckFlashcardsVariables
-      >({
-        query: GET_DECK_FLASHCARDS,
-        variables: { deckId: deckId ?? "" },
-      });
+  const handleDeleteDeck = async () => {
+    if (!deckId) return;
 
-      if (existingCards?.deckFlashcards) {
-        cache.writeQuery<GetDeckFlashcardsResponse, GetDeckFlashcardsVariables>(
-          {
-            query: GET_DECK_FLASHCARDS,
-            variables: { deckId: deckId ?? "" },
-            data: {
-              deckFlashcards: existingCards.deckFlashcards.filter(
-                (c) => c.id !== variables.id,
-              ),
-            },
-          },
-        );
-      }
-
-      const existingDeck = cache.readQuery<GetDeckResponse, GetDeckVariables>({
-        query: GET_DECK,
-        variables: { id: deckId ?? "" },
-      });
-
-      if (existingDeck?.deck) {
-        cache.writeQuery<GetDeckResponse, GetDeckVariables>({
-          query: GET_DECK,
-          variables: { id: deckId ?? "" },
-          data: {
-            deck: {
-              ...existingDeck.deck,
-              _count: {
-                flashcards: Math.max(
-                  0,
-                  (existingDeck.deck._count?.flashcards || 0) - 1,
-                ),
-              },
-            },
-          },
-        });
-      }
-    },
-  });
-
-  const confirmDeletion = async () => {
-    if (!cardToDelete) return;
     try {
-      await removeFlashcard({ variables: { id: cardToDelete } });
-      setCardToDelete(null);
-    } catch (err) {
-      console.error("Erro ao excluir cartão:", err);
-      alert("Não foi possível excluir o cartão no momento.");
-      setCardToDelete(null);
+      await deleteDeck({ variables: { id: deckId } });
+      showToast("Deck excluído com sucesso!", "success");
+      navigate("/dashboard");
+    } catch (err: unknown) {
+      console.error("Erro ao deletar deck:", err);
+      showToast("Falha ao excluir o deck.", "error");
     }
   };
 
-  if (loadingDeck) {
+  const handleDeleteFlashcard = async () => {
+    if (!cardToDeleteId) return;
+
+    try {
+      // CORRIGIDO: Mapeando corretamente os IDs conforme seu schema de exclusão
+      await deleteFlashcard({ variables: { id: cardToDeleteId } });
+      showToast("Flashcard excluído com sucesso!", "success");
+      setCardToDeleteId(null);
+      refetch();
+    } catch (err: unknown) {
+      console.error("Erro ao deletar flashcard:", err);
+      showToast("Falha ao excluir o flashcard.", "error");
+    }
+  };
+
+  if (loading) {
     return (
-      <div className="flex flex-1 items-center justify-center">
-        <p className="text-gray-700 font-medium">
-          Carregando os detalhes do baralho...
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <p className="text-slate-400 font-medium">
+          Carregando detalhes do deck...
         </p>
       </div>
     );
   }
 
-  if (deckError || !deckData?.deck) {
+  if (error || !deck) {
     return (
-      <div className="flex flex-1 flex-col items-center justify-center">
-        <p className="text-red-600 font-bold text-xl mb-4">
-          Deck não encontrado.
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+        <p className="text-rose-400 font-medium">
+          Deck não encontrado ou erro de carregamento.
         </p>
-        <button
-          onClick={() => navigate("/dashboard")}
-          className="px-4 py-2 bg-blue-600 text-white font-bold rounded-lg"
+        <Link
+          to="/dashboard"
+          className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-sm transition"
         >
           Voltar ao Dashboard
-        </button>
+        </Link>
       </div>
     );
   }
 
-  const { deck } = deckData;
-
   return (
-    <div className="p-6 md:p-8 w-full max-w-4xl mx-auto space-y-6 flex flex-col">
-      <div className="bg-white rounded-2xl shadow-sm p-8 flex flex-col md:flex-row md:justify-between md:items-center border border-gray-200">
-        <div className="mb-6 md:mb-0 flex flex-col">
-          <button
-            onClick={() => navigate("/dashboard")}
-            className="text-blue-600 text-sm font-bold hover:underline mb-2 self-start"
-          >
-            &larr; Voltar para Decks
-          </button>
-          <h1 className="text-3xl font-extrabold text-slate-900">
+    <div className="max-w-4xl mx-auto px-4 py-6 flex flex-col gap-6">
+      {/* Cabeçalho do Deck */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-6">
+        <div>
+          <span className="text-xs font-semibold uppercase tracking-wider text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-md border border-amber-500/20">
+            {deck.flashcards?.length || 0} Cartões
+          </span>
+          <h1 className="text-2xl font-bold text-slate-100 mt-2">
             {deck.title}
           </h1>
-          <p className="text-gray-600 mt-2 font-medium">
-            {deck.description || "Nenhuma descrição atribuída."}
-          </p>
+          {deck.description && (
+            <p className="text-sm text-slate-400 mt-1">{deck.description}</p>
+          )}
         </div>
-        <div className="flex space-x-3">
+
+        <div className="flex items-center gap-3">
           <button
-            onClick={() => navigate(`/study/${deck.id}`)}
-            disabled={deck._count?.flashcards === 0}
-            className={`px-6 py-3 font-bold rounded-lg shadow-sm transition-colors ${
-              deck._count?.flashcards === 0
-                ? "bg-green-300 text-white cursor-not-allowed"
-                : "bg-green-600 hover:bg-green-700 text-white"
-            }`}
+            onClick={() => setIsCardModalOpen(true)}
+            className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-semibold rounded-xl text-sm transition"
           >
-            Iniciar Estudo
+            + Criar Card
+          </button>
+          <button
+            onClick={() => setIsDeleteDeckModalOpen(true)}
+            className="px-4 py-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 font-medium rounded-xl text-sm transition"
+          >
+            Excluir Deck
           </button>
         </div>
       </div>
 
-      {/* Refatoração: Substituição do Grid por Flexbox */}
-      <div className="flex flex-col md:flex-row flex-wrap gap-6 w-full">
-        <div className="bg-white rounded-2xl shadow-sm p-6 border border-gray-200 flex flex-col w-full md:w-[calc(50%-0.75rem)]">
-          <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4">
-            Métricas do Deck
-          </h3>
-          <div className="text-4xl font-extrabold text-blue-700 mb-1">
-            {deck._count?.flashcards || 0}
-          </div>
-          <p className="text-gray-600 font-bold">Cartões Totais</p>
-        </div>
-        <div className="bg-white rounded-2xl shadow-sm p-6 border border-gray-200 flex flex-col justify-center items-center text-center w-full md:w-[calc(50%-0.75rem)]">
-          <h3 className="text-lg font-bold text-slate-900 mb-2">
-            Construir Conhecimento
-          </h3>
-          <p className="text-gray-600 text-sm mb-4 font-medium">
-            A melhor forma de reter conhecimento é ser ativo na sua criação.
-          </p>
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="px-6 py-2 bg-blue-100 text-blue-800 font-bold rounded-lg hover:bg-blue-200 transition-colors w-full"
-          >
-            + Criar Flashcard
-          </button>
-        </div>
-      </div>
-
-      <div className="mt-12 pt-6 border-t border-gray-200 flex flex-col">
-        <h2 className="text-2xl font-extrabold text-slate-900 mb-6">
-          Conteúdo do Deck
+      {/* Lista de Flashcards */}
+      <div className="flex flex-col gap-4">
+        <h2 className="text-lg font-semibold text-slate-200">
+          Cartões do Deck
         </h2>
-        {loadingCards ? (
-          <p className="text-gray-600 font-medium">Sincronizando cartões...</p>
-        ) : flashcardsData?.deckFlashcards.length === 0 ? (
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 flex flex-col items-center text-center">
-            <p className="text-gray-600 font-medium">
-              Nenhum cartão cadastrado. Crie o seu primeiro flashcard para
-              começar os estudos!
+
+        {!deck.flashcards || deck.flashcards.length === 0 ? (
+          <div className="text-center py-12 bg-slate-900/50 border border-slate-800/80 rounded-2xl">
+            <p className="text-slate-400 text-sm">
+              Este deck ainda não possui flashcards.
             </p>
+            <button
+              onClick={() => setIsCardModalOpen(true)}
+              className="mt-3 text-amber-400 hover:text-amber-300 text-sm font-medium transition"
+            >
+              Adicionar o primeiro cartão
+            </button>
           </div>
         ) : (
-          <div className="flex flex-col gap-4">
-            {flashcardsData?.deckFlashcards.map((card) => (
+          <div className="flex flex-col gap-3">
+            {deck.flashcards.map((card) => (
               <div
                 key={card.id}
-                className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 hover:shadow-md transition-shadow"
+                className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex items-start justify-between gap-4"
               >
-                <div className="flex flex-col flex-1 w-full">
-                  <h4 className="text-xs font-extrabold text-gray-500 uppercase tracking-widest mb-1">
-                    Frente
-                  </h4>
-                  <p className="text-slate-900 font-bold mb-4 whitespace-pre-wrap">
-                    {card.front}
-                  </p>
-                  <h4 className="text-xs font-extrabold text-green-700 uppercase tracking-widest mb-1">
-                    Verso
-                  </h4>
-                  <p className="text-gray-700 font-medium whitespace-pre-wrap">
-                    {card.back}
-                  </p>
+                <div className="flex flex-col gap-2 flex-1">
+                  <div>
+                    <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
+                      Frente
+                    </span>
+                    <p className="text-sm text-slate-200 font-medium whitespace-pre-wrap">
+                      {card.front}
+                    </p>
+                  </div>
+                  <div className="pt-2 border-t border-slate-800/60">
+                    <span className="text-[10px] font-semibold text-amber-500/80 uppercase tracking-wider">
+                      Verso
+                    </span>
+                    <p className="text-sm text-slate-400 whitespace-pre-wrap">
+                      {card.back}
+                    </p>
+                  </div>
                 </div>
-                <div className="flex flex-col w-full md:w-auto justify-end">
-                  <button
-                    onClick={() => setCardToDelete(card.id)}
-                    className="px-4 py-2 w-full md:w-auto bg-red-50 text-red-700 font-bold rounded-lg hover:bg-red-100 transition-colors border border-red-100"
-                  >
-                    Excluir
-                  </button>
-                </div>
+
+                <button
+                  onClick={() => setCardToDeleteId(card.id)}
+                  className="text-slate-500 hover:text-rose-400 p-1.5 transition"
+                  title="Excluir Flashcard"
+                >
+                  🗑️
+                </button>
               </div>
             ))}
           </div>
         )}
       </div>
 
-      <CreateFlashcardModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        deckId={deck.id}
-      />
+      {/* Modais */}
+      {isCardModalOpen && deckId && (
+        <CreateFlashcardModal
+          deckId={deckId}
+          isOpen={isCardModalOpen}
+          onClose={() => setIsCardModalOpen(false)}
+          onSuccess={() => {
+            showToast("Flashcard criado com sucesso!", "success");
+            refetch();
+          }}
+        />
+      )}
 
-      <ConfirmModal
-        isOpen={!!cardToDelete}
-        title="Excluir Flashcard"
-        message="O conteúdo deste cartão será apagado e ele não aparecerá mais nas suas sessões de estudo. Deseja continuar?"
-        onConfirm={confirmDeletion}
-        onCancel={() => setCardToDelete(null)}
-        isLoading={isDeleting}
-      />
+      {isDeleteDeckModalOpen && (
+        <ConfirmModal
+          isOpen={isDeleteDeckModalOpen}
+          title="Excluir Deck"
+          message="Tem certeza que deseja excluir este deck e todos os seus cartões? Esta ação não poderá ser desfeita."
+          confirmText="Excluir"
+          isDanger
+          loading={deletingDeck}
+          onConfirm={handleDeleteDeck}
+          onClose={() => setIsDeleteDeckModalOpen(false)}
+        />
+      )}
+
+      {cardToDeleteId && (
+        <ConfirmModal
+          isOpen={!!cardToDeleteId}
+          title="Excluir Flashcard"
+          message="Tem certeza que deseja excluir este cartão?"
+          confirmText="Excluir"
+          isDanger
+          loading={deletingCard}
+          onConfirm={handleDeleteFlashcard}
+          onClose={() => setCardToDeleteId(null)}
+        />
+      )}
     </div>
   );
-};
+}
+
+export default DeckDetails;

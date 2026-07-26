@@ -1,183 +1,220 @@
+import { gql } from "@apollo/client/core"; // CORREÇÃO: Import estrito da v4
 import { useMutation } from "@apollo/client/react";
-import React, { useState } from "react";
-import type { GetDeckResponse, GetDeckVariables } from "../lib/graphql/deck";
-import { GET_DECK } from "../lib/graphql/deck";
-import type {
-  CreateFlashcardResponse,
-  CreateFlashcardVariables,
-  GetDeckFlashcardsResponse,
-  GetDeckFlashcardsVariables,
-} from "../lib/graphql/flashcard";
-import {
-  CREATE_FLASHCARD,
-  GET_DECK_FLASHCARDS,
-} from "../lib/graphql/flashcard";
+import React, { useCallback, useEffect, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { CREATE_FLASHCARD } from "../lib/graphql/flashcard";
 
 interface CreateFlashcardModalProps {
-  isOpen: boolean;
-  onClose: () => void;
   deckId: string;
+  isOpen?: boolean; // Adicionado para resolver o erro de tipagem
+  onClose: () => void;
+  onSuccess?: () => void; // Adicionado para triggar o Toast e o Refetch no Pai
 }
 
 export const CreateFlashcardModal: React.FC<CreateFlashcardModalProps> = ({
-  isOpen,
-  onClose,
   deckId,
+  isOpen = true,
+  onClose,
+  onSuccess,
 }) => {
-  const [front, setFront] = useState<string>("");
-  const [back, setBack] = useState<string>("");
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [front, setFront] = useState("");
+  const [back, setBack] = useState("");
+  const [isPreviewMode, setIsPreviewMode] = useState(false);
 
-  const [createFlashcard, { loading }] = useMutation<
-    CreateFlashcardResponse,
-    CreateFlashcardVariables
-  >(CREATE_FLASHCARD, {
+  const [createFlashcard, { loading, error }] = useMutation(CREATE_FLASHCARD, {
     update(cache, { data }) {
       if (!data?.createFlashcard) return;
 
-      const existingDeck = cache.readQuery<GetDeckResponse, GetDeckVariables>({
-        query: GET_DECK,
-        variables: { id: deckId },
-      });
-
-      if (existingDeck?.deck) {
-        cache.writeQuery<GetDeckResponse, GetDeckVariables>({
-          query: GET_DECK,
-          variables: { id: deckId },
-          data: {
-            deck: {
-              ...existingDeck.deck,
-              _count: {
-                flashcards: (existingDeck.deck._count?.flashcards || 0) + 1,
-              },
-            },
-          },
-        });
-      }
-
-      const existingCards = cache.readQuery<
-        GetDeckFlashcardsResponse,
-        GetDeckFlashcardsVariables
-      >({
-        query: GET_DECK_FLASHCARDS,
-        variables: { deckId },
-      });
-
-      if (existingCards?.deckFlashcards) {
-        cache.writeQuery<GetDeckFlashcardsResponse, GetDeckFlashcardsVariables>(
-          {
-            query: GET_DECK_FLASHCARDS,
-            variables: { deckId },
-            data: {
-              deckFlashcards: [
-                data.createFlashcard,
-                ...existingCards.deckFlashcards,
-              ],
-            },
-          },
-        );
-      }
-    },
-  });
-
-  if (!isOpen) return null;
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMsg(null);
-
-    if (!front.trim() || !back.trim()) {
-      setErrorMsg("A frente e o verso são obrigatórios.");
-      return;
-    }
-
-    try {
-      await createFlashcard({
-        variables: {
-          data: {
-            front: front.trim(),
-            back: back.trim(),
-            deckId,
+      cache.modify({
+        id: cache.identify({ __typename: "Deck", id: deckId }),
+        fields: {
+          flashcards(existingFlashcardRefs = []) {
+            const newFlashcardRef = cache.writeFragment({
+              data: data.createFlashcard,
+              fragment: gql`
+                fragment NewFlashcard on Flashcard {
+                  id
+                  front
+                  back
+                }
+              `,
+            });
+            return [...existingFlashcardRefs, newFlashcardRef];
           },
         },
       });
+    },
+    onCompleted: () => {
+      onSuccess?.(); // Executa o callback de sucesso (Toast/Refetch)
+      onClose(); // Fecha o modal
+    },
+  });
 
-      setFront("");
-      setBack("");
-    } catch (err) {
-      console.error("Falha ao criar o cartão:", err);
-      setErrorMsg("Ocorreu um erro no servidor. Tente novamente.");
-    }
-  };
+  const handleSubmit = useCallback(
+    async (e: React.SyntheticEvent<HTMLFormElement>) => {
+      e.preventDefault();
+      if (!front.trim() || !back.trim() || loading) return;
+
+      try {
+        await createFlashcard({
+          variables: {
+            data: {
+              deckId,
+              front,
+              back,
+            },
+          },
+        });
+      } catch (err: unknown) {
+        console.error("Erro ao criar flashcard:", err);
+      }
+    },
+    [deckId, front, back, loading, createFlashcard],
+  );
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
+  if (!isOpen) return null; // Segurança extra de renderização
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 flex flex-col">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-bold text-gray-800">Novo Flashcard</h2>
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+      <div className="flex flex-col w-full max-w-3xl bg-white rounded-2xl shadow-2xl overflow-hidden animate-fade-in">
+        {/* Header */}
+        <div className="flex flex-row items-center justify-between p-6 border-b border-gray-100 bg-gray-50">
+          <h2 className="text-xl font-bold text-gray-800">
+            Criar Novo Flashcard
+          </h2>
           <button
             onClick={onClose}
-            className="text-gray-500 hover:text-gray-700 font-bold text-xl"
+            className="text-gray-400 hover:text-gray-600 font-bold p-2 transition-colors rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-300"
+            aria-label="Fechar Modal"
           >
-            &times;
+            ✕
           </button>
         </div>
 
-        {errorMsg && (
-          <div className="mb-4 p-3 bg-red-50 text-red-700 text-sm rounded-lg flex">
-            {errorMsg}
-          </div>
-        )}
+        {/* Tabs */}
+        <div className="flex flex-row w-full border-b border-gray-200 bg-gray-50/50">
+          <button
+            type="button"
+            className={`flex-1 py-3 text-sm font-semibold transition-colors ${
+              !isPreviewMode
+                ? "bg-white text-blue-600 border-b-2 border-blue-600"
+                : "text-gray-500 hover:bg-gray-100"
+            }`}
+            onClick={() => setIsPreviewMode(false)}
+          >
+            Edição (Markdown)
+          </button>
+          <button
+            type="button"
+            className={`flex-1 py-3 text-sm font-semibold transition-colors ${
+              isPreviewMode
+                ? "bg-white text-blue-600 border-b-2 border-blue-600"
+                : "text-gray-500 hover:bg-gray-100"
+            }`}
+            onClick={() => setIsPreviewMode(true)}
+          >
+            Preview Visual
+          </button>
+        </div>
 
-        <form onSubmit={handleSubmit} className="flex flex-col space-y-4">
-          <div className="flex flex-col">
-            <label className="block text-sm font-medium text-gray-800 mb-1">
-              Frente (Pergunta)
-            </label>
-            <textarea
-              rows={3}
-              maxLength={2000}
-              className="w-full px-4 py-2 rounded-lg bg-gray-50 border border-gray-200 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-              placeholder="Ex: O que é a Mitocôndria?"
-              value={front}
-              onChange={(e) => setFront(e.target.value)}
-              disabled={loading}
-            />
-          </div>
+        {/* Body */}
+        <div className="flex flex-col p-6 h-[55vh] overflow-y-auto">
+          {error && (
+            <div className="mb-4 p-4 bg-red-50 text-red-700 rounded-xl border border-red-200 text-sm font-medium">
+              Falha ao criar cartão: {error.message}
+            </div>
+          )}
 
-          <div className="flex flex-col">
-            <label className="block text-sm font-medium text-gray-800 mb-1">
-              Verso (Resposta)
-            </label>
-            <textarea
-              rows={3}
-              maxLength={3000}
-              className="w-full px-4 py-2 rounded-lg bg-gray-50 border border-gray-200 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-              placeholder="Ex: É o organelo responsável pela respiração celular e produção de energia."
-              value={back}
-              onChange={(e) => setBack(e.target.value)}
-              disabled={loading}
-            />
-          </div>
-
-          <div className="flex justify-end space-x-3 pt-4 border-t border-gray-100">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={loading}
-              className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg font-medium transition"
+          {!isPreviewMode ? (
+            <form
+              id="create-card-form"
+              onSubmit={handleSubmit}
+              className="flex flex-col grow gap-5"
             >
-              Concluir
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-sm transition"
-            >
-              {loading ? "A salvar..." : "Salvar e Adicionar Outro"}
-            </button>
-          </div>
-        </form>
+              <div className="flex flex-col gap-2 flex-1">
+                <label className="text-xs font-bold text-gray-600 uppercase tracking-wider">
+                  Frente (Pergunta / Estímulo)
+                </label>
+                <textarea
+                  className="flex-1 w-full p-4 border border-gray-300 rounded-xl resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all font-mono text-sm"
+                  placeholder="Digite a pergunta. Suporta Markdown (ex: **negrito**, `código`)."
+                  value={front}
+                  onChange={(e) => setFront(e.target.value)}
+                  disabled={loading}
+                  required
+                />
+              </div>
+
+              <div className="flex flex-col gap-2 flex-1">
+                <label className="text-xs font-bold text-gray-600 uppercase tracking-wider">
+                  Verso (Resposta / Explicação)
+                </label>
+                <textarea
+                  className="flex-1 w-full p-4 border border-gray-300 rounded-xl resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all font-mono text-sm"
+                  placeholder="Digite a resposta detalhada."
+                  value={back}
+                  onChange={(e) => setBack(e.target.value)}
+                  disabled={loading}
+                  required
+                />
+              </div>
+            </form>
+          ) : (
+            <div className="flex flex-col grow gap-6">
+              <div className="flex flex-col flex-1 p-5 bg-gray-50 rounded-xl border border-gray-200 overflow-y-auto">
+                <span className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 border-b border-gray-200 pb-1">
+                  Preview da Frente
+                </span>
+                <div className="prose prose-slate max-w-none text-gray-800">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {front || "*Nenhum conteúdo preenchido na frente.*"}
+                  </ReactMarkdown>
+                </div>
+              </div>
+              <div className="flex flex-col flex-1 p-5 bg-blue-50/50 rounded-xl border border-blue-100 overflow-y-auto">
+                <span className="text-xs font-bold text-blue-500 uppercase tracking-widest mb-3 border-b border-blue-200 pb-1">
+                  Preview do Verso
+                </span>
+                <div className="prose prose-slate max-w-none text-gray-800">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {back || "*Nenhum conteúdo preenchido no verso.*"}
+                  </ReactMarkdown>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex flex-row items-center justify-end p-6 border-t border-gray-100 bg-gray-50 gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-5 py-2.5 rounded-xl text-gray-600 font-medium hover:bg-gray-200 transition-colors text-sm"
+            disabled={loading}
+          >
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            form="create-card-form"
+            className="flex flex-row items-center justify-center px-7 py-2.5 bg-blue-600 text-white font-semibold rounded-xl shadow-md hover:bg-blue-700 transition-all text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={loading || !front.trim() || !back.trim()}
+          >
+            {loading ? "Salvando..." : "Salvar Flashcard"}
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-import { ApolloClient, HttpLink, InMemoryCache } from '@apollo/client';
+import { ApolloClient, HttpLink, InMemoryCache } from '@apollo/client/core'; // CORREÇÃO: Diretriz estrita da v4.x
 import { SetContextLink } from '@apollo/client/link/context';
 import { supabase } from './supabaseClient';
 
@@ -7,7 +7,7 @@ const httpLink = new HttpLink({
 });
 
 /**
- * Interceptador de Autenticação adaptado estritamente para o Apollo Client v4.1.9.
+ * Interceptador de Autenticação adaptado estritamente para o Apollo Client v4.2.7.
  * * NOTA ARQUITETURAL: Omitimos as tipagens explícitas nos argumentos do callback (operation, prevContext).
  * Isto permite que o compilador infira nativamente as interfaces internas da biblioteca,
  * erradicando o erro de incompatibilidade com o 'ContextSetter'.
@@ -33,15 +33,20 @@ const authLink = new SetContextLink(async (_operation, prevContext) => {
         authorization: token ? `Bearer ${token}` : '',
       },
     };
-  } catch (err) {
-    console.error('Erro crítico no ciclo do interceptador de contexto:', err);
+  } catch (err: unknown) {
+    // CORREÇÃO: Utilização estrita do unknown e Type Guard contra 'any' implícito
+    if (err instanceof Error) {
+      console.error('Erro crítico no ciclo do interceptador de contexto:', err.message);
+    } else {
+      console.error('Erro crítico no ciclo do interceptador de contexto:', err);
+    }
     return { headers: {} };
   }
 });
 
 export const client = new ApolloClient({
   link: authLink.concat(httpLink),
-  // CORREÇÃO: Aplicação das typePolicies para silenciar o alerta e garantir a fusão segura do agregador
+  // Aplicação das typePolicies para silenciar o alerta e garantir a fusão segura do agregador
   cache: new InMemoryCache({
     typePolicies: {
       Query: {

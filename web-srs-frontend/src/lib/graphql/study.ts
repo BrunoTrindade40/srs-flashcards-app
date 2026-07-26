@@ -1,10 +1,14 @@
 import { gql, type TypedDocumentNode } from '@apollo/client/core';
 
-//Tipagens de Retorno e Variáveis
+// Tipagens de Retorno e Variáveis
 export interface FlashcardDue {
   id: string;
   front: string;
   back: string;
+  deck?: {
+    id: string;
+    title: string;
+  };
 }
 
 export interface GetDueFlashcardsResponse {
@@ -13,6 +17,10 @@ export interface GetDueFlashcardsResponse {
 
 export interface GetDueFlashcardsVariables {
   deckId: string;
+}
+
+export interface GetChaosCardsResponse {
+  chaosCards: FlashcardDue[];
 }
 
 export interface SubmitReviewResponse {
@@ -25,8 +33,7 @@ export interface SubmitReviewVariables {
   reviewDurationMs: number; // Coleta da latência para o TCC 2
 }
 
-// 2. Documentos GraphQL
-// CORREÇÃO DEFINITIVA: O parâmetro está como $deckId: ID!
+// Documentos GraphQL
 export const GET_DUE_FLASHCARDS: TypedDocumentNode<GetDueFlashcardsResponse, GetDueFlashcardsVariables> = gql`
   query GetDueFlashcards($deckId: ID!) {
     dueFlashcards(deckId: $deckId) {
@@ -37,7 +44,22 @@ export const GET_DUE_FLASHCARDS: TypedDocumentNode<GetDueFlashcardsResponse, Get
   }
 `;
 
-// CORREÇÃO: $flashcardId agora é do tipo ID! e adicionamos a métrica de duração
+// Query para o Modo Chaos (Ignora deckId e traz todos intercalados)
+export const GET_CHAOS_CARDS: TypedDocumentNode<GetChaosCardsResponse, Record<string, never>> = gql`
+  query GetChaosCards {
+    chaosCards {
+      id
+      front
+      back
+      deck {
+        id
+        title
+      }
+    }
+  }
+`;
+
+// Mutação oficial do seu schema com telemetria
 export const SUBMIT_REVIEW: TypedDocumentNode<SubmitReviewResponse, SubmitReviewVariables> = gql`
   mutation SubmitReview($flashcardId: ID!, $rating: Int!, $reviewDurationMs: Int!) {
     submitReview(flashcardId: $flashcardId, rating: $rating, reviewDurationMs: $reviewDurationMs)

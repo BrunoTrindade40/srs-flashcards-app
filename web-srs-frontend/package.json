@@ -13,10 +13,13 @@
   "dependencies": {
     "@apollo/client": "^4.2.7",
     "@supabase/supabase-js": "^2.105.4",
+    "@tailwindcss/typography": "^0.5.20",
     "graphql": "^16.14.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
-    "react-router-dom": "^7.15.0"
+    "react-markdown": "^10.1.0",
+    "react-router-dom": "^7.15.0",
+    "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

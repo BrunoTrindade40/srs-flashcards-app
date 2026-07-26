@@ -1,46 +1,34 @@
-import React, { useEffect, useState } from "react";
-import { Navigate, Outlet } from "react-router-dom";
-import { supabase } from "../lib/supabaseClient";
-// Importação estrita de tipo do Supabase para evitar o tipo 'any'
-import type { Session } from "@supabase/supabase-js";
+import React from "react";
+import { Navigate, useLocation } from "react-router-dom";
+import { useAuth } from "../hooks/useAuth";
 
-export const ProtectedRoute: React.FC = () => {
-  const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+interface ProtectedRouteProps {
+  children: React.ReactNode;
+}
 
-  useEffect(() => {
-    // Busca a sessão inicial de forma atômica
-    supabase.auth.getSession().then(({ data: { session: initialSession } }) => {
-      setSession(initialSession);
-      setLoading(false);
-    });
+export function ProtectedRoute({ children }: ProtectedRouteProps) {
+  const { user, loading } = useAuth();
+  const location = useLocation();
 
-    // Inscreve um escutador para capturar mudanças de estado (Login/Logout)
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, currentSession) => {
-      setSession(currentSession);
-      setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
+  // 1. Estado de Espera: Impede a renderização prematura
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50">
-        <p className="text-lg font-bold text-gray-700">
-          Verificando autenticação...
-        </p>
+      <div className="min-h-screen flex items-center justify-center bg-slate-950">
+        <div
+          className="w-10 h-10 border-4 border-amber-500 border-t-transparent rounded-full animate-spin"
+          aria-label="Validando credenciais..."
+        />
       </div>
     );
   }
 
-  // Se não houver sessão ativa, redireciona estritamente para o Login
-  if (!session) {
-    return <Navigate to="/login" replace />;
+  // 2. Barreira de Segurança: Expulsa se não houver usuário logado
+  if (!user) {
+    // Passamos o state 'from' para que a tela de login saiba de onde viemos,
+    // permitindo um fluxo de UX onde o usuário é devolvido à página que tentou acessar.
+    return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // Se autenticado, renderiza as rotas filhas declaradas no roteador
-  return <Outlet />;
-};
+  // 3. Sucesso: Renderiza a rota filha
+  return <>{children}</>;
+}

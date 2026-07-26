@@ -1,12 +1,17 @@
 import { BrowserRouter } from "react-router-dom";
+import { AuthProvider } from "./context/AuthProvider";
+import { ToastProvider } from "./context/ToastProvider";
 import { AppRoutes } from "./routes";
 
-function App() {
-  // Retornamos estritamente o roteador, sem <div> extras ou importações de './App.css'
+export function App() {
   return (
-    <BrowserRouter>
-      <AppRoutes />
-    </BrowserRouter>
+    <AuthProvider>
+      <ToastProvider>
+        <BrowserRouter>
+          <AppRoutes />
+        </BrowserRouter>
+      </ToastProvider>
+    </AuthProvider>
   );
 }
 

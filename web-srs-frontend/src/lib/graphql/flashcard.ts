@@ -1,4 +1,4 @@
-import { gql } from '@apollo/client';
+import { gql, type TypedDocumentNode } from '@apollo/client/core';
 
 export interface Flashcard {
   id: string;
@@ -19,7 +19,10 @@ export interface CreateFlashcardVariables {
   };
 }
 
-export const CREATE_FLASHCARD = gql`
+export const CREATE_FLASHCARD: TypedDocumentNode<
+  CreateFlashcardResponse,
+  CreateFlashcardVariables
+> = gql`
   mutation CreateFlashcard($data: CreateFlashcardInput!) {
     createFlashcard(data: $data) {
       id
@@ -29,7 +32,7 @@ export const CREATE_FLASHCARD = gql`
   }
 `;
 
-// --- QUERY: Listagem (Corrigido para 'deckFlashcards') ---
+// --- QUERY: Listagem ---
 export interface GetDeckFlashcardsResponse {
   deckFlashcards: Flashcard[];
 }
@@ -38,7 +41,10 @@ export interface GetDeckFlashcardsVariables {
   deckId: string;
 }
 
-export const GET_DECK_FLASHCARDS = gql`
+export const GET_DECK_FLASHCARDS: TypedDocumentNode<
+  GetDeckFlashcardsResponse,
+  GetDeckFlashcardsVariables
+> = gql`
   query DeckFlashcards($deckId: ID!) {
     deckFlashcards(deckId: $deckId) {
       id
@@ -48,7 +54,7 @@ export const GET_DECK_FLASHCARDS = gql`
   }
 `;
 
-// --- MUTATION: Deleção (Corrigido para 'removeFlashcard') ---
+// --- MUTATION: Deleção ---
 export interface RemoveFlashcardResponse {
   removeFlashcard: Flashcard;
 }
@@ -57,7 +63,10 @@ export interface RemoveFlashcardVariables {
   id: string;
 }
 
-export const REMOVE_FLASHCARD = gql`
+export const REMOVE_FLASHCARD: TypedDocumentNode<
+  RemoveFlashcardResponse,
+  RemoveFlashcardVariables
+> = gql`
   mutation RemoveFlashcard($id: ID!) {
     removeFlashcard(id: $id) {
       id

@@ -1,10 +1,11 @@
 @import "tailwindcss";
 
-/* Reset rigoroso para garantir que o Tailwind assuma 100% do layout.
-  Removemos qualquer restrição do boilerplate do Vite.
+/* Injeção do plugin Typography diretamente via CSS,
+  conforme especificação nativa do Tailwind v4.
 */
-html,
-body,
-#root {
-  @apply m-0 p-0 w-full min-h-screen;
-}
+@plugin "@tailwindcss/typography";
+
+/* SRP / KISS: Mantenha este arquivo limpo.
+  Não crie classes personalizadas com @apply.
+  Utilize os utilitários diretamente nas propriedades className dos componentes React.
+*/

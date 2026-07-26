@@ -1,25 +1,25 @@
-import type { Session } from "@supabase/supabase-js";
-import React, { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
-import { supabase } from "../lib/supabaseClient";
+import { useAuth } from "../hooks/useAuth";
 
-export const RootRedirect: React.FC = () => {
-  const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+export function RootRedirect() {
+  const { user, loading } = useAuth();
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
-      setSession(currentSession);
-      setLoading(false);
-    });
-  }, []);
+  // 1. Estado de Espera: Idêntico ao ProtectedRoute para coerência visual
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-950">
+        <div
+          className="w-10 h-10 border-4 border-amber-500 border-t-transparent rounded-full animate-spin"
+          aria-label="Direcionando..."
+        />
+      </div>
+    );
+  }
 
-  if (loading) return null;
+  // 2. Tráfego Direcionado de forma Declarativa
+  if (user) {
+    return <Navigate to="/dashboard" replace />;
+  }
 
-  // Aplicação direta das regras de negócio solicitadas
-  return session ? (
-    <Navigate to="/dashboard" replace />
-  ) : (
-    <Navigate to="/login" replace />
-  );
-};
+  return <Navigate to="/login" replace />;
+}
