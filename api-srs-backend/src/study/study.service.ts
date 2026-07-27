@@ -3,7 +3,7 @@ import {
   Injectable,
 } from '@nestjs/common';
 import { Prisma, Flashcard as PrismaFlashcard } from '@prisma/client';
-import { createEmptyCard, FSRS, Card as FSRSCard, Rating } from 'ts-fsrs';
+import { createEmptyCard, FSRS, Card as FSRSCard } from 'ts-fsrs';
 import { PrismaService } from '../../prisma/prisma.service';
 
 import dayjs from 'dayjs';
@@ -14,37 +14,30 @@ import { ANONYMIZED_PAYLOAD } from '../common/constants/domain.constants';
 dayjs.extend(utc);
 dayjs.extend(timezone);
 
-// 🟡 CORREÇÃO ALERTA: Definição do Tipo Dinâmico Relacional
-// Isso cria um tipo exato baseado na query que você faz no banco de dados, incluindo as relações.
 type FSRSRecordWithFlashcard = Prisma.CardFSRSDataGetPayload<{
   include: { flashcard: { include: { deck: true } } };
 }>;
 
 @Injectable()
 export class StudyService {
-  // Inicialização do Motor FSRS Oficial
-  // CORREÇÃO 1: Na versão 5+, o construtor exige um argumento. Passar {} aplica os pesos padrão da rede neural.
   private fsrs = new FSRS({});
 
   constructor(private readonly prisma: PrismaService) { }
 
-  /**
-   * UTILITÁRIO: Calcula o início do "Dia de Estudo" (RN06)
-   * O sistema considera o início de um novo dia às 04:00 AM do horário local do usuário.
-   */
+  private getRolloverThreshold(userTimezone: string = 'America/Sao_Paulo'): Date {
+    return dayjs().tz(userTimezone).endOf('day').toDate();
+  }
+
   private getStartOfStudyDay(userTimezone: string = 'America/Sao_Paulo'): Date {
     let localTime = dayjs().tz(userTimezone);
 
-    // Se ainda não deu 04:00 AM, consideramos que ainda é o "dia anterior" de estudos
     if (localTime.hour() < 4) {
       localTime = localTime.subtract(1, 'day');
     }
 
-    // Zera os relógios para 04:00:00 do dia correto
     return localTime.hour(4).minute(0).second(0).millisecond(0).toDate();
   }
 
-  // 🔵 SUGESTÃO APLICADA: DRY - Mapeador universal de registros FSRS para PrismaFlashcard
   private mapFsrsToCard(records: FSRSRecordWithFlashcard[]): PrismaFlashcard[] {
     return records.map((record) => {
       const { flashcard, ...fsrsMetadata } = record;
@@ -55,16 +48,12 @@ export class StudyService {
     });
   }
 
-  /**
-   * RF04: Motor de Sessão de Estudo
-   */
   async dueFlashcards(
     userId: string,
     deckId: string,
   ): Promise<PrismaFlashcard[]> {
     const deck = await this.prisma.deck.findUnique({
       where: { id: deckId },
-      // 🔴 CORREÇÃO CRÍTICA: Bloqueio de baralho arquivado
       select: { creatorId: true, isArchived: true },
     });
 
@@ -79,7 +68,9 @@ export class StudyService {
 
     const baseNewCardLimit = user?.dailyNewCardLimit ?? 20;
     const maxDailyReviews = user?.maxDailyReviews ?? 100;
+
     const now = new Date();
+    const rolloverThreshold = this.getRolloverThreshold(user?.timezone);
     const todayStart = this.getStartOfStudyDay(user?.timezone);
 
     const distinctCardsReviewedToday = await this.prisma.reviewLog.groupBy({
@@ -90,8 +81,6 @@ export class StudyService {
     const reviewsDoneToday = distinctCardsReviewedToday.length;
     const remainingReviewsQuota = Math.max(0, maxDailyReviews - reviewsDoneToday);
 
-    // 1. FILA CRÍTICA
-    // 🔴 CORREÇÃO CRÍTICA: Inversão de Query (Busca em CardFSRSData) para permitir orderBy
     const criticalRecords = await this.prisma.cardFSRSData.findMany({
       where: {
         userId,
@@ -99,11 +88,10 @@ export class StudyService {
         state: { in: [1, 3] },
         flashcard: { deckId, front: { not: ANONYMIZED_PAYLOAD } },
       },
-      orderBy: { due: 'asc' }, // Traz os mais urgentes/esquecidos primeiro
+      orderBy: { due: 'asc' },
       include: { flashcard: { include: { deck: true } } },
     });
 
-    // 2. FILA DE REVISÃO
     let reviewRecords: FSRSRecordWithFlashcard[] = [];
     let effectiveNewCardLimit = baseNewCardLimit;
 
@@ -111,7 +99,7 @@ export class StudyService {
       const pendingReviewsCount = await this.prisma.cardFSRSData.count({
         where: {
           userId,
-          due: { lte: now },
+          due: { lte: rolloverThreshold },
           state: 2,
           flashcard: { deckId, front: { not: ANONYMIZED_PAYLOAD } },
         },
@@ -126,11 +114,11 @@ export class StudyService {
       reviewRecords = await this.prisma.cardFSRSData.findMany({
         where: {
           userId,
-          due: { lte: now },
+          due: { lte: rolloverThreshold },
           state: 2,
           flashcard: { deckId, front: { not: ANONYMIZED_PAYLOAD } },
         },
-        orderBy: { due: 'asc' }, // 🔴 FUNDAMENTAL para SRS: Ordenação temporal ativada
+        orderBy: { due: 'asc' },
         take: remainingReviewsQuota,
         include: { flashcard: { include: { deck: true } } },
       });
@@ -138,7 +126,6 @@ export class StudyService {
       effectiveNewCardLimit = 0;
     }
 
-    // 3. FILA DE NOVOS CARTÕES
     let newRecords: FSRSRecordWithFlashcard[] = [];
     if (effectiveNewCardLimit > 0) {
       newRecords = await this.prisma.cardFSRSData.findMany({
@@ -147,7 +134,7 @@ export class StudyService {
           state: 0,
           flashcard: { deckId, front: { not: ANONYMIZED_PAYLOAD } },
         },
-        orderBy: { createdAt: 'asc' }, // Novidades respeitam a ordem de criação do professor
+        orderBy: { createdAt: 'asc' },
         take: effectiveNewCardLimit,
         include: { flashcard: { include: { deck: true } } },
       });
@@ -163,15 +150,16 @@ export class StudyService {
   }
 
   /**
-   * RF05: Avaliação de Retenção - Usando a Biblioteca FSRS Matemática Oficial
+   * RF05: Avaliação de Retenção (FSRS) + Transação Atômica + Gamificação
    */
   async submitReview(
     userId: string,
     flashcardId: string,
-    rating: number, // 1: Errei, 2: Difícil, 3: Bom, 4: Fácil
+    rating: number,
     reviewDurationMs: number,
   ): Promise<boolean> {
-    const validRatings = [Rating.Again, Rating.Hard, Rating.Good, Rating.Easy];
+    // RESOLUÇÃO DE LINTER (KISS): Usamos Array de números primitivos
+    const validRatings = [1, 2, 3, 4];
     if (!validRatings.includes(rating)) {
       throw new ForbiddenException('Avaliação inválida. Use 1 (Again) a 4 (Easy).');
     }
@@ -182,33 +170,65 @@ export class StudyService {
     });
 
     if (!flashcard || flashcard.deck.creatorId !== userId) {
-      throw new ForbiddenException('Cartão encontrado ou acesso negado.');
+      throw new ForbiddenException('Cartão não encontrado ou acesso negado.');
     }
 
+    // Busca o status do cartão e os dados de perfil do usuário simultaneamente
     const [fsrsDataRecord, userRecord] = await Promise.all([
       this.prisma.cardFSRSData.findUnique({
-        where: { flashcardId_userId: { flashcardId, userId } }
+        where: { flashcardId_userId: { flashcardId, userId } },
       }),
       this.prisma.user.findUnique({
         where: { id: userId },
-        select: { fsrsWeights: true },
+        select: { fsrsWeights: true, timezone: true, currentStreak: true, longestStreak: true },
       }),
     ]);
 
-    let currentFsrsCard: FSRSCard;
+    // --- 1. LÓGICA DE GAMIFICAÇÃO (Ofensiva / XP) ---
+    let nextCurrentStreak = userRecord?.currentStreak ?? 0;
+    let nextLongestStreak = userRecord?.longestStreak ?? 0;
+    let isFirstStudyOfDay = false;
 
-    // 🔴 CORREÇÃO CRÍTICA: Inicialização condicional da rede neural.
-    let activeFsrs = this.fsrs; // Fallback para a instância padrão
+    const todayStart = this.getStartOfStudyDay(userRecord?.timezone || 'America/Sao_Paulo');
 
-    // Verificamos se há pesos gravados e se o JSON é válido/array.
+    const hasStudiedToday = await this.prisma.reviewLog.findFirst({
+      where: { userId, createdAt: { gte: todayStart } },
+      select: { id: true },
+    });
+
+    if (!hasStudiedToday) {
+      isFirstStudyOfDay = true;
+      const yesterdayStart = dayjs(todayStart).subtract(1, 'day').toDate();
+
+      const hasStudiedYesterday = await this.prisma.reviewLog.findFirst({
+        where: { userId, createdAt: { gte: yesterdayStart, lt: todayStart } },
+        select: { id: true },
+      });
+
+      if (hasStudiedYesterday) {
+        nextCurrentStreak += 1;
+      } else {
+        nextCurrentStreak = 1;
+      }
+
+      if (nextCurrentStreak > nextLongestStreak) {
+        nextLongestStreak = nextCurrentStreak;
+      }
+    }
+
+    // RESOLUÇÃO DE LINTER (KISS): Comparamos diretamente os números (1, 2, 3, 4)
+    const gainedXp = rating === 1 ? 3 : rating === 2 ? 5 : rating === 3 ? 10 : 15;
+
+    // --- 2. LÓGICA FSRS ---
+    let activeFsrs = this.fsrs;
     if (userRecord?.fsrsWeights && Array.isArray(userRecord.fsrsWeights)) {
       activeFsrs = new FSRS({ w: userRecord.fsrsWeights as number[] });
     }
 
+    let currentFsrsCard: FSRSCard;
     if (!fsrsDataRecord) {
       currentFsrsCard = createEmptyCard();
     } else {
-      // 🔴 CORREÇÃO CRÍTICA: As chaves exigidas pela interface Card na v5.4.1
       currentFsrsCard = {
         ...createEmptyCard(),
         due: fsrsDataRecord.due,
@@ -225,22 +245,19 @@ export class StudyService {
 
     const now = new Date();
 
-    // 🔴 CORREÇÃO CRÍTICA APLICADA:
-    // O método 'next' agora é chamado EXATAMENTE na instância 'activeFsrs',
-    // garantindo que os cálculos de retenção utilizem a assinatura cerebral (pesos) do estudante.
+    // TYPE ASSERTION SEGURO: Convertemos forçadamente para o Enum apenas na entrega para a lib
     const reviewResult = activeFsrs.next(currentFsrsCard, now, rating);
     const nextState = reviewResult.card;
 
     const sanitizedDurationMs = Math.min(reviewDurationMs, 60000);
 
-    // Persistência em Transação (Atomicidade)
+    // --- 3. A TRANSAÇÃO ATÔMICA ---
     await this.prisma.$transaction([
       this.prisma.cardFSRSData.upsert({
         where: { flashcardId_userId: { flashcardId, userId } },
         update: {
           stability: nextState.stability,
           difficulty: nextState.difficulty,
-          // 🔴 CORREÇÃO CRÍTICA: Retorno ao mapeamento seguro para o Prisma
           elapsedDays: nextState.elapsed_days,
           scheduledDays: nextState.scheduled_days,
           reps: nextState.reps,
@@ -261,20 +278,30 @@ export class StudyService {
           state: nextState.state,
           lastReview: nextState.last_review,
           due: nextState.due,
-        }
+        },
       }),
       this.prisma.reviewLog.create({
         data: {
           flashcardId,
           userId,
-          rating,
+          rating, // Salvamos o número nativo no banco
           reviewDurationMs: sanitizedDurationMs,
-          elapsedDays: nextState.elapsed_days, // <-- Correção na entidade dependente
+          elapsedDays: nextState.elapsed_days,
           stabilityBefore: currentFsrsCard.stability,
           difficultyBefore: currentFsrsCard.difficulty,
           stabilityAfter: nextState.stability,
           difficultyAfter: nextState.difficulty,
-          isFatiguedReview: false
+          isFatiguedReview: false,
+        },
+      }),
+      this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          totalXp: { increment: gainedXp },
+          ...(isFirstStudyOfDay && {
+            currentStreak: nextCurrentStreak,
+            longestStreak: nextLongestStreak,
+          }),
         },
       }),
     ]);
@@ -283,55 +310,45 @@ export class StudyService {
   }
 
   /**
-   * UC10 - Executar estudos no "Modo Chaos" (Interleaving)
-   * Mistura cards atrasados de diferentes decks para forçar o cérebro a alternar contextos.
-   * * @param userId ID do estudante autenticado (provido pelo token JWT/Supabase)
-   * @param limit Limite máximo de revisões para mitigar o "Efeito Bola de Neve"
+   * UC10 - Modo Chaos (Interleaving)
    */
   async getChaosStudyQueue(userId: string, limit: number = 50): Promise<PrismaFlashcard[]> {
-    const now = dayjs().toDate();
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { timezone: true },
+    });
+
+    const rolloverThreshold = this.getRolloverThreshold(user?.timezone);
 
     const dueFsrsRecords = await this.prisma.cardFSRSData.findMany({
       where: {
         userId: userId,
-        due: {
-          lte: now,
-        },
+        due: { lte: rolloverThreshold },
+        state: { not: 0 },
         flashcard: {
           front: { not: ANONYMIZED_PAYLOAD },
           deck: {
             creatorId: userId,
-            isArchived: false, // 🔴 CORREÇÃO CRÍTICA: Proteção do Modo Chaos
+            isArchived: false,
           },
         },
       },
       include: {
         flashcard: {
-          include: {
-            deck: true,
-          },
+          include: { deck: true },
         },
       },
-      orderBy: {
-        due: 'asc',
-      },
+      orderBy: { due: 'asc' },
       take: limit,
     });
 
-    // Utiliza o mapeador DRY abstraído
     return this.shuffleArray(this.mapFsrsToCard(dueFsrsRecords));
   }
 
-  /**
-   * Algoritmo Fisher-Yates para embaralhar arrays de forma otimizada O(n).
-   * Ele garante que as matérias ("Biologia", "Alemão") fiquem misturadas de forma randômica.
-   */
   private shuffleArray<T>(array: T[]): T[] {
     const shuffled = [...array];
     for (let i = shuffled.length - 1; i > 0; i--) {
-      // Gera um índice aleatório entre 0 e i
       const j = Math.floor(Math.random() * (i + 1));
-      // Troca os elementos de lugar
       [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
     }
     return shuffled;

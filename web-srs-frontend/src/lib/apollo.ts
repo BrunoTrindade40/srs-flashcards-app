@@ -1,4 +1,4 @@
-import { ApolloClient, HttpLink, InMemoryCache } from '@apollo/client/core'; // CORREÇÃO: Diretriz estrita da v4.x
+import { ApolloClient, HttpLink, InMemoryCache } from '@apollo/client/core';
 import { SetContextLink } from '@apollo/client/link/context';
 import { supabase } from './supabaseClient';
 
@@ -6,24 +6,14 @@ const httpLink = new HttpLink({
   uri: import.meta.env.VITE_API_URL || 'http://localhost:3000/graphql',
 });
 
-/**
- * Interceptador de Autenticação adaptado estritamente para o Apollo Client v4.2.7.
- * * NOTA ARQUITETURAL: Omitimos as tipagens explícitas nos argumentos do callback (operation, prevContext).
- * Isto permite que o compilador infira nativamente as interfaces internas da biblioteca,
- * erradicando o erro de incompatibilidade com o 'ContextSetter'.
- */
 const authLink = new SetContextLink(async (_operation, prevContext) => {
   try {
-    // Recupera a sessão ativa delegada ao Supabase Auth
     const { data, error } = await supabase.auth.getSession();
-
     if (error) {
       console.error('Falha na autorização via Supabase:', error.message);
     }
-
     const token = data?.session?.access_token;
 
-    // Proteção contra o tipo 'any': mapeamos o contexto para uma estrutura estrita conhecida.
     const typedContext = prevContext as { headers?: Record<string, string> };
     const currentHeaders = typedContext?.headers || {};
 
@@ -34,11 +24,8 @@ const authLink = new SetContextLink(async (_operation, prevContext) => {
       },
     };
   } catch (err: unknown) {
-    // CORREÇÃO: Utilização estrita do unknown e Type Guard contra 'any' implícito
     if (err instanceof Error) {
       console.error('Erro crítico no ciclo do interceptador de contexto:', err.message);
-    } else {
-      console.error('Erro crítico no ciclo do interceptador de contexto:', err);
     }
     return { headers: {} };
   }
@@ -46,12 +33,27 @@ const authLink = new SetContextLink(async (_operation, prevContext) => {
 
 export const client = new ApolloClient({
   link: authLink.concat(httpLink),
-  // Aplicação das typePolicies para silenciar o alerta e garantir a fusão segura do agregador
   cache: new InMemoryCache({
     typePolicies: {
       Query: {
         fields: {
+          // 🟡 ALERTA CORRIGIDO: Estratégia de substituição nativa para o Dashboard
+          myDecks: {
+            merge(_existing, incoming) {
+              return incoming;
+            },
+          },
           deckFlashcards: {
+            merge(_existing, incoming) {
+              return incoming;
+            },
+          },
+          dueFlashcards: {
+            merge(_existing, incoming) {
+              return incoming;
+            },
+          },
+          chaosStudyQueue: {
             merge(_existing, incoming) {
               return incoming;
             },

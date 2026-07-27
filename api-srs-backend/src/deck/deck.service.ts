@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { Deck } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ANONYMIZED_PAYLOAD } from '../common/constants/domain.constants';
 import { CreateDeckInput } from './dto/create-deck.input';
@@ -9,86 +9,69 @@ import { UpdateDeckInput } from './dto/update-deck.input';
 export class DeckService {
   constructor(private readonly prisma: PrismaService) { }
 
-  async create(createDeckInput: CreateDeckInput, creatorId: string): Promise<Deck> {
-    return this.prisma.deck.create({
-      data: { ...createDeckInput, creatorId },
-      include: {
-        _count: {
-          select: { flashcards: true }, // Em novos baralhos, a contagem sempre nasce zerada
-        },
-      },
-    });
-  }
-
-  async findAllByUser(creatorId: string): Promise<Deck[]> {
+  async findMyDecks(userId: string) {
     return this.prisma.deck.findMany({
-      where: { creatorId, isArchived: false },
+      where: { creatorId: userId, isArchived: false },
       include: {
         _count: {
           select: {
-            // 🔴 CORREÇÃO CRÍTICA: O banco conta apenas cartões que não foram excluídos (anonimizados)
-            flashcards: {
-              where: { front: { not: ANONYMIZED_PAYLOAD } },
-            },
+            flashcards: { where: { front: { not: ANONYMIZED_PAYLOAD } } },
           },
         },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { updatedAt: 'desc' },
     });
   }
 
-  async findOne(id: string, creatorId: string): Promise<Deck> {
+  async findById(id: string, userId: string) {
     const deck = await this.prisma.deck.findFirst({
-      // 🔴 CORREÇÃO CRÍTICA: Bloqueia acesso a baralhos logicamente excluídos
-      where: { id, creatorId, isArchived: false },
+      where: { id, creatorId: userId, isArchived: false },
       include: {
+        flashcards: {
+          where: { front: { not: ANONYMIZED_PAYLOAD } },
+          orderBy: { createdAt: 'desc' },
+        },
         _count: {
           select: {
-            flashcards: {
-              where: { front: { not: ANONYMIZED_PAYLOAD } },
-            },
+            flashcards: { where: { front: { not: ANONYMIZED_PAYLOAD } } },
           },
         },
       },
     });
 
     if (!deck) {
-      throw new NotFoundException('O baralho solicitado não foi encontrado ou já foi excluído.');
+      throw new NotFoundException('Baralho não encontrado.');
     }
-
     return deck;
   }
 
-  async update(updateDeckInput: UpdateDeckInput, creatorId: string): Promise<Deck> {
-    const { id, ...fieldsToUpdate } = updateDeckInput;
-    await this.findOne(id, creatorId);
-
-    return this.prisma.deck.update({
-      where: { id },
-      data: fieldsToUpdate,
+  async create(data: CreateDeckInput, userId: string) {
+    return this.prisma.deck.create({
+      data: {
+        ...data,
+        creatorId: userId,
+      },
       include: {
         _count: {
           select: {
-            flashcards: {
-              where: { front: { not: ANONYMIZED_PAYLOAD } },
-            },
+            flashcards: { where: { front: { not: ANONYMIZED_PAYLOAD } } },
           },
         },
       },
     });
   }
 
-  async remove(id: string, creatorId: string): Promise<boolean> {
-    await this.findOne(id, creatorId);
+  async update(data: UpdateDeckInput, userId: string) {
+    await this.findById(data.id, userId);
 
-    // 🔴 CORREÇÃO CRÍTICA: Proteção contra CASCADE delete para manter os ReviewLogs (ML).
-    // O baralho é arquivado e seus cartões sofrem a anonimização irreversível.
-    await this.prisma.$transaction([
-      this.prisma.deck.update({
-        where: { id },
-        data: { isArchived: true },
-      }),
-      this.prisma.flashcard.updateMany({
+    const { id, ...updateData } = data;
+
+    // 🔴 CRÍTICO CORRIGIDO: Conversão segura de DTO para Prisma Payload
+    // O tipo Prisma.DeckUpdateInput entende nativamente que campos vazios do BD recebem 'null'
+    const payload: Prisma.DeckUpdateInput = { ...updateData };
+
+    if (updateData.isArchived === true) {
+      await this.prisma.flashcard.updateMany({
         where: { deckId: id },
         data: {
           front: ANONYMIZED_PAYLOAD,
@@ -97,9 +80,38 @@ export class DeckService {
           imageUrl: null,
           audioUrl: null,
         },
-      }),
-    ]);
+      });
 
+      payload.title = ANONYMIZED_PAYLOAD;
+      payload.description = null;
+      payload.sourceLanguage = null;
+      payload.targetLanguage = null;
+    }
+
+    return this.prisma.deck.update({
+      where: { id },
+      data: payload,
+      include: {
+        _count: {
+          select: {
+            flashcards: { where: { front: { not: ANONYMIZED_PAYLOAD } } },
+          },
+        },
+      },
+    });
+  }
+
+  async remove(id: string, userId: string): Promise<boolean> {
+    await this.findById(id, userId);
+    await this.prisma.deck.delete({
+      where: { id },
+    });
     return true;
+  }
+
+  async countFlashcards(deckId: string): Promise<number> {
+    return this.prisma.flashcard.count({
+      where: { deckId, front: { not: ANONYMIZED_PAYLOAD } },
+    });
   }
 }

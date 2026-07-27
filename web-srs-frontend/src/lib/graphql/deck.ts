@@ -1,18 +1,17 @@
 import { gql, type TypedDocumentNode } from '@apollo/client/core';
+import type { Flashcard } from './flashcard';
 
 export interface Deck {
   id: string;
   title: string;
-  description?: string;
+  description?: string | null; // 🔴 CRÍTICO CORRIGIDO: Tipagem estendida para suportar null
+  sourceLanguage?: string | null;
+  targetLanguage?: string | null;
+  isArchived?: boolean | null;
   _count?: {
     flashcards: number;
   };
-  // Tipagem necessária para renderizar a lista na página de detalhes
-  flashcards?: {
-    id: string;
-    front: string;
-    back: string;
-  }[];
+  flashcards?: Flashcard[];
 }
 
 // --- QUERY: Get My Decks ---
@@ -20,17 +19,45 @@ export interface GetMyDecksResponse {
   myDecks: Deck[];
 }
 
-export const GET_MY_DECKS: TypedDocumentNode<
-  GetMyDecksResponse,
-  Record<string, never>
-> = gql`
+export const GET_MY_DECKS: TypedDocumentNode<GetMyDecksResponse, Record<string, never>> = gql`
   query GetMyDecks {
     myDecks {
       id
       title
       description
+      sourceLanguage
+      targetLanguage
       _count {
         flashcards
+      }
+    }
+  }
+`;
+
+// --- QUERY: Get Deck Details ---
+export interface GetDeckDetailsResponse {
+  deck: Deck;
+}
+
+export interface GetDeckDetailsVariables {
+  id: string;
+}
+
+export const GET_DECK_DETAILS: TypedDocumentNode<GetDeckDetailsResponse, GetDeckDetailsVariables> = gql`
+  query GetDeckDetails($id: ID!) {
+    deck(id: $id) {
+      id
+      title
+      description
+      sourceLanguage
+      targetLanguage
+      _count {
+        flashcards
+      }
+      flashcards {
+        id
+        front
+        back
       }
     }
   }
@@ -44,19 +71,20 @@ export interface CreateDeckResponse {
 export interface CreateDeckVariables {
   data: {
     title: string;
-    description?: string;
+    description?: string | null; // 🔴 CRÍTICO CORRIGIDO
+    sourceLanguage?: string | null; // 🔴 CRÍTICO CORRIGIDO
+    targetLanguage?: string | null; // 🔴 CRÍTICO CORRIGIDO
   };
 }
 
-export const CREATE_DECK: TypedDocumentNode<
-  CreateDeckResponse,
-  CreateDeckVariables
-> = gql`
+export const CREATE_DECK: TypedDocumentNode<CreateDeckResponse, CreateDeckVariables> = gql`
   mutation CreateDeck($data: CreateDeckInput!) {
     createDeck(data: $data) {
       id
       title
       description
+      sourceLanguage
+      targetLanguage
       _count {
         flashcards
       }
@@ -64,52 +92,46 @@ export const CREATE_DECK: TypedDocumentNode<
   }
 `;
 
-// --- QUERY: Get Deck Details (CORRIGIDO) ---
-export interface GetDeckDetailsResponse {
-  deck: Deck;
+// --- MUTATION: Update Deck ---
+export interface UpdateDeckResponse {
+  updateDeck: Deck;
 }
 
-export interface GetDeckDetailsVariables {
-  id: string;
+export interface UpdateDeckVariables {
+  data: {
+    id: string;
+    title?: string | null;
+    description?: string | null; // 🔴 CRÍTICO CORRIGIDO
+    sourceLanguage?: string | null; // 🔴 CRÍTICO CORRIGIDO
+    targetLanguage?: string | null; // 🔴 CRÍTICO CORRIGIDO
+    isArchived?: boolean | null;
+  };
 }
 
-export const GET_DECK_DETAILS: TypedDocumentNode<
-  GetDeckDetailsResponse,
-  GetDeckDetailsVariables
-> = gql`
-  query GetDeckDetails($id: ID!) {
-    deck(id: $id) {
+export const UPDATE_DECK: TypedDocumentNode<UpdateDeckResponse, UpdateDeckVariables> = gql`
+  mutation UpdateDeck($data: UpdateDeckInput!) {
+    updateDeck(data: $data) {
       id
       title
       description
-      _count {
-        flashcards
-      }
-      flashcards {
-        id
-        front
-        back
-      }
+      sourceLanguage
+      targetLanguage
+      isArchived
     }
   }
 `;
 
-// --- MUTATION: Delete Deck (ADICIONADO) ---
+// --- MUTATION: Delete Deck ---
 export interface DeleteDeckResponse {
-  removeDeck: { id: string };
+  removeDeck: boolean;
 }
 
 export interface DeleteDeckVariables {
   id: string;
 }
 
-export const DELETE_DECK: TypedDocumentNode<
-  DeleteDeckResponse,
-  DeleteDeckVariables
-> = gql`
+export const DELETE_DECK: TypedDocumentNode<DeleteDeckResponse, DeleteDeckVariables> = gql`
   mutation DeleteDeck($id: ID!) {
-    removeDeck(id: $id) {
-      id
-    }
+    removeDeck(id: $id)
   }
 `;

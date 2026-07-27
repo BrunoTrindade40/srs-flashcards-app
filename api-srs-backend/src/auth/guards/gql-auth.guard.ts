@@ -2,14 +2,16 @@ import {
   CanActivate,
   ExecutionContext,
   Injectable,
+  Logger,
+  OnModuleInit,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { GqlExecutionContext } from '@nestjs/graphql';
 import { User } from '@prisma/client';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Request } from 'express';
-import * as jwt from 'jsonwebtoken';
-import { PrismaService } from '../../../prisma/prisma.service';
+import { UserService } from '../../user/user.service';
 
 export interface RequestWithUser extends Request {
   user?: User;
@@ -19,27 +21,31 @@ interface GqlContext {
   req: RequestWithUser;
 }
 
-interface SupabaseJwtPayload extends jwt.JwtPayload {
-  sub: string;
-  email?: string;
-  user_metadata?: {
-    full_name?: string;
-  };
-}
-
 @Injectable()
-export class GqlAuthGuard implements CanActivate {
-  private readonly jwtSecret: string;
+export class GqlAuthGuard implements CanActivate, OnModuleInit {
+  private supabase!: SupabaseClient<any, 'public', any>;
+  private readonly logger = new Logger(GqlAuthGuard.name);
 
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly userService: UserService,
     private readonly configService: ConfigService,
-  ) {
-    const secret = this.configService.get<string>('SUPABASE_JWT_SECRET');
-    if (!secret) {
-      throw new Error('Falha Crítica: SUPABASE_JWT_SECRET ausente no ambiente.');
+  ) { }
+
+  // 🔵 SUGESTÃO APLICADA (Boy Scout): Transferimos a inicialização para o ciclo de vida correto do NestJS
+  onModuleInit() {
+    const supabaseUrl = this.configService.get<string>('SUPABASE_URL');
+    const supabaseKey = this.configService.get<string>('SUPABASE_ANON_KEY');
+
+    if (!supabaseUrl || !supabaseKey) {
+      this.logger.error('FALHA CRÍTICA: SUPABASE_URL ou SUPABASE_ANON_KEY ausentes no arquivo .env do Backend.');
+      throw new Error('Configuração de ambiente inválida para o Supabase.');
     }
-    this.jwtSecret = secret;
+
+    this.supabase = createClient(supabaseUrl, supabaseKey, {
+      auth: {
+        persistSession: false,
+      },
+    }) as SupabaseClient<any, 'public', any>;
   }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -48,10 +54,9 @@ export class GqlAuthGuard implements CanActivate {
     const req = gqlContext.req;
 
     const authHeader = req.headers.authorization;
+
     if (!authHeader || typeof authHeader !== 'string') {
-      throw new UnauthorizedException(
-        'Acesso negado. Token ausente ou inválido.',
-      );
+      throw new UnauthorizedException('Acesso negado. Token ausente ou inválido.');
     }
 
     const parts = authHeader.split(' ');
@@ -61,37 +66,26 @@ export class GqlAuthGuard implements CanActivate {
       );
     }
 
-    const token = parts[1];
-    let decoded: SupabaseJwtPayload;
+    const token = parts[1].trim();
 
-    try {
-      decoded = jwt.verify(token, this.jwtSecret) as SupabaseJwtPayload;
-    } catch {
-      // CORREÇÃO: Aplicação do Optional Catch Binding (ES2019+).
-      // A variável (error) foi removida, extinguindo o erro do Linter de variável não utilizada.
-      throw new UnauthorizedException('Token de acesso inválido, forjado ou expirado.');
+    const response = await this.supabase.auth.getUser(token);
+
+    if (response.error || !response.data || !response.data.user) {
+      this.logger.error(`Falha de autenticação: ${response.error?.message || 'Token corrompido.'}`);
+      throw new UnauthorizedException('Token de acesso inválido, expirado ou forjado.');
     }
 
-    const authId = decoded.sub;
+    const authId = response.data.user.id;
+    const email: string = response.data.user.email || `${authId}@no-email.local`;
 
-    let internalUser = await this.prisma.user.findUnique({
-      where: { authId },
-    });
+    const metadata = response.data.user.user_metadata as Record<string, unknown> | undefined;
+    const rawName = metadata?.['full_name'];
+    const name: string = typeof rawName === 'string' && rawName.trim() !== '' ? rawName.trim() : 'Estudante';
 
-    if (!internalUser) {
-      const email: string = decoded.email || `${authId}@no-email.local`;
-      const name: string = decoded.user_metadata?.full_name || 'Estudante';
-
-      internalUser = await this.prisma.user.create({
-        data: {
-          authId,
-          email,
-          name,
-        },
-      });
-    }
+    const internalUser = await this.userService.upsertUserByAuthId(authId, email, name);
 
     req.user = internalUser;
+
     return true;
   }
 }

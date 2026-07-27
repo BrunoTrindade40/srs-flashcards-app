@@ -24,6 +24,29 @@ A date-time string at UTC, such as 2019-12-03T09:54:33Z, compliant with the date
 """
 scalar DateTime
 
+type CardFSRSData {
+  stability: Float!
+  difficulty: Float!
+  reps: Int!
+  lapses: Int!
+  state: Int!
+  due: DateTime!
+}
+
+type Flashcard {
+  id: ID!
+  front: String!
+  back: String!
+  sourceContext: String
+  imageUrl: String
+  audioUrl: String
+  deckId: ID!
+  deck: Deck
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  fsrsData: [CardFSRSData!]
+}
+
 """Agregador de contagem de relações do baralho"""
 type DeckCount {
   """Quantidade total de flashcards associados a este baralho"""
@@ -58,41 +81,15 @@ type Deck {
 
   """Timestamp da última modificação do registo"""
   updatedAt: DateTime!
-
-  """Agregador com contagem de relações"""
   _count: DeckCount
-}
 
-type CardFSRSData {
-  stability: Float!
-  difficulty: Float!
-  reps: Int!
-  lapses: Int!
-  state: Int!
-  due: DateTime!
-}
-
-type Flashcard {
-  id: ID!
-  front: String!
-  back: String!
-  sourceContext: String
-  imageUrl: String
-  audioUrl: String
-  deckId: ID!
-  deck: Deck
-  createdAt: DateTime!
-  updatedAt: DateTime!
-  fsrsData: [CardFSRSData!]
+  """Lista de flashcards pertencentes a este baralho"""
+  flashcards: [Flashcard!]
 }
 
 type Query {
   me: User!
-
-  """Lista todos os baralhos ativos pertencentes ao estudante autenticado"""
   myDecks: [Deck!]!
-
-  """Obtém detalhes de um baralho específico por ID"""
   deck(id: ID!): Deck!
   deckFlashcards(deckId: ID!): [Flashcard!]!
   dueFlashcards(deckId: ID!): [Flashcard!]!
@@ -101,16 +98,8 @@ type Query {
 
 type Mutation {
   updateMySettings(data: UpdateUserSettingsInput!): User!
-
-  """Cria um novo baralho de estudos associado ao usuário logado"""
   createDeck(data: CreateDeckInput!): Deck!
-
-  """Atualiza os dados estruturais de um baralho existente"""
   updateDeck(data: UpdateDeckInput!): Deck!
-
-  """
-  Exclui definitivamente um baralho e seus flashcards associados do sistema
-  """
   removeDeck(id: ID!): Boolean!
   createFlashcard(data: CreateFlashcardInput!): Flashcard!
   updateFlashcard(data: UpdateFlashcardInput!): Flashcard!
@@ -145,6 +134,8 @@ input CreateFlashcardInput {
   front: String!
   back: String!
   sourceContext: String
+  imageUrl: String
+  audioUrl: String
   deckId: ID!
 }
 
@@ -152,5 +143,7 @@ input UpdateFlashcardInput {
   front: String
   back: String
   sourceContext: String
+  imageUrl: String
+  audioUrl: String
   id: ID!
 }

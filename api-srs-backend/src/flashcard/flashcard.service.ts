@@ -4,10 +4,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Flashcard as PrismaFlashcard } from '@prisma/client';
-// Importação corrigida: createEmptyCard e Card são importados diretamente
 import { Card, createEmptyCard } from 'ts-fsrs';
 import { PrismaService } from '../../prisma/prisma.service';
-// 🟡 CORREÇÃO ALERTA: Importação da fonte de verdade da constante de negócio
 import { ANONYMIZED_PAYLOAD } from '../common/constants/domain.constants';
 import {
   CreateFlashcardInput,
@@ -26,7 +24,6 @@ export class FlashcardService {
 
     const deck = await this.prisma.deck.findUnique({
       where: { id: data.deckId },
-      // 🔴 CORREÇÃO CRÍTICA: Traciona a verificação de exclusão lógica do pai
       select: { creatorId: true, isArchived: true },
     });
 
@@ -34,28 +31,24 @@ export class FlashcardService {
       throw new NotFoundException('Deck não encontrado.');
     }
 
-    // Bloqueia a injeção caso o baralho esteja arquivado
     if (deck.creatorId !== userId || deck.isArchived) {
       throw new ForbiddenException(
         'Acesso negado. Você não é o proprietário ou o baralho foi excluído.',
       );
     }
 
-    // 3. Persistência Atômica via Nested Writes
+    // 🔵 SUGESTÃO APLICADA (Boy Scout): Desestruturação para mapeamento automático
+    const { deckId, ...cardData } = data;
+
     return this.prisma.flashcard.create({
       data: {
-        front: data.front,
-        back: data.back,
-        sourceContext: data.sourceContext,
-        deckId: data.deckId,
-        // Encadeamento obrigatório do metadado de aprendizado inicial
+        ...cardData, // Injeta front, back, sourceContext, imageUrl e audioUrl nativamente
+        deckId: deckId,
         fsrsData: {
           create: {
             userId: userId,
             stability: emptyCard.stability,
             difficulty: emptyCard.difficulty,
-            // 🔴 CORREÇÃO CRÍTICA: Restauração do mapeamento em snake_case.
-            // O aviso visual de depreciação gerado pelo TypeScript deve ser ignorado.
             elapsedDays: emptyCard.elapsed_days,
             scheduledDays: emptyCard.scheduled_days,
             reps: emptyCard.reps,
@@ -85,7 +78,6 @@ export class FlashcardService {
     return this.prisma.flashcard.findMany({
       where: {
         deckId,
-        // Aplicação no filtro de leitura
         front: { not: ANONYMIZED_PAYLOAD },
       },
       orderBy: { createdAt: 'desc' },
@@ -99,23 +91,20 @@ export class FlashcardService {
       include: { deck: true },
     });
 
-    // 🔴 CORREÇÃO CRÍTICA: Impede atualização de cartão de um baralho excluído
     if (!existingCard || existingCard.deck.creatorId !== userId || existingCard.deck.isArchived) {
       throw new ForbiddenException('Flashcard não encontrado, acesso negado ou baralho excluído.');
     }
 
-    // 🔴 CORREÇÃO CRÍTICA: Bloqueia a adulteração de registros logicamente excluídos
     if (existingCard.front === ANONYMIZED_PAYLOAD) {
       throw new ForbiddenException('Não é possível modificar um flashcard anonimizado.');
     }
 
+    // 🔵 SUGESTÃO APLICADA (DRY/OCP): Desestruturação
+    const { id, ...updateData } = data;
+
     return this.prisma.flashcard.update({
-      where: { id: data.id },
-      data: {
-        front: data.front,
-        back: data.back,
-        sourceContext: data.sourceContext,
-      },
+      where: { id },
+      data: updateData, // Todos os campos do DTO serão salvos de forma atômica
     });
   }
 
@@ -128,7 +117,6 @@ export class FlashcardService {
       include: { deck: true },
     });
 
-    // 🔴 CORREÇÃO CRÍTICA: Impede re-anonimização inútil caso o baralho já esteja morto
     if (!flashcard || flashcard.deck.creatorId !== userId || flashcard.deck.isArchived) {
       throw new NotFoundException('Flashcard não encontrado, acesso negado ou baralho já excluído.');
     }
@@ -136,7 +124,6 @@ export class FlashcardService {
     return this.prisma.flashcard.update({
       where: { id },
       data: {
-        // Aplicação na mutação de dados para anonimização LGPD
         front: ANONYMIZED_PAYLOAD,
         back: ANONYMIZED_PAYLOAD,
         sourceContext: null,

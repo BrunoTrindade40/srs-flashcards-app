@@ -5,8 +5,24 @@ import { UpdateUserSettingsInput } from './models/user.model';
 
 @Injectable()
 export class UserService {
-  // CORREÇÃO: O Logger foi removido, pois sua única dependência (syncUser) foi deletada.
   constructor(private readonly prisma: PrismaService) { }
+
+  /**
+   * Abordagem KISS & Atômica: Upsert Silencioso.
+   * Evita "Race Conditions" (condições de corrida) em requisições paralelas.
+   */
+  async upsertUserByAuthId(authId: string, email: string, name: string): Promise<PrismaUser> {
+    return this.prisma.user.upsert({
+      where: { authId },
+      update: { email, name }, // Mantém dados sincronizados com o Supabase
+      create: {
+        authId,
+        email,
+        name,
+        // timezone, maxDailyReviews, etc., assumem o @default() do schema.prisma
+      },
+    });
+  }
 
   async findByAuthId(authId: string): Promise<PrismaUser | null> {
     return this.prisma.user.findUnique({
@@ -26,7 +42,6 @@ export class UserService {
     return user;
   }
 
-  // Novo método para atualização (RF07) - Altera diretamente na tabela User
   async updateSettings(
     userId: string,
     data: UpdateUserSettingsInput,

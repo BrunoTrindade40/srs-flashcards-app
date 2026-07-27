@@ -1,63 +1,34 @@
-import { gql } from "@apollo/client/core";
 import { useMutation } from "@apollo/client/react";
 import React, { useEffect, useState } from "react";
 import { useToast } from "../hooks/useToast";
-import { CREATE_DECK } from "../lib/graphql/deck";
+import { UPDATE_DECK, type Deck } from "../lib/graphql/deck";
 
-interface CreateDeckModalProps {
+interface EditDeckModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess?: () => void;
+  // Rigor na Tipagem: Assumimos que o objeto parcial possui os dados mapeados em graphql/deck.ts
+  deck: Partial<Deck> & { id: string; title: string };
 }
 
-export const CreateDeckModal: React.FC<CreateDeckModalProps> = ({
+export const EditDeckModal: React.FC<EditDeckModalProps> = ({
   isOpen,
   onClose,
-  onSuccess,
+  deck,
 }) => {
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [sourceLanguage, setSourceLanguage] = useState("pt-BR");
-  const [targetLanguage, setTargetLanguage] = useState("");
+  const [title, setTitle] = useState(deck.title);
+  const [description, setDescription] = useState(deck.description || "");
+  const [sourceLanguage, setSourceLanguage] = useState(
+    deck.sourceLanguage || "pt-BR",
+  );
+  const [targetLanguage, setTargetLanguage] = useState(
+    deck.targetLanguage || "",
+  );
   const { showToast } = useToast();
 
-  const [createDeck, { loading }] = useMutation(CREATE_DECK, {
-    update(cache, { data }) {
-      if (!data?.createDeck) return;
-      cache.modify({
-        fields: {
-          myDecks(existingDeckRefs = []) {
-            const newDeckRef = cache.writeFragment({
-              data: data.createDeck,
-              fragment: gql`
-                fragment NewDeck on Deck {
-                  id
-                  title
-                  description
-                  sourceLanguage
-                  targetLanguage
-                  _count {
-                    flashcards
-                  }
-                }
-              `,
-            });
-            return [...existingDeckRefs, newDeckRef];
-          },
-        },
-      });
-    },
+  const [updateDeck, { loading }] = useMutation(UPDATE_DECK, {
     onCompleted: () => {
-      showToast("Deck criado com sucesso!", "success");
-      setTitle("");
-      setDescription("");
-      setSourceLanguage("pt-BR");
-      setTargetLanguage("");
-      onSuccess?.();
+      showToast("Deck atualizado com sucesso!", "success");
       onClose();
-    },
-    onError: (err) => {
-      showToast(`Erro ao criar deck: ${err.message}`, "error");
     },
   });
 
@@ -66,11 +37,13 @@ export const CreateDeckModal: React.FC<CreateDeckModalProps> = ({
     if (!title.trim() || loading) return;
 
     try {
-      await createDeck({
+      await updateDeck({
         variables: {
           data: {
-            // 🔴 CRÍTICO CORRIGIDO: Removido o envio do 'id'. Na criação, o payload não possui identificador.
+            id: deck.id,
             title: title.trim(),
+            // 🔴 CRÍTICO CORRIGIDO: Forçando o envio do valor `null` quando o usuário limpa o campo.
+            // O operador '|| null' garante que strings vazias ("") engatilhem a remoção do dado no banco.
             description: description.trim() || null,
             sourceLanguage: sourceLanguage || null,
             targetLanguage: targetLanguage || null,
@@ -79,7 +52,7 @@ export const CreateDeckModal: React.FC<CreateDeckModalProps> = ({
       });
     } catch (err: unknown) {
       if (err instanceof Error) {
-        console.error("Erro na submissão de deck:", err.message);
+        showToast(`Erro ao atualizar deck: ${err.message}`, "error");
       }
     }
   };
@@ -99,15 +72,13 @@ export const CreateDeckModal: React.FC<CreateDeckModalProps> = ({
       <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl flex flex-col gap-6">
         <div className="flex items-center justify-between border-b border-slate-800 pb-4">
           <div className="flex items-center gap-2">
-            <span className="text-xl">📚</span>
-            <h2 className="text-lg font-bold text-slate-100">
-              Criar Novo Deck
-            </h2>
+            <span className="text-xl">✏️</span>
+            <h2 className="text-lg font-bold text-slate-100">Editar Deck</h2>
           </div>
           <button
             onClick={onClose}
             className="text-slate-500 hover:text-slate-300 text-sm p-1 transition-colors cursor-pointer"
-            aria-label="Fechar Modal"
+            aria-label="Fechar modal"
           >
             ✕
           </button>
@@ -115,43 +86,33 @@ export const CreateDeckModal: React.FC<CreateDeckModalProps> = ({
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
-            <label
-              htmlFor="deck-title"
-              className="text-xs font-semibold text-slate-300 uppercase tracking-wider"
-            >
+            <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
               Título do Baralho *
             </label>
             <input
-              id="deck-title"
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="Ex: Vocabulário de Inglês..."
               required
               disabled={loading}
-              className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 text-sm placeholder-slate-600 focus:outline-none focus:border-amber-500 transition-colors"
+              className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 text-sm focus:outline-none focus:border-amber-500 transition-colors"
             />
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label
-              htmlFor="deck-desc"
-              className="text-xs font-semibold text-slate-300 uppercase tracking-wider"
-            >
+            <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
               Descrição (Opcional)
             </label>
             <textarea
-              id="deck-desc"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Breve resumo do conteúdo..."
               rows={3}
               disabled={loading}
-              className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 text-sm placeholder-slate-600 resize-none focus:outline-none focus:border-amber-500 transition-colors"
+              className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 text-sm resize-none focus:outline-none focus:border-amber-500 transition-colors"
             />
           </div>
 
-          {/* Seção de Idiomas: Flexbox Responsivo Puro */}
+          {/* Seção de Idiomas: Replicando o design consistente (DRY visual) */}
           <div className="flex flex-col sm:flex-row gap-4 border-t border-slate-800/50 pt-3 mt-1">
             <div className="flex flex-col gap-1.5 flex-1">
               <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
@@ -202,7 +163,7 @@ export const CreateDeckModal: React.FC<CreateDeckModalProps> = ({
               disabled={loading || !title.trim()}
               className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-xs transition-all cursor-pointer disabled:opacity-50"
             >
-              {loading ? "Criando..." : "Criar Baralho"}
+              {loading ? "Salvando..." : "Salvar Alterações"}
             </button>
           </div>
         </form>

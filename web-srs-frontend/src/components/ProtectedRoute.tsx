@@ -1,12 +1,10 @@
-import React from "react";
-import { Navigate, useLocation } from "react-router-dom";
+import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 
-interface ProtectedRouteProps {
-  children: React.ReactNode;
-}
+// Removida a interface ProtectedRouteProps.
+// Componentes de Layout no React Router v6 não precisam receber 'children'.
 
-export function ProtectedRoute({ children }: ProtectedRouteProps) {
+export function ProtectedRoute() {
   const { user, loading } = useAuth();
   const location = useLocation();
 
@@ -24,11 +22,10 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
 
   // 2. Barreira de Segurança: Expulsa se não houver usuário logado
   if (!user) {
-    // Passamos o state 'from' para que a tela de login saiba de onde viemos,
-    // permitindo um fluxo de UX onde o usuário é devolvido à página que tentou acessar.
+    // Passamos o state 'from' para que a tela de login saiba de onde viemos
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // 3. Sucesso: Renderiza a rota filha
-  return <>{children}</>;
+  // 3. Sucesso: Renderiza as rotas aninhadas através do Outlet
+  return <Outlet />;
 }

@@ -4,18 +4,24 @@ export interface Flashcard {
   id: string;
   front: string;
   back: string;
+  sourceContext?: string | null;
+  imageUrl?: string | null;
+  audioUrl?: string | null;
 }
 
-// --- MUTATION: Criação ---
+// --- MUTATION: Create Flashcard ---
 export interface CreateFlashcardResponse {
   createFlashcard: Flashcard;
 }
 
 export interface CreateFlashcardVariables {
   data: {
+    deckId: string;
     front: string;
     back: string;
-    deckId: string;
+    sourceContext?: string;
+    imageUrl?: string;
+    audioUrl?: string;
   };
 }
 
@@ -28,35 +34,48 @@ export const CREATE_FLASHCARD: TypedDocumentNode<
       id
       front
       back
+      sourceContext
+      imageUrl
+      audioUrl
     }
   }
 `;
 
-// --- QUERY: Listagem ---
-export interface GetDeckFlashcardsResponse {
-  deckFlashcards: Flashcard[];
+// --- MUTATION: Update Flashcard ---
+export interface UpdateFlashcardResponse {
+  updateFlashcard: Flashcard;
 }
 
-export interface GetDeckFlashcardsVariables {
-  deckId: string;
+export interface UpdateFlashcardVariables {
+  data: {
+    id: string;
+    front?: string;
+    back?: string;
+    sourceContext?: string;
+    imageUrl?: string;
+    audioUrl?: string;
+  };
 }
 
-export const GET_DECK_FLASHCARDS: TypedDocumentNode<
-  GetDeckFlashcardsResponse,
-  GetDeckFlashcardsVariables
+export const UPDATE_FLASHCARD: TypedDocumentNode<
+  UpdateFlashcardResponse,
+  UpdateFlashcardVariables
 > = gql`
-  query DeckFlashcards($deckId: ID!) {
-    deckFlashcards(deckId: $deckId) {
+  mutation UpdateFlashcard($data: UpdateFlashcardInput!) {
+    updateFlashcard(data: $data) {
       id
       front
       back
+      sourceContext
+      imageUrl
+      audioUrl
     }
   }
 `;
 
-// --- MUTATION: Deleção ---
+// --- MUTATION: Remove Flashcard ---
 export interface RemoveFlashcardResponse {
-  removeFlashcard: Flashcard;
+  removeFlashcard: { id: string };
 }
 
 export interface RemoveFlashcardVariables {

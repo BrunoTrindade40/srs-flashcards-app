@@ -4,25 +4,42 @@ import { Link } from "react-router-dom";
 import { CreateDeckModal } from "../components/CreateDeckModal";
 import { useToast } from "../hooks/useToast";
 import { GET_MY_DECKS, type Deck } from "../lib/graphql/deck";
+import { GET_ME } from "../lib/graphql/settings";
 
 export function Dashboard() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const { showToast } = useToast();
 
-  // 1. CORREÇÃO: Remoção do callback 'onError' descontinuado das opções do useQuery.
-  const { data, loading, error, refetch } = useQuery(GET_MY_DECKS, {
+  // Query dos Baralhos
+  const {
+    data: dataDecks,
+    loading: loadingDecks,
+    error: errorDecks,
+    refetch: refetchDecks,
+  } = useQuery(GET_MY_DECKS, {
     fetchPolicy: "cache-and-network",
   });
 
-  // 2. CORREÇÃO: Tratamento de erros declarativo (Side-effect seguro no React 19).
-  useEffect(() => {
-    if (error) {
-      showToast(`Falha ao carregar baralhos: ${error.message}`, "error");
-    }
-  }, [error, showToast]);
+  // Query de Gamificação e Perfil do Usuário
+  const { data: dataMe, error: errorMe } = useQuery(GET_ME, {
+    fetchPolicy: "cache-and-network",
+  });
 
-  // 3. CORREÇÃO: Type Assertion segura (as Deck[]) para resolver a inferência 'DeepPartialObject' do Apollo.
-  const decks = (data?.myDecks as Deck[]) || [];
+  // Tratamento declarativo e purista de erros no Apollo v4
+  useEffect(() => {
+    if (errorDecks) {
+      showToast(`Falha ao carregar baralhos: ${errorDecks.message}`, "error");
+    }
+  }, [errorDecks, showToast]);
+
+  useEffect(() => {
+    if (errorMe) {
+      console.error("Erro ao sincronizar perfil do usuário:", errorMe.message);
+    }
+  }, [errorMe]);
+
+  const decks = (dataDecks?.myDecks as Deck[]) || [];
+  const userStats = dataMe?.me;
 
   return (
     <div className="flex flex-col gap-8 max-w-7xl mx-auto px-4 py-4">
@@ -57,6 +74,56 @@ export function Dashboard() {
         </div>
       </div>
 
+      {/* Cartões de Gamificação / Estatísticas do Usuário (Flexbox Responsivo) */}
+      <div className="flex flex-wrap gap-4 w-full">
+        {/* CORREÇÃO: Utilização da classe nativa min-w-55 ao invés do valor arbitrário min-w-[220px] */}
+        <div className="flex-1 min-w-55 bg-slate-900 border border-slate-800 rounded-2xl p-4 flex items-center gap-4 shadow-md">
+          <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 text-2xl shrink-0">
+            🔥
+          </div>
+          <div className="flex flex-col">
+            <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+              Ofensiva Atual
+            </span>
+            <span className="text-xl font-black text-slate-100">
+              {userStats?.currentStreak ?? 0}{" "}
+              {userStats?.currentStreak === 1 ? "dia" : "dias"}
+            </span>
+          </div>
+        </div>
+
+        {/* CORREÇÃO: Utilização da classe nativa min-w-55 */}
+        <div className="flex-1 min-w-55 bg-slate-900 border border-slate-800 rounded-2xl p-4 flex items-center gap-4 shadow-md">
+          <div className="w-12 h-12 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-orange-400 text-2xl shrink-0">
+            🏆
+          </div>
+          <div className="flex flex-col">
+            <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+              Maior Sequência
+            </span>
+            <span className="text-xl font-black text-slate-100">
+              {userStats?.longestStreak ?? 0}{" "}
+              {userStats?.longestStreak === 1 ? "dia" : "dias"}
+            </span>
+          </div>
+        </div>
+
+        {/* CORREÇÃO: Utilização da classe nativa min-w-55 */}
+        <div className="flex-1 min-w-55 bg-slate-900 border border-slate-800 rounded-2xl p-4 flex items-center gap-4 shadow-md">
+          <div className="w-12 h-12 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 text-2xl shrink-0">
+            ⚡
+          </div>
+          <div className="flex flex-col">
+            <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+              XP Total
+            </span>
+            <span className="text-xl font-black text-slate-100">
+              {userStats?.totalXp ?? 0} XP
+            </span>
+          </div>
+        </div>
+      </div>
+
       {/* Grade de Decks em Flexbox (Responsiva e Fluida) */}
       <div className="flex flex-col gap-4">
         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
@@ -64,7 +131,7 @@ export function Dashboard() {
             <span>📚</span> Seus Baralhos ({decks.length})
           </h2>
           <button
-            onClick={() => refetch()}
+            onClick={() => refetchDecks()}
             className="text-xs font-semibold text-slate-400 hover:text-amber-400 transition cursor-pointer"
           >
             🔄 Atualizar
@@ -72,7 +139,7 @@ export function Dashboard() {
         </div>
 
         {/* Estado de Carregamento */}
-        {loading && decks.length === 0 && (
+        {loadingDecks && decks.length === 0 && (
           <div className="flex items-center justify-center min-h-[30vh]">
             <p className="text-slate-400 text-sm font-medium">
               Carregando seus baralhos...
@@ -81,13 +148,13 @@ export function Dashboard() {
         )}
 
         {/* Estado de Erro */}
-        {error && decks.length === 0 && (
+        {errorDecks && decks.length === 0 && (
           <div className="flex flex-col items-center justify-center min-h-[30vh] gap-3 text-center">
             <p className="text-rose-400 text-sm font-medium">
               Erro ao sincronizar baralhos.
             </p>
             <button
-              onClick={() => refetch()}
+              onClick={() => refetchDecks()}
               className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-semibold transition cursor-pointer"
             >
               Tentar Novamente
@@ -96,7 +163,7 @@ export function Dashboard() {
         )}
 
         {/* Estado Vazio */}
-        {!loading && !error && decks.length === 0 && (
+        {!loadingDecks && !errorDecks && decks.length === 0 && (
           <div className="flex flex-col items-center justify-center py-16 bg-slate-900/40 border border-slate-800/80 rounded-2xl text-center px-4">
             <span className="text-4xl mb-3">📭</span>
             <h3 className="text-base font-bold text-slate-200">

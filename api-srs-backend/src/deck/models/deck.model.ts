@@ -1,16 +1,15 @@
-// src/deck/models/deck.model.ts
 import { Field, ID, Int, ObjectType } from '@nestjs/graphql';
+// 🔴 CRÍTICO CORRIGIDO: Importação do modelo filho
+import { Flashcard } from '../../flashcard/models/flashcard.model';
 
-// 1. DECLARAÇÃO DA CLASSE AGREGADORA (Deve vir antes do modelo principal)
 @ObjectType({ description: 'Agregador de contagem de relações do baralho' })
 export class DeckCount {
   @Field(() => Int, {
     description: 'Quantidade total de flashcards associados a este baralho',
   })
-  flashcards!: number; // Operador de atribuição definitiva (!) aplicado
+  flashcards!: number;
 }
 
-// 2. DECLARAÇÃO DO MODELO PRINCIPAL
 @ObjectType({ description: 'Modelo principal do baralho de estudos' })
 export class Deck {
   @Field(() => ID, { description: 'Identificador único do baralho (UUID)' })
@@ -56,10 +55,17 @@ export class Deck {
   })
   updatedAt!: Date;
 
-  // Associação estrita e opcional com a classe DeckCount declarada acima
   @Field(() => DeckCount, {
     nullable: true,
     description: 'Agregador com contagem de relações',
   })
   _count?: DeckCount | null;
+
+  // 🔴 CRÍTICO CORRIGIDO: Exposição da relação Flashcards para o GraphQL
+  // A função de seta () => [Flashcard] resolve dependências circulares do TypeScript
+  @Field(() => [Flashcard], {
+    nullable: true,
+    description: 'Lista de flashcards pertencentes a este baralho',
+  })
+  flashcards?: Flashcard[] | null;
 }

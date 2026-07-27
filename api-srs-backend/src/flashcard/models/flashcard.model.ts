@@ -70,8 +70,6 @@ export class Flashcard {
   @Field()
   updatedAt!: Date;
 
-  // 🔴 CORREÇÃO CRÍTICA: O contrato agora espera um Array de objetos FSRS,
-  // possuindo paridade exata 1:1 com o relacionamento 'CardFSRSData[]' do Prisma.
   @Field(() => [CardFSRSData], { nullable: true })
   fsrsData?: CardFSRSData[] | null;
 }
@@ -100,6 +98,18 @@ export class CreateFlashcardInput {
   @MaxLength(500, { message: 'O contexto de origem é muito extenso.' })
   sourceContext?: string | null;
 
+  // 🔴 CRÍTICO CORRIGIDO: Adição explícita da URL de Imagem no Input
+  @Field(() => String, { nullable: true })
+  @IsString()
+  @IsOptional()
+  imageUrl?: string | null;
+
+  // 🔴 CRÍTICO CORRIGIDO: Adição explícita da URL de Áudio no Input
+  @Field(() => String, { nullable: true })
+  @IsString()
+  @IsOptional()
+  audioUrl?: string | null;
+
   @Field(() => ID)
   @IsUUID('4', { message: 'O identificador do Deck deve ser um UUID válido.' })
   @IsNotEmpty()
@@ -108,7 +118,6 @@ export class CreateFlashcardInput {
 
 @InputType()
 export class UpdateFlashcardInput extends PartialType(
-  // 🟡 CORREÇÃO ALERTA: Retira a falsa promessa de edição do deckId
   OmitType(CreateFlashcardInput, ['deckId'] as const),
 ) {
   @Field(() => ID)

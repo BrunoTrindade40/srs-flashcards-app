@@ -1,6 +1,6 @@
 import { useMutation, useQuery } from "@apollo/client/react";
 import { useCallback, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom"; // Importado useNavigate
 import { useStudyKeyboard } from "../hooks/useStudyKeyboard";
 import { useToast } from "../hooks/useToast";
 import {
@@ -11,11 +11,11 @@ import {
 
 export function StudySession() {
   const { deckId } = useParams<{ deckId: string }>();
+  const navigate = useNavigate(); // Instanciado o roteador defensivo
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showAnswer, setShowAnswer] = useState(false);
   const [sessionFinished, setSessionFinished] = useState(false);
   const [answerShownAt, setAnswerShownAt] = useState<number | null>(null);
-
   const { showToast } = useToast();
 
   const { data, loading, error, refetch } = useQuery(GET_DUE_FLASHCARDS, {
@@ -52,8 +52,20 @@ export function StudySession() {
           setSessionFinished(true);
         }
       } catch (err: unknown) {
-        console.error("Erro ao registrar avaliação:", err);
-        showToast("Falha ao salvar revisão no servidor.", "error");
+        // Type Guard estrito para capturar mensagens reais do NestJS (ex: ForbiddenException)
+        if (err instanceof Error) {
+          console.error("Erro crítico na avaliação FSRS:", err.message);
+          showToast(
+            `Falha de segurança ou sincronização: ${err.message}`,
+            "error",
+          );
+        } else {
+          console.error("Erro desconhecido na avaliação:", err);
+          showToast("Falha inesperada no servidor.", "error");
+        }
+
+        // Bloqueio ativo: Força a saída do usuário da sessão corrompida
+        navigate("/dashboard", { replace: true });
       }
     },
     [
@@ -64,6 +76,7 @@ export function StudySession() {
       currentIndex,
       cards.length,
       showToast,
+      navigate, // Adicionado ao array de dependências
     ],
   );
 
@@ -82,9 +95,7 @@ export function StudySession() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <p className="text-slate-400 font-medium">
-          Carregando sessão de estudos...
-        </p>
+        <div className="w-8 h-8 border-4 border-amber-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -150,17 +161,57 @@ export function StudySession() {
 
       {/* Visualizador do Card */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 min-h-65 flex flex-col justify-between shadow-lg">
-        <div className="flex flex-col gap-2">
-          <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">
-            Frente (Pergunta)
-          </span>
-          <div className="text-lg text-slate-100 font-medium whitespace-pre-wrap">
-            {currentCard.front}
+        <div className="flex flex-col gap-4">
+          {/* Contexto da Referência (Renderização Condicional em Flexbox) */}
+          {currentCard.sourceContext && (
+            <div className="flex items-center gap-2 bg-slate-950 px-3 py-1.5 rounded-lg border border-slate-800 w-fit self-start">
+              <span className="text-amber-500 text-xs">📖</span>
+              <cite className="text-[10px] text-slate-400 font-medium uppercase tracking-wider not-italic">
+                {currentCard.sourceContext}
+              </cite>
+            </div>
+          )}
+
+          <div className="flex flex-col gap-2">
+            <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">
+              Frente (Pergunta)
+            </span>
+            <div className="text-lg text-slate-100 font-medium whitespace-pre-wrap">
+              {currentCard.front}
+            </div>
           </div>
+
+          {/* Multimídia via Flexbox Puro (KISS: HTML5 Nativo) */}
+          {(currentCard.imageUrl || currentCard.audioUrl) && (
+            <div className="flex flex-col gap-3 mt-2 border-t border-slate-800/50 pt-4">
+              {currentCard.imageUrl && (
+                <div className="flex justify-center w-full bg-slate-950/50 rounded-xl border border-slate-800 p-2">
+                  <img
+                    src={currentCard.imageUrl}
+                    alt="Contexto visual do flashcard"
+                    loading="lazy"
+                    className="max-h-56 w-auto object-contain rounded-lg"
+                  />
+                </div>
+              )}
+              {currentCard.audioUrl && (
+                <audio
+                  key={`audio-${currentCard.id}`} /* Previne colisão de estado no React */
+                  controls
+                  className="w-full h-10 rounded-lg outline-none"
+                  src={currentCard.audioUrl}
+                  preload="none"
+                >
+                  Seu navegador não suporta o formato de áudio.
+                </audio>
+              )}
+            </div>
+          )}
         </div>
 
+        {/* Verso (Resposta) */}
         {showAnswer ? (
-          <div className="flex flex-col gap-2 pt-6 border-t border-slate-800/80 mt-6">
+          <div className="flex flex-col gap-2 pt-6 border-t border-slate-800/80 mt-6 animate-fade-in">
             <span className="text-xs font-medium text-amber-400 uppercase tracking-wider">
               Verso (Resposta)
             </span>
@@ -172,7 +223,7 @@ export function StudySession() {
           <div className="pt-6 border-t border-slate-800/50 mt-6 text-center">
             <button
               onClick={handleShowAnswerClick}
-              className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium rounded-xl text-sm transition border border-slate-700/50"
+              className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium rounded-xl text-sm transition border border-slate-700/50 cursor-pointer"
             >
               Revelar Resposta (Espaço / Enter)
             </button>
