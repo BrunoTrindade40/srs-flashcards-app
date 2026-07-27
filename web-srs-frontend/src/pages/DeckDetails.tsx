@@ -1,279 +1,283 @@
-import { gql } from "@apollo/client";
-import { useQuery } from "@apollo/client/react";
-import React, { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useMutation, useQuery } from "@apollo/client/react";
+import { useEffect, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { ConfirmModal } from "../components/ConfirmModal";
 import { CreateFlashcardModal } from "../components/CreateFlashcardModal";
+import { EditDeckModal } from "../components/EditDeckModal";
+import { EditFlashcardModal } from "../components/EditFlashcardModal";
+import { useToast } from "../hooks/useToast";
+import { GET_DECK_DETAILS, UPDATE_DECK } from "../lib/graphql/deck"; // Alterado para UPDATE_DECK
+import { REMOVE_FLASHCARD } from "../lib/graphql/flashcard";
 
-// 1. Interfaces Estritas Corrigidas
-interface Flashcard {
-  id: string;
-  front: string;
-  back: string;
-  createdAt: string;
-}
-
-interface GetDeckDetailsData {
-  deck: {
-    id: string;
-    title: string;
-    description?: string | null;
-  };
-  // O backend retorna os flashcards como uma Root Query paralela
-  deckFlashcards: Flashcard[];
-}
-
-interface GetDeckDetailsVars {
-  id: string;
-}
-
-// 2. Query Refatorada: Tipagem 'ID!' e consumo de múltiplas Root Queries
-const GET_DECK_DETAILS = gql`
-  query GetDeckDetails($id: ID!) {
-    deck(id: $id) {
-      id
-      title
-      description
-    }
-    deckFlashcards(deckId: $id) {
-      id
-      front
-      back
-      createdAt
-    }
-  }
-`;
-
-export const DeckDetails: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
+export function DeckDetails() {
+  const { deckId } = useParams<{ deckId: string }>();
   const navigate = useNavigate();
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const { showToast } = useToast();
 
-  const { data, loading, error } = useQuery<
-    GetDeckDetailsData,
-    GetDeckDetailsVars
-  >(GET_DECK_DETAILS, {
-    variables: { id: id! },
-    skip: !id,
-    fetchPolicy: "cache-and-network",
+  const [isCardModalOpen, setIsCardModalOpen] = useState(false);
+  const [isAnonymizeDeckModalOpen, setIsAnonymizeDeckModalOpen] =
+    useState(false); // Renomeado por clareza arquitetural
+  const [isEditDeckModalOpen, setIsEditDeckModalOpen] = useState(false);
+  const [cardToDeleteId, setCardToDeleteId] = useState<string | null>(null);
+  const [flashcardToEdit, setFlashcardToEdit] = useState<{
+    id: string;
+    front: string;
+    back: string;
+  } | null>(null);
+
+  const { data, loading, error, refetch } = useQuery(GET_DECK_DETAILS, {
+    variables: { id: deckId || "" },
+    skip: !deckId,
   });
 
-  const containerStyle: React.CSSProperties = {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    width: "100%",
-    padding: "2rem",
-    boxSizing: "border-box",
-  };
-  const headerStyle: React.CSSProperties = {
-    display: "flex",
-    flexDirection: "column",
-    gap: "1rem",
-    width: "100%",
-    maxWidth: "900px",
-    marginBottom: "2rem",
-    paddingBottom: "1rem",
-    borderBottom: "1px solid #e4e4e7",
-  };
-  const listContainerStyle: React.CSSProperties = {
-    display: "flex",
-    flexDirection: "column",
-    gap: "1rem",
-    width: "100%",
-    maxWidth: "900px",
-  };
-  const flashcardStyle: React.CSSProperties = {
-    display: "flex",
-    flexDirection: "column",
-    gap: "0.75rem",
-    padding: "1.5rem",
-    backgroundColor: "#fafafa",
-    borderRadius: "8px",
-    border: "1px solid #e4e4e7",
+  // Alterado o motor para a mutação de atualização
+  const [anonymizeDeck, { loading: anonymizingDeck }] =
+    useMutation(UPDATE_DECK);
+  const [deleteFlashcard, { loading: deletingCard }] =
+    useMutation(REMOVE_FLASHCARD);
+
+  useEffect(() => {
+    if (error) {
+      showToast(`Erro ao carregar deck: ${error.message}`, "error");
+    }
+  }, [error, showToast]);
+
+  const deck = data?.deck;
+
+  const handleAnonymizeDeck = async () => {
+    if (!deckId) return;
+
+    try {
+      await anonymizeDeck({
+        variables: {
+          data: {
+            id: deckId,
+            isArchived: true, // Aciona o gatilho da anonimização no NestJS
+          },
+        },
+        update(cache) {
+          // Limpeza imperativa: Rompe a referência do objeto localmente e limpa a lixeira do Apollo
+          cache.evict({
+            id: cache.identify({ __typename: "Deck", id: deckId }),
+          });
+          cache.gc();
+        },
+      });
+      showToast("Baralho anonimizado e removido com sucesso!", "success");
+      navigate("/dashboard", { replace: true });
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        showToast(`Falha ao remover o deck: ${err.message}`, "error");
+      }
+    }
   };
 
-  if (loading)
+  const handleDeleteFlashcard = async () => {
+    if (!cardToDeleteId) return;
+    try {
+      await deleteFlashcard({
+        variables: { id: cardToDeleteId },
+        // 🔵 SUGESTÃO APLICADA: Manipulação direta da Store (Zero Latência)
+        update(cache) {
+          cache.evict({
+            id: cache.identify({ __typename: "Flashcard", id: cardToDeleteId }),
+          });
+          cache.gc(); // Garbage collector recolhe o nó destruído
+        },
+      });
+      showToast("Flashcard excluído com sucesso!", "success");
+      setCardToDeleteId(null);
+
+      // Remova (ou comente) a linha 'refetch()'
+      // refetch();
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        showToast(`Falha ao excluir o flashcard: ${err.message}`, "error");
+      }
+    }
+  };
+
+  if (loading) {
     return (
-      <div style={containerStyle}>
-        <h2>Carregando repositório...</h2>
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="w-8 h-8 border-4 border-amber-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
-  if (error)
+  }
+
+  if (error || !deck) {
     return (
-      <div style={containerStyle}>
-        <h2>Erro de comunicação: {error.message}</h2>
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+        <p className="text-rose-400 font-medium">Deck não encontrado.</p>
+        <Link
+          to="/dashboard"
+          className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-sm transition"
+        >
+          Voltar ao Dashboard
+        </Link>
       </div>
     );
-  if (!data?.deck)
-    return (
-      <div style={containerStyle}>
-        <h2>Deck não encontrado.</h2>
-      </div>
-    );
+  }
 
   return (
-    <div style={containerStyle}>
-      <header style={headerStyle}>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
-          <div>
-            <button
-              onClick={() => navigate("/")}
-              style={{
-                marginBottom: "1rem",
-                cursor: "pointer",
-                background: "none",
-                border: "none",
-                color: "#2563eb",
-                fontWeight: "bold",
-                padding: 0,
-              }}
-            >
-              ← Voltar para a Dashboard
-            </button>
-            <h1 style={{ margin: 0, fontSize: "1.75rem", color: "#18181b" }}>
-              {data.deck.title}
-            </h1>
-            <p style={{ margin: "0.5rem 0 0 0", color: "#71717a" }}>
-              {data.deck.description || "Sem descrição."}
+    <div className="max-w-4xl mx-auto px-4 py-6 flex flex-col gap-6">
+      {/* Cabeçalho do Deck */}
+      <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 border-b border-slate-800 pb-6">
+        <div className="flex flex-col gap-2">
+          <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-md border border-amber-500/20 w-fit">
+            {deck.flashcards?.length || 0} Cartões
+          </span>
+          <h1 className="text-2xl font-bold text-slate-100">{deck.title}</h1>
+          {deck.description && (
+            <p className="text-sm text-slate-400 max-w-2xl">
+              {deck.description}
             </p>
-          </div>
-          <div style={{ display: "flex", gap: "1rem" }}>
-            <button
-              style={{
-                padding: "0.5rem 1rem",
-                cursor: "pointer",
-                backgroundColor: "#10b981",
-                color: "#fff",
-                border: "none",
-                borderRadius: "4px",
-                fontWeight: "bold",
-              }}
-            >
-              Estudar Deck
-            </button>
-            <button
-              onClick={() => setIsModalOpen(true)}
-              style={{
-                padding: "0.5rem 1rem",
-                cursor: "pointer",
-                backgroundColor: "#2563eb",
-                color: "#fff",
-                border: "none",
-                borderRadius: "4px",
-                fontWeight: "bold",
-              }}
-            >
-              + Novo Flashcard
-            </button>
-          </div>
+          )}
         </div>
-      </header>
 
-      <main style={listContainerStyle}>
-        {/* Agora utilizamos o array deckFlashcards vindo da raiz do data */}
-        {!data.deckFlashcards || data.deckFlashcards.length === 0 ? (
-          <div
-            style={{ textAlign: "center", padding: "3rem", color: "#71717a" }}
+        {/* Grupo de Ações (Flexbox) */}
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <button
+            onClick={() => setIsEditDeckModalOpen(true)}
+            className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold rounded-xl text-sm transition cursor-pointer"
           >
-            Nenhum flashcard cadastrado neste deck.
+            Editar Deck
+          </button>
+          <button
+            onClick={() => setIsCardModalOpen(true)}
+            className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-sm transition shadow-lg cursor-pointer"
+          >
+            + Criar Card
+          </button>
+          <button
+            onClick={() => setIsAnonymizeDeckModalOpen(true)}
+            className="px-4 py-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 font-medium rounded-xl text-sm transition cursor-pointer"
+          >
+            Remover
+          </button>
+        </div>
+      </div>
+
+      {/* Lista de Flashcards */}
+      <div className="flex flex-col gap-4">
+        <h2 className="text-lg font-semibold text-slate-200">
+          Cartões do Deck
+        </h2>
+
+        {!deck.flashcards || deck.flashcards.length === 0 ? (
+          <div className="text-center py-12 bg-slate-900/50 border border-slate-800/80 rounded-2xl">
+            <p className="text-slate-400 text-sm">
+              Este deck ainda não possui flashcards.
+            </p>
+            <button
+              onClick={() => setIsCardModalOpen(true)}
+              className="mt-3 text-amber-400 hover:text-amber-300 text-sm font-bold transition cursor-pointer"
+            >
+              Adicionar o primeiro cartão
+            </button>
           </div>
         ) : (
-          data.deckFlashcards.map((card) => (
-            <article key={card.id} style={flashcardStyle}>
+          <div className="flex flex-col gap-3">
+            {deck.flashcards.map((card) => (
               <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "0.25rem",
-                }}
+                key={card.id}
+                className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col sm:flex-row items-start justify-between gap-4 group hover:border-slate-600 transition-colors"
               >
-                <span
-                  style={{
-                    fontSize: "0.75rem",
-                    fontWeight: "bold",
-                    color: "#a1a1aa",
-                    textTransform: "uppercase",
-                  }}
-                >
-                  Frente
-                </span>
-                <p
-                  style={{
-                    margin: 0,
-                    color: "#18181b",
-                    whiteSpace: "pre-wrap",
-                  }}
-                >
-                  {card.front}
-                </p>
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "0.25rem",
-                  paddingTop: "0.75rem",
-                  borderTop: "1px dashed #d4d4d8",
-                }}
-              >
-                <span
-                  style={{
-                    fontSize: "0.75rem",
-                    fontWeight: "bold",
-                    color: "#a1a1aa",
-                    textTransform: "uppercase",
-                  }}
-                >
-                  Verso
-                </span>
-                <p
-                  style={{
-                    margin: 0,
-                    color: "#18181b",
-                    whiteSpace: "pre-wrap",
-                  }}
-                >
-                  {card.back}
-                </p>
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "flex-end",
-                  marginTop: "0.5rem",
-                }}
-              >
-                <button
-                  style={{
-                    padding: "0.25rem 0.5rem",
-                    cursor: "pointer",
-                    border: "none",
-                    backgroundColor: "#fee2e2",
-                    color: "#b91c1c",
-                    borderRadius: "4px",
-                    fontSize: "0.8rem",
-                    fontWeight: "bold",
-                  }}
-                >
-                  Excluir
-                </button>
-              </div>
-            </article>
-          ))
-        )}
-      </main>
+                <div className="flex flex-col gap-3 flex-1 w-full">
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                      Frente
+                    </span>
+                    <p className="text-sm text-slate-200 font-medium whitespace-pre-wrap mt-1">
+                      {card.front}
+                    </p>
+                  </div>
+                  <div className="pt-3 border-t border-slate-800/60">
+                    <span className="text-[10px] font-bold text-amber-500/80 uppercase tracking-wider">
+                      Verso
+                    </span>
+                    <p className="text-sm text-slate-400 whitespace-pre-wrap mt-1">
+                      {card.back}
+                    </p>
+                  </div>
+                </div>
 
-      <CreateFlashcardModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        deckId={data.deck.id}
-      />
+                <div className="flex sm:flex-col items-center gap-2 pt-2 sm:pt-0 shrink-0 w-full sm:w-auto justify-end border-t sm:border-t-0 border-slate-800 sm:border-transparent mt-2 sm:mt-0">
+                  <button
+                    onClick={() => setFlashcardToEdit(card)}
+                    className="p-2 bg-slate-800/50 hover:bg-blue-500/20 text-slate-400 hover:text-blue-400 rounded-lg transition-colors cursor-pointer"
+                    title="Editar Flashcard"
+                  >
+                    ✏️
+                  </button>
+                  <button
+                    onClick={() => setCardToDeleteId(card.id)}
+                    className="p-2 bg-slate-800/50 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 rounded-lg transition-colors cursor-pointer"
+                    title="Excluir Flashcard"
+                  >
+                    🗑️
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Modais Aninhados */}
+      {isCardModalOpen && deckId && (
+        <CreateFlashcardModal
+          deckId={deckId}
+          isOpen={isCardModalOpen}
+          onClose={() => setIsCardModalOpen(false)}
+          onSuccess={() => refetch()}
+        />
+      )}
+
+      {isEditDeckModalOpen && (
+        <EditDeckModal
+          isOpen={isEditDeckModalOpen}
+          onClose={() => setIsEditDeckModalOpen(false)}
+          deck={deck}
+        />
+      )}
+
+      {flashcardToEdit && (
+        <EditFlashcardModal
+          isOpen={!!flashcardToEdit}
+          onClose={() => setFlashcardToEdit(null)}
+          flashcard={flashcardToEdit}
+        />
+      )}
+
+      {isAnonymizeDeckModalOpen && (
+        <ConfirmModal
+          isOpen={isAnonymizeDeckModalOpen}
+          title="Remover Baralho (Anonimização)"
+          message="Tem certeza que deseja remover este baralho? Para proteger sua privacidade, o baralho será irreversivelmente anonimizado e removido da sua interface, mantendo apenas métricas estatísticas impessoais para a calibração do algoritmo."
+          confirmText="Anonimizar e Remover"
+          isDanger
+          loading={anonymizingDeck}
+          onConfirm={handleAnonymizeDeck}
+          onClose={() => setIsAnonymizeDeckModalOpen(false)}
+        />
+      )}
+
+      {/* Modal de Delete de Flashcard original */}
+      {cardToDeleteId && (
+        <ConfirmModal
+          isOpen={!!cardToDeleteId}
+          title="Excluir Flashcard"
+          message="Tem certeza que deseja excluir este cartão de forma permanente?"
+          confirmText="Excluir Card"
+          isDanger
+          loading={deletingCard}
+          onConfirm={handleDeleteFlashcard}
+          onClose={() => setCardToDeleteId(null)}
+        />
+      )}
     </div>
   );
-};
+}
+
+export default DeckDetails;

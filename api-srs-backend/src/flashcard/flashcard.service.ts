@@ -3,7 +3,10 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { Flashcard as PrismaFlashcard } from '@prisma/client';
+import { Card, createEmptyCard } from 'ts-fsrs';
 import { PrismaService } from '../../prisma/prisma.service';
+import { ANONYMIZED_PAYLOAD } from '../common/constants/domain.constants';
 import {
   CreateFlashcardInput,
   UpdateFlashcardInput,
@@ -11,55 +14,61 @@ import {
 
 @Injectable()
 export class FlashcardService {
-  // eslint-disable-next-line prettier/prettier
   constructor(private readonly prisma: PrismaService) { }
 
-  // 1. Assinatura corrigida para receber o userId do Resolver (Resolve TS2554)
-  async createFlashcard(userId: string, data: CreateFlashcardInput) {
-    // 1. Validação de Regra de Negócio: Garante a propriedade do Deck
+  async createFlashcard(
+    userId: string,
+    data: CreateFlashcardInput,
+  ): Promise<PrismaFlashcard> {
+    const emptyCard: Card = createEmptyCard();
+
     const deck = await this.prisma.deck.findUnique({
       where: { id: data.deckId },
-      select: { creatorId: true },
+      select: { creatorId: true, isArchived: true },
     });
 
     if (!deck) {
       throw new NotFoundException('Deck não encontrado.');
     }
 
-    if (deck.creatorId !== userId) {
+    if (deck.creatorId !== userId || deck.isArchived) {
       throw new ForbiddenException(
-        'Acesso negado. Você não é o proprietário deste Deck.',
+        'Acesso negado. Você não é o proprietário ou o baralho foi excluído.',
       );
     }
 
-    // 2. Persistência do Flashcard com Inicialização FSRS Segura
+    // 🔵 SUGESTÃO APLICADA (Boy Scout): Desestruturação para mapeamento automático
+    const { deckId, ...cardData } = data;
+
     return this.prisma.flashcard.create({
       data: {
-        front: data.front,
-        back: data.back,
-        deckId: data.deckId,
+        ...cardData, // Injeta front, back, sourceContext, imageUrl e audioUrl nativamente
+        deckId: deckId,
         fsrsData: {
           create: {
-            stability: 0,
-            difficulty: 0,
-            state: 0, // NEW
-            reps: 0,
-            lapses: 0,
-            // SOLUÇÃO: Omitimos a propriedade de data.
-            // O TypeScript para de reclamar de propriedades desconhecidas e o
-            // Prisma utilizará o @default(now()) do seu schema.prisma.
+            userId: userId,
+            stability: emptyCard.stability,
+            difficulty: emptyCard.difficulty,
+            elapsedDays: emptyCard.elapsed_days,
+            scheduledDays: emptyCard.scheduled_days,
+            reps: emptyCard.reps,
+            lapses: emptyCard.lapses,
+            state: emptyCard.state,
+            due: emptyCard.due,
+            lastReview: emptyCard.last_review || null,
           },
         },
-      },
-      include: {
-        fsrsData: true,
       },
     });
   }
 
-  async getFlashcardsByDeck(userId: string, deckId: string) {
+  async getFlashcardsByDeck(
+    userId: string,
+    deckId: string,
+  ): Promise<PrismaFlashcard[]> {
     const deck = await this.prisma.deck.findUnique({
       where: { id: deckId },
+      select: { creatorId: true },
     });
 
     if (!deck || deck.creatorId !== userId) {
@@ -67,50 +76,59 @@ export class FlashcardService {
     }
 
     return this.prisma.flashcard.findMany({
-      // O Filtro rigoroso: Ignora cartões anonimizados
       where: {
         deckId,
-        front: { not: '[DADO_ANONIMIZADO]' },
+        front: { not: ANONYMIZED_PAYLOAD },
       },
       orderBy: { createdAt: 'desc' },
+      take: 1000,
     });
   }
 
   async updateFlashcard(userId: string, data: UpdateFlashcardInput) {
-    const { id, ...updateData } = data;
-
-    const flashcard = await this.prisma.flashcard.findUnique({
-      where: { id },
+    const existingCard = await this.prisma.flashcard.findUnique({
+      where: { id: data.id },
       include: { deck: true },
     });
 
-    if (!flashcard || flashcard.deck.creatorId !== userId) {
-      throw new NotFoundException('Flashcard não encontrado ou acesso negado.');
+    if (!existingCard || existingCard.deck.creatorId !== userId || existingCard.deck.isArchived) {
+      throw new ForbiddenException('Flashcard não encontrado, acesso negado ou baralho excluído.');
     }
+
+    if (existingCard.front === ANONYMIZED_PAYLOAD) {
+      throw new ForbiddenException('Não é possível modificar um flashcard anonimizado.');
+    }
+
+    // 🔵 SUGESTÃO APLICADA (DRY/OCP): Desestruturação
+    const { id, ...updateData } = data;
 
     return this.prisma.flashcard.update({
       where: { id },
-      data: updateData,
+      data: updateData, // Todos os campos do DTO serão salvos de forma atômica
     });
   }
 
-  async anonymizeFlashcard(userId: string, id: string) {
+  async anonymizeFlashcard(
+    userId: string,
+    id: string,
+  ): Promise<PrismaFlashcard> {
     const flashcard = await this.prisma.flashcard.findUnique({
       where: { id },
       include: { deck: true },
     });
 
-    if (!flashcard || flashcard.deck.creatorId !== userId) {
-      throw new NotFoundException('Flashcard não encontrado ou acesso negado.');
+    if (!flashcard || flashcard.deck.creatorId !== userId || flashcard.deck.isArchived) {
+      throw new NotFoundException('Flashcard não encontrado, acesso negado ou baralho já excluído.');
     }
 
-    // Fluxo de Anonimização Irreversível garantindo a conformidade sem 'isArchived'
     return this.prisma.flashcard.update({
       where: { id },
       data: {
-        front: '[DADO_ANONIMIZADO]',
-        back: '[DADO_ANONIMIZADO]',
+        front: ANONYMIZED_PAYLOAD,
+        back: ANONYMIZED_PAYLOAD,
         sourceContext: null,
+        imageUrl: null,
+        audioUrl: null,
       },
     });
   }

@@ -1,0 +1,1 @@
+export const ANONYMIZED_PAYLOAD = '[DADO_ANONIMIZADO]';

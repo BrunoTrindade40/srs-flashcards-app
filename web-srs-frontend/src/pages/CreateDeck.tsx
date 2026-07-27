@@ -1,333 +1,157 @@
-import { gql } from "@apollo/client";
-import { useMutation } from "@apollo/client/react";
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-// 1. Contratos de Interface Estritos
-interface Deck {
-  id: string;
-  title: string;
-  description?: string | null;
-  sourceLanguage: string;
-  targetLanguage?: string | null;
-  createdAt: string;
-  isArchived: boolean;
-}
+// Importação estrita compatível com Apollo Client v4.1.9
+import { useMutation } from "@apollo/client/react";
 
-interface CreateDeckData {
-  createDeck: Deck;
-}
-
-interface CreateDeckVars {
-  data: {
-    title: string;
-    description?: string | null;
-    sourceLanguage: string;
-    targetLanguage?: string | null;
-  };
-}
-
-// 2. Definição da Mutação GraphQL conforme o Schema do Backend
-const CREATE_DECK_MUTATION = gql`
-  mutation CreateDeck($data: CreateDeckInput!) {
-    createDeck(data: $data) {
-      id
-      title
-      description
-      sourceLanguage
-      targetLanguage
-      createdAt
-      isArchived
-    }
-  }
-`;
+import type {
+  CreateDeckResponse,
+  CreateDeckVariables,
+  GetMyDecksResponse,
+} from "../lib/graphql/deck";
+import { CREATE_DECK, GET_MY_DECKS } from "../lib/graphql/deck";
 
 export const CreateDeck: React.FC = () => {
   const navigate = useNavigate();
 
-  // Estados locais controlados
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [sourceLanguage, setSourceLanguage] = useState("pt-BR");
-  const [targetLanguage, setTargetLanguage] = useState("");
+  // Controlo de Formulário Controlado
+  const [title, setTitle] = useState<string>("");
+  const [description, setDescription] = useState<string>("");
+  const [formError, setFormError] = useState<string | null>(null);
 
-  // 3. Hook de Mutação com Injeção de Generics e Manipulação do Cache
-  const [createDeck, { loading, error }] = useMutation<
-    CreateDeckData,
-    CreateDeckVars
-  >(CREATE_DECK_MUTATION, {
+  // Instanciação da Mutation com atualização de Cache
+  const [createDeck, { loading }] = useMutation<
+    CreateDeckResponse,
+    CreateDeckVariables
+  >(CREATE_DECK, {
+    // O 'update' permite-nos injetar o novo deck no cache do Apollo,
+    // poupando uma requisição HTTP quando voltarmos ao Dashboard.
     update(cache, { data }) {
-      if (!data) return;
+      if (!data?.createDeck) return;
 
-      cache.modify({
-        fields: {
-          myDecks(existingDecks = []) {
-            const newDeckRef = cache.writeFragment({
-              data: data.createDeck,
-              fragment: gql`
-                fragment NewDeck on Deck {
-                  id
-                  title
-                  description
-                  sourceLanguage
-                  targetLanguage
-                  createdAt
-                  isArchived
-                }
-              `,
-            });
-            return [newDeckRef, ...existingDecks];
-          },
-        },
+      const existingDecks = cache.readQuery<GetMyDecksResponse>({
+        query: GET_MY_DECKS,
       });
-    },
-    onCompleted: () => {
-      navigate("/"); // Retorna à Dashboard após o sucesso
+
+      if (existingDecks && existingDecks.myDecks) {
+        cache.writeQuery<GetMyDecksResponse>({
+          query: GET_MY_DECKS,
+          data: {
+            myDecks: [data.createDeck, ...existingDecks.myDecks],
+          },
+        });
+      }
     },
   });
 
-  // 4. Manipulador de Formulário aderente ao React 19
-  const handleSubmit: React.FormEventHandler<HTMLFormElement> = async (e) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim()) return;
+    setFormError(null);
 
-    await createDeck({
-      variables: {
-        data: {
-          title,
-          description: description.trim() || null,
-          sourceLanguage,
-          targetLanguage: targetLanguage.trim() || null,
+    // Validação de Frontend Básica
+    if (!title.trim()) {
+      setFormError("O título do Deck é obrigatório.");
+      return;
+    }
+
+    try {
+      await createDeck({
+        variables: {
+          data: {
+            title: title.trim(),
+            description: description.trim() || undefined,
+          },
         },
-      },
-    });
-  };
+      });
 
-  // 5. Arquitetura de UI Estritamente Baseada em Flexbox
-  const containerStyle: React.CSSProperties = {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    width: "100%",
-    minHeight: "100vh",
-    backgroundColor: "#f4f4f5",
-    padding: "2rem",
-    boxSizing: "border-box",
-  };
-
-  const formCardStyle: React.CSSProperties = {
-    display: "flex",
-    flexDirection: "column",
-    gap: "1.5rem",
-    width: "100%",
-    maxWidth: "600px",
-    backgroundColor: "#ffffff",
-    padding: "2.5rem",
-    borderRadius: "8px",
-    boxShadow: "0 4px 6px rgba(0, 0, 0, 0.05)",
-    border: "1px solid #e4e4e7",
-  };
-
-  const fieldGroupStyle: React.CSSProperties = {
-    display: "flex",
-    flexDirection: "column",
-    gap: "0.5rem",
-  };
-
-  const rowStyle: React.CSSProperties = {
-    display: "flex",
-    flexDirection: "row",
-    gap: "1rem",
-    width: "100%",
-  };
-
-  const inputStyle: React.CSSProperties = {
-    padding: "0.75rem",
-    borderRadius: "4px",
-    border: "1px solid #d4d4d8",
-    fontSize: "1rem",
-    fontFamily: "inherit",
-    width: "100%",
-    boxSizing: "border-box",
+      // Redireciona para o Dashboard após o sucesso
+      navigate("/dashboard");
+    } catch (err) {
+      console.error("Falha ao criar o deck:", err);
+      setFormError(
+        "Ocorreu um erro ao comunicar com o servidor. Tenta novamente.",
+      );
+    }
   };
 
   return (
-    <div style={containerStyle}>
-      <div style={{ width: "100%", maxWidth: "600px", marginBottom: "1.5rem" }}>
-        <button
-          onClick={() => navigate(-1)}
-          style={{
-            background: "none",
-            border: "none",
-            color: "#2563eb",
-            cursor: "pointer",
-            fontWeight: "bold",
-            fontSize: "1rem",
-            padding: 0,
-          }}
-        >
-          ← Voltar para a Dashboard
-        </button>
-      </div>
+    <div className="flex flex-1 items-center justify-center p-4">
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8">
+        <div className="mb-6">
+          <h2 className="text-2xl font-bold text-gray-800">Criar Novo Deck</h2>
+          <p className="text-gray-500 text-sm mt-1">
+            Organiza o teu conhecimento por áreas de estudo.
+          </p>
+        </div>
 
-      <main style={formCardStyle}>
-        <h1 style={{ margin: 0, fontSize: "1.75rem", color: "#09090b" }}>
-          Criar Novo Baralho
-        </h1>
-        <p style={{ margin: 0, color: "#71717a", marginTop: "-0.75rem" }}>
-          {" "}
-          Configure os parâmetros textuais e linguísticos do seu Deck.
-        </p>
-
-        {error && (
-          <div
-            style={{
-              padding: "1rem",
-              backgroundColor: "#fef2f2",
-              border: "1px solid #fca5a5",
-              borderRadius: "4px",
-              color: "#991b1b",
-            }}
-          >
-            {error.message}
+        {formError && (
+          <div className="mb-4 p-3 bg-red-50 text-red-700 text-sm rounded-lg border border-red-100">
+            {formError}
           </div>
         )}
 
-        <form
-          onSubmit={handleSubmit}
-          style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}
-        >
-          <div style={fieldGroupStyle}>
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div>
             <label
               htmlFor="title"
-              style={{
-                fontSize: "0.9rem",
-                fontWeight: "bold",
-                color: "#18181b",
-              }}
+              className="block text-sm font-medium text-gray-700 mb-1"
             >
-              Título do Baralho
+              Título do Deck <span className="text-red-500">*</span>
             </label>
             <input
               id="title"
               type="text"
+              placeholder="Ex: Inglês B2, Biologia Celular..."
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="Ex: Vocabulário Avançado de Engenharia"
-              required
-              style={inputStyle}
+              disabled={loading}
+              className="w-full px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+              maxLength={100}
             />
           </div>
 
-          <div style={fieldGroupStyle}>
+          <div>
             <label
               htmlFor="description"
-              style={{
-                fontSize: "0.9rem",
-                fontWeight: "bold",
-                color: "#18181b",
-              }}
+              className="block text-sm font-medium text-gray-700 mb-1"
             >
-              Descrição / Ementa
+              Descrição (Opcional)
             </label>
             <textarea
               id="description"
+              placeholder="Breve resumo sobre o conteúdo deste deck..."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
+              disabled={loading}
               rows={3}
-              placeholder="Ex: Termos técnicos utilizados em documentações internacionais de arquitetura de software."
-              style={{ ...inputStyle, resize: "none" }}
+              className="w-full px-4 py-3 rounded-lg bg-gray-50 border border-gray-200 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors resize-none"
+              maxLength={500}
             />
           </div>
 
-          <div style={rowStyle}>
-            <div style={{ ...fieldGroupStyle, flex: 1 }}>
-              <label
-                htmlFor="sourceLanguage"
-                style={{
-                  fontSize: "0.9rem",
-                  fontWeight: "bold",
-                  color: "#18181b",
-                }}
-              >
-                Idioma Origem
-              </label>
-              <select
-                id="sourceLanguage"
-                value={sourceLanguage}
-                onChange={(e) => setSourceLanguage(e.target.value)}
-                style={inputStyle}
-              >
-                <option value="pt-BR">Português (pt-BR)</option>
-                <option value="en-US">Inglês (en-US)</option>
-                <option value="es-ES">Espanhol (es-ES)</option>
-                <option value="fr-FR">Francês (fr-FR)</option>
-              </select>
-            </div>
-
-            <div style={{ ...fieldGroupStyle, flex: 1 }}>
-              <label
-                htmlFor="targetLanguage"
-                style={{
-                  fontSize: "0.9rem",
-                  fontWeight: "bold",
-                  color: "#18181b",
-                }}
-              >
-                Idioma Destino (Opcional)
-              </label>
-              <input
-                id="targetLanguage"
-                type="text"
-                value={targetLanguage}
-                onChange={(e) => setTargetLanguage(e.target.value)}
-                placeholder="Ex: en-US"
-                style={inputStyle}
-              />
-            </div>
-          </div>
-
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "row",
-              justifyContent: "flex-end",
-              gap: "1rem",
-              marginTop: "1rem",
-            }}
-          >
+          <div className="flex items-center justify-end space-x-3 pt-4 border-t border-gray-100">
             <button
               type="button"
-              onClick={() => navigate("/")}
-              style={{
-                padding: "0.75rem 1.5rem",
-                cursor: "pointer",
-                border: "1px solid #d4d4d8",
-                backgroundColor: "transparent",
-                borderRadius: "4px",
-                fontWeight: "500",
-              }}
+              onClick={() => navigate(-1)}
+              disabled={loading}
+              className="px-5 py-2.5 text-gray-600 bg-gray-100 hover:bg-gray-200 font-medium rounded-lg transition-colors"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={loading}
-              style={{
-                padding: "0.75rem 1.5rem",
-                cursor: "pointer",
-                backgroundColor: "#2563eb",
-                color: "#ffffff",
-                border: "none",
-                borderRadius: "4px",
-                fontWeight: "bold",
-              }}
+              className={`px-5 py-2.5 text-white font-medium rounded-lg shadow-sm transition-colors ${
+                loading
+                  ? "bg-blue-400 cursor-not-allowed"
+                  : "bg-blue-600 hover:bg-blue-700"
+              }`}
             >
-              {loading ? "Salvando..." : "Confirmar Criação"}
+              {loading ? "A criar..." : "Criar Deck"}
             </button>
           </div>
         </form>
-      </main>
+      </div>
     </div>
   );
 };

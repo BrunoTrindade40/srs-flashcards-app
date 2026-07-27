@@ -1,96 +1,71 @@
-import { Field, ID, InputType, ObjectType } from '@nestjs/graphql';
-import {
-  IsBoolean,
-  IsNotEmpty,
-  IsOptional,
-  IsString,
-  MaxLength,
-} from 'class-validator';
+import { Field, ID, Int, ObjectType } from '@nestjs/graphql';
+// 🔴 CRÍTICO CORRIGIDO: Importação do modelo filho
+import { Flashcard } from '../../flashcard/models/flashcard.model';
 
-@ObjectType()
+@ObjectType({ description: 'Agregador de contagem de relações do baralho' })
+export class DeckCount {
+  @Field(() => Int, {
+    description: 'Quantidade total de flashcards associados a este baralho',
+  })
+  flashcards!: number;
+}
+
+@ObjectType({ description: 'Modelo principal do baralho de estudos' })
 export class Deck {
-  @Field(() => ID)
+  @Field(() => ID, { description: 'Identificador único do baralho (UUID)' })
   id!: string;
 
-  @Field(() => String)
+  @Field(() => String, { description: 'Título identificador do baralho' })
   title!: string;
 
-  // Correção: Tipagem explícita com null para espelhar o comportamento do Prisma
-  @Field(() => String, { nullable: true })
-  description!: string | null;
+  @Field(() => String, {
+    nullable: true,
+    description: 'Descrição opcional do propósito do baralho',
+  })
+  description?: string | null;
 
-  @Field(() => String, { defaultValue: 'pt-BR' })
-  sourceLanguage!: string | null;
+  @Field(() => String, {
+    nullable: true,
+    defaultValue: 'pt-BR',
+    description: 'Idioma de origem do conteúdo',
+  })
+  sourceLanguage?: string | null;
 
-  @Field(() => String, { nullable: true })
-  targetLanguage!: string | null;
+  @Field(() => String, {
+    nullable: true,
+    description: 'Idioma alvo do aprendizado',
+  })
+  targetLanguage?: string | null;
 
-  @Field(() => Boolean)
+  @Field(() => Boolean, {
+    description: 'Sinalizador de arquivamento lógico do baralho',
+  })
   isArchived!: boolean;
 
-  @Field(() => Date)
+  @Field(() => ID, {
+    description: 'Vínculo com o identificador único do utilizador criador',
+  })
+  creatorId!: string;
+
+  @Field(() => Date, { description: 'Timestamp de criação do registo' })
   createdAt!: Date;
 
-  @Field(() => Date)
+  @Field(() => Date, {
+    description: 'Timestamp da última modificação do registo',
+  })
   updatedAt!: Date;
-}
 
-@InputType()
-export class CreateDeckInput {
-  @Field(() => String)
-  @IsString()
-  @IsNotEmpty({ message: 'O título do Deck não pode estar vazio.' })
-  @MaxLength(100, { message: 'O título deve ter no máximo 100 caracteres.' })
-  title!: string;
+  @Field(() => DeckCount, {
+    nullable: true,
+    description: 'Agregador com contagem de relações',
+  })
+  _count?: DeckCount | null;
 
-  @Field(() => String, { nullable: true })
-  @IsString()
-  @IsOptional()
-  @MaxLength(500, { message: 'A descrição não pode exceder 500 caracteres.' })
-  description?: string;
-
-  @Field(() => String, { nullable: true, defaultValue: 'pt-BR' })
-  @IsString()
-  @IsOptional()
-  sourceLanguage?: string;
-
-  @Field(() => String, { nullable: true })
-  @IsString()
-  @IsOptional()
-  targetLanguage?: string;
-}
-
-@InputType()
-export class UpdateDeckInput {
-  @Field(() => ID)
-  @IsString()
-  @IsNotEmpty()
-  id!: string;
-
-  @Field(() => String, { nullable: true })
-  @IsString()
-  @IsOptional()
-  @MaxLength(100)
-  title?: string;
-
-  @Field(() => String, { nullable: true })
-  @IsString()
-  @IsOptional()
-  @MaxLength(500)
-  description?: string;
-
-  @Field(() => String, { nullable: true })
-  @IsString()
-  @IsOptional()
-  sourceLanguage?: string;
-
-  @Field(() => String, { nullable: true })
-  @IsString()
-  @IsOptional()
-  targetLanguage?: string;
-
-  @Field(() => Boolean, { nullable: true })
-  @IsBoolean()
-  @IsOptional()
-  isArchived?: boolean;
+  // 🔴 CRÍTICO CORRIGIDO: Exposição da relação Flashcards para o GraphQL
+  // A função de seta () => [Flashcard] resolve dependências circulares do TypeScript
+  @Field(() => [Flashcard], {
+    nullable: true,
+    description: 'Lista de flashcards pertencentes a este baralho',
+  })
+  flashcards?: Flashcard[] | null;
 }

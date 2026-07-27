@@ -18,9 +18,16 @@ async function bootstrap() {
   app.enableCors({
     origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
     credentials: true,
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    allowedHeaders: 'Content-Type, Accept, Authorization',
   });
 
-  await app.listen(process.env.PORT ?? 3000);
+  // Forçamos o log no terminal para saber exatamente em qual porta o NestJS inicializou
+  const port = process.env.PORT ?? 3000;
+  await app.listen(port);
+  console.log(
+    `🚀 Servidor NestJS operacional em: http://localhost:${port}/graphql`,
+  );
 }
 
 bootstrap().catch((err) => {

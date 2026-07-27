@@ -2,14 +2,16 @@ import {
   CanActivate,
   ExecutionContext,
   Injectable,
+  Logger,
+  OnModuleInit,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { GqlExecutionContext } from '@nestjs/graphql';
 import { User } from '@prisma/client';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Request } from 'express';
-import { PrismaService } from '../../../prisma/prisma.service';
+import { UserService } from '../../user/user.service';
 
 export interface RequestWithUser extends Request {
   user?: User;
@@ -20,24 +22,30 @@ interface GqlContext {
 }
 
 @Injectable()
-export class GqlAuthGuard implements CanActivate {
-  // SOLUÇÃO 1: Inferência Absoluta
-  // Em vez de importar e forçar a classe genérica 'SupabaseClient',
-  // capturamos exatamente o tipo de retorno da função 'createClient' instalada.
-  private readonly supabase: ReturnType<typeof createClient>;
+export class GqlAuthGuard implements CanActivate, OnModuleInit {
+  private supabase!: SupabaseClient<any, 'public', any>;
+  private readonly logger = new Logger(GqlAuthGuard.name);
 
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly userService: UserService,
     private readonly configService: ConfigService,
-  ) {
-    const supabaseUrl = this.configService.get<string>('SUPABASE_URL');
-    const supabaseAnonKey = this.configService.get<string>('SUPABASE_ANON_KEY');
+  ) { }
 
-    if (!supabaseUrl || !supabaseAnonKey) {
-      throw new Error('Supabase URL ou Anon Key ausentes no ambiente.');
+  // 🔵 SUGESTÃO APLICADA (Boy Scout): Transferimos a inicialização para o ciclo de vida correto do NestJS
+  onModuleInit() {
+    const supabaseUrl = this.configService.get<string>('SUPABASE_URL');
+    const supabaseKey = this.configService.get<string>('SUPABASE_ANON_KEY');
+
+    if (!supabaseUrl || !supabaseKey) {
+      this.logger.error('FALHA CRÍTICA: SUPABASE_URL ou SUPABASE_ANON_KEY ausentes no arquivo .env do Backend.');
+      throw new Error('Configuração de ambiente inválida para o Supabase.');
     }
 
-    this.supabase = createClient(supabaseUrl, supabaseAnonKey);
+    this.supabase = createClient(supabaseUrl, supabaseKey, {
+      auth: {
+        persistSession: false,
+      },
+    }) as SupabaseClient<any, 'public', any>;
   }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -48,51 +56,36 @@ export class GqlAuthGuard implements CanActivate {
     const authHeader = req.headers.authorization;
 
     if (!authHeader || typeof authHeader !== 'string') {
+      throw new UnauthorizedException('Acesso negado. Token ausente ou inválido.');
+    }
+
+    const parts = authHeader.split(' ');
+    if (parts.length !== 2 || parts[0].toLowerCase() !== 'bearer') {
       throw new UnauthorizedException(
-        'Acesso negado. Token ausente ou inválido.',
+        'Formato de token inválido. O formato correto é: Bearer <token>',
       );
     }
 
-    const token = authHeader.replace('Bearer ', '');
-    const { data, error } = await this.supabase.auth.getUser(token);
+    const token = parts[1].trim();
 
-    if (error !== null || !data.user) {
-      throw new UnauthorizedException(
-        'Sessão inválida ou expirada no provedor.',
-      );
+    const response = await this.supabase.auth.getUser(token);
+
+    if (response.error || !response.data || !response.data.user) {
+      this.logger.error(`Falha de autenticação: ${response.error?.message || 'Token corrompido.'}`);
+      throw new UnauthorizedException('Token de acesso inválido, expirado ou forjado.');
     }
 
-    const authId = data.user.id;
+    const authId = response.data.user.id;
+    const email: string = response.data.user.email || `${authId}@no-email.local`;
 
-    // SOLUÇÃO DEFINITIVA: Tipagem estrita de 'string'.
-    // Caso o Supabase não retorne um e-mail, garantimos um hash único e válido para o Prisma.
-    const email: string = data.user.email
-      ? data.user.email
-      : `${authId}@no-email.local`;
+    const metadata = response.data.user.user_metadata as Record<string, unknown> | undefined;
+    const rawName = metadata?.['full_name'];
+    const name: string = typeof rawName === 'string' && rawName.trim() !== '' ? rawName.trim() : 'Estudante';
 
-    // SOLUÇÃO 3: Type-Guard Rigoroso contra o tipo 'any'
-    // Convertendo o JSONB do Supabase em 'unknown' antes da extração.
-    let name = 'Estudante';
-    const metadata = data.user.user_metadata;
-
-    if (metadata && typeof metadata === 'object' && 'full_name' in metadata) {
-      const rawName = (metadata as Record<string, unknown>).full_name;
-      if (typeof rawName === 'string') {
-        name = rawName;
-      }
-    }
-
-    const internalUser = await this.prisma.user.upsert({
-      where: { authId },
-      update: {},
-      create: {
-        authId,
-        email, // Enviará string ou null de forma correta ao PostgreSQL
-        name,
-      },
-    });
+    const internalUser = await this.userService.upsertUserByAuthId(authId, email, name);
 
     req.user = internalUser;
+
     return true;
   }
 }

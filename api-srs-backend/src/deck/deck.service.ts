@@ -1,58 +1,117 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
-import { CreateDeckInput, UpdateDeckInput } from './models/deck.model';
+import { ANONYMIZED_PAYLOAD } from '../common/constants/domain.constants';
+import { CreateDeckInput } from './dto/create-deck.input';
+import { UpdateDeckInput } from './dto/update-deck.input';
 
 @Injectable()
 export class DeckService {
-  // eslint-disable-next-line prettier/prettier
   constructor(private readonly prisma: PrismaService) { }
 
-  async createDeck(userId: string, data: CreateDeckInput) {
+  async findMyDecks(userId: string) {
+    return this.prisma.deck.findMany({
+      where: { creatorId: userId, isArchived: false },
+      include: {
+        _count: {
+          select: {
+            flashcards: { where: { front: { not: ANONYMIZED_PAYLOAD } } },
+          },
+        },
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
+  }
+
+  async findById(id: string, userId: string) {
+    const deck = await this.prisma.deck.findFirst({
+      where: { id, creatorId: userId, isArchived: false },
+      include: {
+        flashcards: {
+          where: { front: { not: ANONYMIZED_PAYLOAD } },
+          orderBy: { createdAt: 'desc' },
+        },
+        _count: {
+          select: {
+            flashcards: { where: { front: { not: ANONYMIZED_PAYLOAD } } },
+          },
+        },
+      },
+    });
+
+    if (!deck) {
+      throw new NotFoundException('Baralho não encontrado.');
+    }
+    return deck;
+  }
+
+  async create(data: CreateDeckInput, userId: string) {
     return this.prisma.deck.create({
       data: {
         ...data,
         creatorId: userId,
       },
+      include: {
+        _count: {
+          select: {
+            flashcards: { where: { front: { not: ANONYMIZED_PAYLOAD } } },
+          },
+        },
+      },
     });
   }
 
-  async getUserDecks(userId: string) {
-    return this.prisma.deck.findMany({
-      where: { creatorId: userId, isArchived: false },
-      orderBy: { createdAt: 'desc' },
-    });
-  }
+  async update(data: UpdateDeckInput, userId: string) {
+    await this.findById(data.id, userId);
 
-  async getDeckById(userId: string, deckId: string) {
-    const deck = await this.prisma.deck.findFirst({
-      where: { id: deckId, creatorId: userId },
-    });
-
-    if (!deck) {
-      throw new NotFoundException('Deck não encontrado ou acesso negado.');
-    }
-
-    return deck;
-  }
-
-  async updateDeck(userId: string, data: UpdateDeckInput) {
     const { id, ...updateData } = data;
 
-    // Valida a existência e a posse do Deck antes de atualizar
-    await this.getDeckById(userId, id);
+    // 🔴 CRÍTICO CORRIGIDO: Conversão segura de DTO para Prisma Payload
+    // O tipo Prisma.DeckUpdateInput entende nativamente que campos vazios do BD recebem 'null'
+    const payload: Prisma.DeckUpdateInput = { ...updateData };
+
+    if (updateData.isArchived === true) {
+      await this.prisma.flashcard.updateMany({
+        where: { deckId: id },
+        data: {
+          front: ANONYMIZED_PAYLOAD,
+          back: ANONYMIZED_PAYLOAD,
+          sourceContext: null,
+          imageUrl: null,
+          audioUrl: null,
+        },
+      });
+
+      payload.title = ANONYMIZED_PAYLOAD;
+      payload.description = null;
+      payload.sourceLanguage = null;
+      payload.targetLanguage = null;
+    }
 
     return this.prisma.deck.update({
       where: { id },
-      data: updateData,
+      data: payload,
+      include: {
+        _count: {
+          select: {
+            flashcards: { where: { front: { not: ANONYMIZED_PAYLOAD } } },
+          },
+        },
+      },
     });
   }
 
-  async archiveDeck(userId: string, deckId: string) {
-    await this.getDeckById(userId, deckId);
+  async remove(id: string, userId: string): Promise<boolean> {
+    await this.findById(id, userId);
+    await this.prisma.deck.delete({
+      where: { id },
+    });
+    return true;
+  }
 
-    return this.prisma.deck.update({
-      where: { id: deckId },
-      data: { isArchived: true },
+  async countFlashcards(deckId: string): Promise<number> {
+    return this.prisma.flashcard.count({
+      where: { deckId, front: { not: ANONYMIZED_PAYLOAD } },
     });
   }
 }

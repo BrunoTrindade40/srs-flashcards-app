@@ -1,231 +1,208 @@
-import { gql } from "@apollo/client";
-import { useMutation } from "@apollo/client/react"; // A sua correção manual aplicada
-import React, { useState } from "react";
-
-// 1. Contratos Estritos da Mutação
-interface Deck {
-  id: string;
-  title: string;
-  description?: string | null;
-  createdAt: string;
-  isArchived: boolean;
-}
-
-interface CreateDeckData {
-  createDeck: Deck;
-}
-
-interface CreateDeckVars {
-  data: {
-    title: string;
-    description?: string | null;
-  };
-}
-
-const CREATE_DECK_MUTATION = gql`
-  mutation CreateDeck($data: CreateDeckInput!) {
-    createDeck(data: $data) {
-      id
-      title
-      description
-      createdAt
-      isArchived
-    }
-  }
-`;
+import { gql } from "@apollo/client/core";
+import { useMutation } from "@apollo/client/react";
+import React, { useEffect, useState } from "react";
+import { useToast } from "../hooks/useToast";
+import { CREATE_DECK } from "../lib/graphql/deck";
 
 interface CreateDeckModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onSuccess?: () => void;
 }
 
 export const CreateDeckModal: React.FC<CreateDeckModalProps> = ({
   isOpen,
   onClose,
+  onSuccess,
 }) => {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [sourceLanguage, setSourceLanguage] = useState("pt-BR");
+  const [targetLanguage, setTargetLanguage] = useState("");
+  const { showToast } = useToast();
 
-  // 2. Injeção de Generics: O TS agora sabe exatamente o formato de 'data' e 'variables'
-  const [createDeck, { loading }] = useMutation<CreateDeckData, CreateDeckVars>(
-    CREATE_DECK_MUTATION,
-    {
-      update(cache, { data }) {
-        // Barreira de segurança para garantir que a mutação retornou dados válidos
-        if (!data) return;
-
-        cache.modify({
-          fields: {
-            myDecks(existingDecks = []) {
-              const newDeckRef = cache.writeFragment({
-                data: data.createDeck, // Acesso 100% seguro reconhecido pelo compilador
-                fragment: gql`
-                  fragment NewDeck on Deck {
-                    id
-                    title
-                    description
-                    createdAt
-                    isArchived
+  const [createDeck, { loading }] = useMutation(CREATE_DECK, {
+    update(cache, { data }) {
+      if (!data?.createDeck) return;
+      cache.modify({
+        fields: {
+          myDecks(existingDeckRefs = []) {
+            const newDeckRef = cache.writeFragment({
+              data: data.createDeck,
+              fragment: gql`
+                fragment NewDeck on Deck {
+                  id
+                  title
+                  description
+                  sourceLanguage
+                  targetLanguage
+                  _count {
+                    flashcards
                   }
-                `,
-              });
-              return [newDeckRef, ...existingDecks];
-            },
+                }
+              `,
+            });
+            return [...existingDeckRefs, newDeckRef];
           },
-        });
-      },
-      onCompleted: () => {
-        setTitle("");
-        setDescription("");
-        onClose();
-      },
-    },
-  );
-
-  // 3. Resolução do Deprecated: Utilização do manipulador de eventos explícito do React 19
-  const handleSubmit: React.FormEventHandler<HTMLFormElement> = async (e) => {
-    e.preventDefault();
-    if (!title.trim()) return;
-
-    await createDeck({
-      variables: {
-        data: {
-          title,
-          description: description || null,
         },
-      },
-    });
+      });
+    },
+    onCompleted: () => {
+      showToast("Deck criado com sucesso!", "success");
+      setTitle("");
+      setDescription("");
+      setSourceLanguage("pt-BR");
+      setTargetLanguage("");
+      onSuccess?.();
+      onClose();
+    },
+    onError: (err) => {
+      showToast(`Erro ao criar deck: ${err.message}`, "error");
+    },
+  });
+
+  const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!title.trim() || loading) return;
+
+    try {
+      await createDeck({
+        variables: {
+          data: {
+            // 🔴 CRÍTICO CORRIGIDO: Removido o envio do 'id'. Na criação, o payload não possui identificador.
+            title: title.trim(),
+            description: description.trim() || null,
+            sourceLanguage: sourceLanguage || null,
+            targetLanguage: targetLanguage || null,
+          },
+        },
+      });
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        console.error("Erro na submissão de deck:", err.message);
+      }
+    }
   };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
 
   if (!isOpen) return null;
 
-  // 4. Arquitetura Visual (Flexbox Puro)
-  const overlayStyle: React.CSSProperties = {
-    position: "fixed",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    zIndex: 1000,
-  };
-
-  const modalStyle: React.CSSProperties = {
-    display: "flex",
-    flexDirection: "column",
-    gap: "1.5rem",
-    width: "400px",
-    backgroundColor: "#ffffff",
-    padding: "2rem",
-    borderRadius: "8px",
-    boxShadow: "0 10px 15px rgba(0,0,0,0.1)",
-  };
-
   return (
-    <div style={overlayStyle}>
-      <div style={modalStyle}>
-        <h2 style={{ margin: 0, color: "#09090b" }}>Novo Deck</h2>
-        <form
-          onSubmit={handleSubmit}
-          style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}
-        >
-          <div
-            style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
+      <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl flex flex-col gap-6">
+        <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+          <div className="flex items-center gap-2">
+            <span className="text-xl">📚</span>
+            <h2 className="text-lg font-bold text-slate-100">
+              Criar Novo Deck
+            </h2>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-slate-500 hover:text-slate-300 text-sm p-1 transition-colors cursor-pointer"
+            aria-label="Fechar Modal"
           >
+            ✕
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1.5">
             <label
-              htmlFor="title"
-              style={{
-                fontSize: "0.9rem",
-                fontWeight: "bold",
-                color: "#18181b",
-              }}
+              htmlFor="deck-title"
+              className="text-xs font-semibold text-slate-300 uppercase tracking-wider"
             >
-              Título
+              Título do Baralho *
             </label>
             <input
-              id="title"
+              id="deck-title"
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="Ex: Padrões de Arquitetura"
+              placeholder="Ex: Vocabulário de Inglês..."
               required
-              style={{
-                padding: "0.75rem",
-                borderRadius: "4px",
-                border: "1px solid #d4d4d8",
-                fontSize: "1rem",
-              }}
+              disabled={loading}
+              className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 text-sm placeholder-slate-600 focus:outline-none focus:border-amber-500 transition-colors"
             />
           </div>
 
-          <div
-            style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}
-          >
+          <div className="flex flex-col gap-1.5">
             <label
-              htmlFor="description"
-              style={{
-                fontSize: "0.9rem",
-                fontWeight: "bold",
-                color: "#18181b",
-              }}
+              htmlFor="deck-desc"
+              className="text-xs font-semibold text-slate-300 uppercase tracking-wider"
             >
               Descrição (Opcional)
             </label>
             <textarea
-              id="description"
+              id="deck-desc"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
+              placeholder="Breve resumo do conteúdo..."
               rows={3}
-              style={{
-                padding: "0.75rem",
-                borderRadius: "4px",
-                border: "1px solid #d4d4d8",
-                resize: "none",
-                fontSize: "1rem",
-                fontFamily: "inherit",
-              }}
+              disabled={loading}
+              className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 text-sm placeholder-slate-600 resize-none focus:outline-none focus:border-amber-500 transition-colors"
             />
           </div>
 
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "flex-end",
-              gap: "0.75rem",
-              marginTop: "0.5rem",
-            }}
-          >
+          {/* Seção de Idiomas: Flexbox Responsivo Puro */}
+          <div className="flex flex-col sm:flex-row gap-4 border-t border-slate-800/50 pt-3 mt-1">
+            <div className="flex flex-col gap-1.5 flex-1">
+              <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                Idioma de Origem
+              </label>
+              <select
+                value={sourceLanguage}
+                onChange={(e) => setSourceLanguage(e.target.value)}
+                disabled={loading}
+                className="w-full px-3 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 text-sm focus:outline-none focus:border-amber-500 transition-colors appearance-none cursor-pointer"
+              >
+                <option value="pt-BR">Português (Brasil)</option>
+                <option value="en-US">Inglês (EUA)</option>
+                <option value="es-ES">Espanhol</option>
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-1.5 flex-1">
+              <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                Idioma Alvo
+              </label>
+              <select
+                value={targetLanguage}
+                onChange={(e) => setTargetLanguage(e.target.value)}
+                disabled={loading}
+                className="w-full px-3 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 text-sm focus:outline-none focus:border-amber-500 transition-colors appearance-none cursor-pointer"
+              >
+                <option value="">Não Especificado</option>
+                <option value="en-US">Inglês (EUA)</option>
+                <option value="es-ES">Espanhol</option>
+                <option value="fr-FR">Francês</option>
+                <option value="de-DE">Alemão</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800 mt-2">
             <button
               type="button"
               onClick={onClose}
-              style={{
-                padding: "0.5rem 1rem",
-                cursor: "pointer",
-                border: "1px solid #d4d4d8",
-                backgroundColor: "transparent",
-                borderRadius: "4px",
-                fontWeight: "500",
-              }}
+              disabled={loading}
+              className="px-4 py-2 text-xs font-medium text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              disabled={loading}
-              style={{
-                padding: "0.5rem 1rem",
-                cursor: "pointer",
-                backgroundColor: "#2563eb",
-                color: "#ffffff",
-                border: "none",
-                borderRadius: "4px",
-                fontWeight: "500",
-              }}
+              disabled={loading || !title.trim()}
+              className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-xs transition-all cursor-pointer disabled:opacity-50"
             >
-              {loading ? "Salvando..." : "Salvar"}
+              {loading ? "Criando..." : "Criar Baralho"}
             </button>
           </div>
         </form>

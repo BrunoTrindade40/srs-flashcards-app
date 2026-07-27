@@ -2,15 +2,21 @@
 # THIS FILE WAS AUTOMATICALLY GENERATED (DO NOT MODIFY)
 # ------------------------------------------------------
 
-type Deck {
+type User {
   id: ID!
-  title: String!
-  description: String
-  sourceLanguage: String!
-  targetLanguage: String
-  isArchived: Boolean!
+  email: String!
+  name: String
+  isAnonymized: Boolean!
+  totalXp: Int!
+  timezone: String!
+  lastDataExportAt: DateTime
+  lastNotificationSentAt: DateTime
   createdAt: DateTime!
   updatedAt: DateTime!
+  dailyNewCardLimit: Int!
+  maxDailyReviews: Int!
+  currentStreak: Int!
+  longestStreak: Int!
 }
 
 """
@@ -18,46 +24,93 @@ A date-time string at UTC, such as 2019-12-03T09:54:33Z, compliant with the date
 """
 scalar DateTime
 
+type CardFSRSData {
+  stability: Float!
+  difficulty: Float!
+  reps: Int!
+  lapses: Int!
+  state: Int!
+  due: DateTime!
+}
+
 type Flashcard {
   id: ID!
   front: String!
   back: String!
   sourceContext: String
-  status: String!
+  imageUrl: String
+  audioUrl: String
   deckId: ID!
+  deck: Deck
   createdAt: DateTime!
   updatedAt: DateTime!
+  fsrsData: [CardFSRSData!]
 }
 
-"""Representa o Estudante no sistema SRS"""
-type User {
+"""Agregador de contagem de relações do baralho"""
+type DeckCount {
+  """Quantidade total de flashcards associados a este baralho"""
+  flashcards: Int!
+}
+
+"""Modelo principal do baralho de estudos"""
+type Deck {
+  """Identificador único do baralho (UUID)"""
   id: ID!
 
-  """Identificador único vinculado ao Supabase Auth"""
-  authId: String!
-  name: String
-  email: String!
+  """Título identificador do baralho"""
+  title: String!
 
-  """Acúmulo de pontos de experiência (Gamificação)"""
-  totalXp: Int!
-  currentStreak: Int!
+  """Descrição opcional do propósito do baralho"""
+  description: String
+
+  """Idioma de origem do conteúdo"""
+  sourceLanguage: String
+
+  """Idioma alvo do aprendizado"""
+  targetLanguage: String
+
+  """Sinalizador de arquivamento lógico do baralho"""
+  isArchived: Boolean!
+
+  """Vínculo com o identificador único do utilizador criador"""
+  creatorId: ID!
+
+  """Timestamp de criação do registo"""
+  createdAt: DateTime!
+
+  """Timestamp da última modificação do registo"""
+  updatedAt: DateTime!
+  _count: DeckCount
+
+  """Lista de flashcards pertencentes a este baralho"""
+  flashcards: [Flashcard!]
 }
 
 type Query {
-  me(authId: String!): User
+  me: User!
   myDecks: [Deck!]!
   deck(id: ID!): Deck!
   deckFlashcards(deckId: ID!): [Flashcard!]!
+  dueFlashcards(deckId: ID!): [Flashcard!]!
+  chaosStudyQueue(limit: Int = 50): [Flashcard!]!
 }
 
 type Mutation {
-  syncIdentity(authId: String!, email: String!, name: String): User!
+  updateMySettings(data: UpdateUserSettingsInput!): User!
   createDeck(data: CreateDeckInput!): Deck!
   updateDeck(data: UpdateDeckInput!): Deck!
-  archiveDeck(id: ID!): Deck!
+  removeDeck(id: ID!): Boolean!
   createFlashcard(data: CreateFlashcardInput!): Flashcard!
   updateFlashcard(data: UpdateFlashcardInput!): Flashcard!
   removeFlashcard(id: ID!): Flashcard!
+  submitReview(flashcardId: ID!, rating: Int!, reviewDurationMs: Int! = 0): Boolean!
+}
+
+input UpdateUserSettingsInput {
+  dailyNewCardLimit: Int
+  maxDailyReviews: Int
+  timezone: String
 }
 
 input CreateDeckInput {
@@ -68,6 +121,7 @@ input CreateDeckInput {
 }
 
 input UpdateDeckInput {
+  """ID do baralho que sofrerá a mutação"""
   id: ID!
   title: String
   description: String
@@ -80,6 +134,8 @@ input CreateFlashcardInput {
   front: String!
   back: String!
   sourceContext: String
+  imageUrl: String
+  audioUrl: String
   deckId: ID!
 }
 
@@ -87,6 +143,7 @@ input UpdateFlashcardInput {
   front: String
   back: String
   sourceContext: String
-  deckId: ID
+  imageUrl: String
+  audioUrl: String
   id: ID!
 }
