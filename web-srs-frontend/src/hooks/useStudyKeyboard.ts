@@ -1,40 +1,51 @@
 import { useEffect } from "react";
 
 export interface UseStudyKeyboardOptions {
-  /** Indica se o verso da carta (resposta) já está visível */
+  /** Flag booleana indicando se a resposta já está visível */
   showAnswer: boolean;
-  /** Flag para desabilitar atalhos (ex: durante submissão, modal aberto ou sessão finalizada) */
+  /** Callback acionado ao pressionar Espaço ou Enter para revelar a resposta */
+  onShowAnswer: () => void;
+  /** Callback acionado ao pressionar as teclas 1, 2, 3 ou 4 para classificar a retenção */
+  onRate: (rating: number) => void;
+  /** Desativa temporariamente a escuta de eventos (ex: durante carregamento) */
   disabled?: boolean;
-  /** Callback acionado ao pressionar Espaço ou Enter (quando showAnswer for false) */
-  onRevealAnswer: () => void;
-  /** Callback acionado ao pressionar as teclas 1, 2, 3 ou 4 (quando showAnswer for true) */
-  onRating: (rating: number) => void;
 }
 
-export function useStudyKeyboard({
+/**
+  * SRP: Hook responsável exclusivamente por capturar atalhos de teclado globais da sessão de estudos.
+  */
+export const useStudyKeyboard = ({
   showAnswer,
+  onShowAnswer,
+  onRate,
   disabled = false,
-  onRevealAnswer,
-  onRating,
-}: UseStudyKeyboardOptions): void {
+}: UseStudyKeyboardOptions) => {
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (disabled) return;
+    if (disabled) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Evita disparar atalhos se o usuário estiver digitando em um campo de texto
+      if (
+        event.target instanceof HTMLInputElement ||
+        event.target instanceof HTMLTextAreaElement
+      ) {
+        return;
+      }
 
       if (!showAnswer) {
-        if (e.code === "Space" || e.code === "Enter") {
-          e.preventDefault();
-          onRevealAnswer();
+        if (event.code === "Space" || event.key === "Enter") {
+          event.preventDefault();
+          onShowAnswer();
         }
       } else {
-        if (e.key === "1") onRating(1);
-        else if (e.key === "2") onRating(2);
-        else if (e.key === "3") onRating(3);
-        else if (e.key === "4") onRating(4);
+        if (event.key === "1") onRate(1);
+        if (event.key === "2") onRate(2);
+        if (event.key === "3") onRate(3);
+        if (event.key === "4") onRate(4);
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [showAnswer, disabled, onRevealAnswer, onRating]);
-}
+  }, [showAnswer, onShowAnswer, onRate, disabled]);
+};

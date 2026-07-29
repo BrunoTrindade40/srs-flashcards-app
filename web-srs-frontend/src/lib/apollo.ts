@@ -37,7 +37,6 @@ export const client = new ApolloClient({
     typePolicies: {
       Query: {
         fields: {
-          // 🟡 ALERTA CORRIGIDO: Estratégia de substituição nativa para o Dashboard
           myDecks: {
             merge(_existing, incoming) {
               return incoming;
@@ -65,6 +64,12 @@ export const client = new ApolloClient({
           _count: {
             merge(existing = {}, incoming) {
               return { ...existing, ...incoming };
+            },
+          },
+          // Resolve o warning do Cache v4 definindo que a UI confia na fonte de dados do Backend
+          flashcards: {
+            merge(_existing, incoming) {
+              return incoming;
             },
           },
         },

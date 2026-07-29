@@ -4,11 +4,11 @@ import { Args, ID, Mutation, Query, Resolver } from '@nestjs/graphql';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { GqlAuthGuard } from '../auth/guards/gql-auth.guard';
 import { User } from '../user/models/user.model';
+import { CreateFlashcardInput } from './dto/create-flashcard.input';
+import { UpdateFlashcardInput } from './dto/update-flashcard.input';
 import { FlashcardService } from './flashcard.service';
 import {
-  CreateFlashcardInput,
   Flashcard,
-  UpdateFlashcardInput,
 } from './models/flashcard.model';
 
 @Resolver(() => Flashcard)

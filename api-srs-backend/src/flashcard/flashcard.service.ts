@@ -7,10 +7,9 @@ import { Flashcard as PrismaFlashcard } from '@prisma/client';
 import { Card, createEmptyCard } from 'ts-fsrs';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ANONYMIZED_PAYLOAD } from '../common/constants/domain.constants';
-import {
-  CreateFlashcardInput,
-  UpdateFlashcardInput,
-} from './models/flashcard.model';
+import { CreateFlashcardInput } from './dto/create-flashcard.input';
+import { UpdateFlashcardInput } from './dto/update-flashcard.input';
+
 
 @Injectable()
 export class FlashcardService {

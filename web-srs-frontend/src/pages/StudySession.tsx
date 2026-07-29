@@ -1,24 +1,37 @@
-import { useMutation, useQuery } from "@apollo/client/react";
-import { useCallback, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom"; // Importado useNavigate
+import { useApolloClient, useMutation, useQuery } from "@apollo/client/react";
+import React, { useCallback, useRef, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { MarkdownRenderer } from "../components/MarkdownRenderer";
+import { useDailyReviewTracker } from "../hooks/useDailyReviewTracker";
 import { useStudyKeyboard } from "../hooks/useStudyKeyboard";
 import { useToast } from "../hooks/useToast";
-import {
-  GET_DUE_FLASHCARDS,
-  SUBMIT_REVIEW,
-  type FlashcardDue,
-} from "../lib/graphql/study";
+import { GET_MY_DECKS } from "../lib/graphql/deck";
+import { GET_ME } from "../lib/graphql/settings";
+import { GET_DUE_FLASHCARDS, SUBMIT_REVIEW } from "../lib/graphql/study";
 
-export function StudySession() {
+export const StudySession: React.FC = () => {
   const { deckId } = useParams<{ deckId: string }>();
-  const navigate = useNavigate(); // Instanciado o roteador defensivo
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [showAnswer, setShowAnswer] = useState(false);
-  const [sessionFinished, setSessionFinished] = useState(false);
-  const [answerShownAt, setAnswerShownAt] = useState<number | null>(null);
+  const navigate = useNavigate();
+  const client = useApolloClient();
   const { showToast } = useToast();
 
-  const { data, loading, error, refetch } = useQuery(GET_DUE_FLASHCARDS, {
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [isFlipped, setIsFlipped] = useState(false);
+
+  const flipTimeRef = useRef<number>(0);
+
+  const { data: dataMe } = useQuery(GET_ME, { fetchPolicy: "cache-first" });
+  const userStats = dataMe?.me;
+
+  const { todayReviewCount, incrementReviewCount } = useDailyReviewTracker(
+    userStats?.id ?? null,
+  );
+
+  const hasReachedDailyLimit = userStats?.maxDailyReviews
+    ? todayReviewCount >= userStats.maxDailyReviews
+    : false;
+
+  const { data, loading, error } = useQuery(GET_DUE_FLASHCARDS, {
     variables: { deckId: deckId || "" },
     skip: !deckId,
     fetchPolicy: "network-only",
@@ -26,252 +39,238 @@ export function StudySession() {
 
   const [submitReview, { loading: submitting }] = useMutation(SUBMIT_REVIEW);
 
-  const cards: FlashcardDue[] = data?.dueFlashcards || [];
+  const cards = data?.dueFlashcards || [];
   const currentCard = cards[currentIndex];
 
-  const handleRating = useCallback(
-    async (rating: number) => {
-      if (!currentCard || submitting) return;
+  // 🔵 PRÉ-FETCHING: Prepara a referência do próximo cartão
+  const nextCard =
+    currentIndex + 1 < cards.length ? cards[currentIndex + 1] : null;
 
-      const reviewDurationMs = answerShownAt ? Date.now() - answerShownAt : 0;
-
-      try {
-        await submitReview({
-          variables: {
-            flashcardId: currentCard.id,
-            rating,
-            reviewDurationMs,
-          },
-        });
-
-        if (currentIndex + 1 < cards.length) {
-          setCurrentIndex((prev) => prev + 1);
-          setShowAnswer(false);
-          setAnswerShownAt(null);
-        } else {
-          setSessionFinished(true);
-        }
-      } catch (err: unknown) {
-        // Type Guard estrito para capturar mensagens reais do NestJS (ex: ForbiddenException)
-        if (err instanceof Error) {
-          console.error("Erro crítico na avaliação FSRS:", err.message);
-          showToast(
-            `Falha de segurança ou sincronização: ${err.message}`,
-            "error",
-          );
-        } else {
-          console.error("Erro desconhecido na avaliação:", err);
-          showToast("Falha inesperada no servidor.", "error");
-        }
-
-        // Bloqueio ativo: Força a saída do usuário da sessão corrompida
-        navigate("/dashboard", { replace: true });
-      }
-    },
-    [
-      currentCard,
-      submitting,
-      answerShownAt,
-      submitReview,
-      currentIndex,
-      cards.length,
-      showToast,
-      navigate, // Adicionado ao array de dependências
-    ],
-  );
-
-  const handleShowAnswerClick = useCallback(() => {
-    setShowAnswer(true);
-    setAnswerShownAt(Date.now());
+  const handleShowAnswer = useCallback(() => {
+    setIsFlipped(true);
+    flipTimeRef.current = Date.now();
   }, []);
 
+  const handleRating = async (rating: number) => {
+    if (!currentCard || submitting || !isFlipped) return;
+
+    const reviewDurationMs = Date.now() - flipTimeRef.current;
+
+    try {
+      await submitReview({
+        variables: {
+          flashcardId: currentCard.id,
+          rating,
+          reviewDurationMs,
+        },
+      });
+
+      incrementReviewCount();
+      setIsFlipped(false);
+      flipTimeRef.current = 0;
+
+      if (currentIndex + 1 < cards.length) {
+        setCurrentIndex((prev) => prev + 1);
+      } else {
+        await Promise.all([
+          client.query({ query: GET_ME, fetchPolicy: "network-only" }),
+          client.query({ query: GET_MY_DECKS, fetchPolicy: "network-only" }),
+        ]);
+
+        showToast(
+          "Brilhante! XP e Ofensiva atualizados com sucesso.",
+          "success",
+        );
+        navigate("/dashboard");
+      }
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        showToast(`Erro ao registrar revisão: ${err.message}`, "error");
+      }
+    }
+  };
+
   useStudyKeyboard({
-    showAnswer,
-    disabled: sessionFinished || !currentCard || submitting,
-    onRevealAnswer: handleShowAnswerClick,
-    onRating: handleRating,
+    showAnswer: isFlipped,
+    onShowAnswer: handleShowAnswer,
+    onRate: handleRating,
+    disabled: loading || submitting || !currentCard,
   });
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="w-8 h-8 border-4 border-amber-500 border-t-transparent rounded-full animate-spin" />
+      <div className="flex flex-col items-center justify-center min-h-screen w-full bg-slate-950 gap-4">
+        <div className="text-amber-500 text-4xl animate-pulse">🧠</div>
+        <div className="text-slate-400 font-medium text-sm animate-pulse tracking-wider uppercase">
+          Preparando seu ambiente de foco...
+        </div>
       </div>
     );
   }
 
-  if (error) {
+  if (hasReachedDailyLimit) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
-        <p className="text-rose-400 font-medium">
-          Erro ao carregar sessão de estudos.
+      <div className="flex flex-col items-center justify-center min-h-screen w-full bg-slate-950 gap-5 p-4 text-center animate-fadeIn">
+        <span className="text-6xl drop-shadow-2xl mb-2">🛑</span>
+        <h2 className="text-2xl sm:text-3xl font-extrabold text-rose-500">
+          Consolidação Cognitiva Atingida
+        </h2>
+        <p className="text-slate-400 max-w-md leading-relaxed">
+          Você atingiu sua trava de segurança de{" "}
+          <b>{userStats?.maxDailyReviews} revisões hoje</b>. Continuar forçando
+          o algoritmo agora causará o <i>Efeito Bola de Neve</i>. O aprendizado
+          de longo prazo exige que você durma para consolidar. Retorne amanhã!
         </p>
         <button
-          onClick={() => refetch()}
-          className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-sm transition"
+          onClick={() => navigate("/dashboard")}
+          className="mt-6 px-8 py-3 bg-rose-500/10 text-rose-400 border border-rose-500/20 font-bold rounded-xl hover:bg-rose-500/20 transition-all shadow-lg cursor-pointer"
         >
-          Tentar Novamente
+          Voltar ao Painel
         </button>
       </div>
     );
   }
 
-  if (cards.length === 0 || sessionFinished) {
+  if (error || cards.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 text-center max-w-md mx-auto px-4">
-        <div className="w-16 h-16 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 text-2xl mb-2">
-          🎉
-        </div>
-        <h2 className="text-2xl font-bold text-slate-100">
-          Sessão Finalizada!
+      <div className="flex flex-col items-center justify-center min-h-screen w-full bg-slate-950 gap-5 p-4 text-center animate-fadeIn">
+        <span className="text-6xl drop-shadow-2xl mb-2">🏆</span>
+        <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-100">
+          Você está em dia!
         </h2>
-        <p className="text-slate-400 text-sm">
-          Você revisou todos os cartões agendados para este baralho no dia de
-          hoje.
+        <p className="text-slate-400 max-w-md leading-relaxed">
+          Você dominou todos os cartões pendentes deste baralho para hoje.
+          Excelente trabalho! Agora, descanse e permita que seu cérebro
+          consolide essas memórias.
         </p>
-        <Link
-          to="/dashboard"
-          className="mt-2 px-6 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-semibold rounded-xl text-sm transition"
+        <button
+          onClick={() => navigate("/dashboard")}
+          className="mt-6 px-8 py-3 bg-amber-500 text-slate-950 font-bold rounded-xl hover:bg-amber-400 transition-all shadow-lg shadow-amber-500/20 cursor-pointer"
         >
-          Voltar ao Dashboard
-        </Link>
+          Voltar ao Painel
+        </button>
       </div>
     );
   }
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-6 flex flex-col gap-6">
-      {/* Cabeçalho */}
-      <div className="flex items-center justify-between border-b border-slate-800 pb-4">
-        <div>
-          <span className="text-xs font-semibold uppercase tracking-wider text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-md border border-emerald-500/20">
-            Sessão Padrão
+    <div className="min-h-screen w-full bg-slate-950 flex flex-col items-center py-8 px-4 relative overflow-hidden">
+      <div className="flex flex-col items-center w-full max-w-3xl mx-auto gap-6 z-10">
+        <div className="flex justify-between items-center w-full text-slate-400 text-sm font-semibold">
+          <span>
+            Cartão {currentIndex + 1} de {cards.length}
           </span>
-          <h1 className="text-lg font-bold text-slate-200 mt-2">
-            Deck: {currentCard.deck?.title || "Estudo Diário"}
-          </h1>
+          <button
+            onClick={() => navigate("/dashboard")}
+            className="hover:text-slate-200 transition-colors cursor-pointer"
+          >
+            Encerrar Sessão
+          </button>
         </div>
-        <div className="text-right">
-          <span className="text-xs text-slate-400">Progresso</span>
-          <p className="text-sm font-semibold text-slate-200">
-            {currentIndex + 1} / {cards.length}
-          </p>
-        </div>
-      </div>
 
-      {/* Visualizador do Card */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 min-h-65 flex flex-col justify-between shadow-lg">
-        <div className="flex flex-col gap-4">
-          {/* Contexto da Referência (Renderização Condicional em Flexbox) */}
-          {currentCard.sourceContext && (
-            <div className="flex items-center gap-2 bg-slate-950 px-3 py-1.5 rounded-lg border border-slate-800 w-fit self-start">
-              <span className="text-amber-500 text-xs">📖</span>
-              <cite className="text-[10px] text-slate-400 font-medium uppercase tracking-wider not-italic">
-                {currentCard.sourceContext}
-              </cite>
-            </div>
-          )}
-
-          <div className="flex flex-col gap-2">
-            <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">
-              Frente (Pergunta)
+        <div className="flex flex-col w-full bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-8 min-h-80 justify-between gap-6 transition-all">
+          <div className="flex flex-col gap-3">
+            <span className="text-xs font-bold text-amber-500 uppercase tracking-wider">
+              Pergunta
             </span>
-            <div className="text-lg text-slate-100 font-medium whitespace-pre-wrap">
-              {currentCard.front}
-            </div>
+            <MarkdownRenderer content={currentCard.front ?? ""} />
           </div>
 
-          {/* Multimídia via Flexbox Puro (KISS: HTML5 Nativo) */}
-          {(currentCard.imageUrl || currentCard.audioUrl) && (
-            <div className="flex flex-col gap-3 mt-2 border-t border-slate-800/50 pt-4">
-              {currentCard.imageUrl && (
-                <div className="flex justify-center w-full bg-slate-950/50 rounded-xl border border-slate-800 p-2">
-                  <img
-                    src={currentCard.imageUrl}
-                    alt="Contexto visual do flashcard"
-                    loading="lazy"
-                    className="max-h-56 w-auto object-contain rounded-lg"
-                  />
+          {isFlipped && (
+            <div className="flex flex-col gap-4 border-t border-slate-800 pt-6 animate-fadeIn">
+              <div className="flex flex-col gap-2">
+                <span className="text-xs font-bold text-emerald-500 uppercase tracking-wider">
+                  Resposta
+                </span>
+                <MarkdownRenderer content={currentCard.back ?? ""} />
+              </div>
+
+              {currentCard.sourceContext && (
+                <div className="flex flex-col gap-1 bg-slate-950 p-3 rounded border border-slate-800/60 mt-2">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                    Contexto de Origem
+                  </span>
+                  <p className="text-xs text-slate-400 italic">
+                    {currentCard.sourceContext}
+                  </p>
                 </div>
               )}
-              {currentCard.audioUrl && (
-                <audio
-                  key={`audio-${currentCard.id}`} /* Previne colisão de estado no React */
-                  controls
-                  className="w-full h-10 rounded-lg outline-none"
-                  src={currentCard.audioUrl}
-                  preload="none"
-                >
-                  Seu navegador não suporta o formato de áudio.
-                </audio>
-              )}
             </div>
+          )}
+
+          {!isFlipped && (
+            <button
+              onClick={handleShowAnswer}
+              className="w-full py-4 bg-slate-800 hover:bg-slate-700 text-slate-100 font-bold rounded-xl transition-all border border-slate-700 mt-4 cursor-pointer flex items-center justify-center gap-3"
+            >
+              <span>Mostrar Resposta</span>
+              <kbd className="px-2 py-1 bg-slate-950 border border-slate-700 rounded-md text-[10px] font-mono text-slate-400 uppercase tracking-wider shadow-inner">
+                Espaço
+              </kbd>
+            </button>
           )}
         </div>
 
-        {/* Verso (Resposta) */}
-        {showAnswer ? (
-          <div className="flex flex-col gap-2 pt-6 border-t border-slate-800/80 mt-6 animate-fade-in">
-            <span className="text-xs font-medium text-amber-400 uppercase tracking-wider">
-              Verso (Resposta)
-            </span>
-            <div className="text-base text-slate-200 whitespace-pre-wrap">
-              {currentCard.back}
-            </div>
-          </div>
-        ) : (
-          <div className="pt-6 border-t border-slate-800/50 mt-6 text-center">
+        {isFlipped && (
+          <div className="flex flex-wrap md:flex-nowrap w-full gap-3 animate-fadeIn">
             <button
-              onClick={handleShowAnswerClick}
-              className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium rounded-xl text-sm transition border border-slate-700/50 cursor-pointer"
+              disabled={submitting}
+              onClick={() => handleRating(1)}
+              className="flex-1 py-3 bg-red-900/40 hover:bg-red-900/60 text-red-200 border border-red-800/50 font-bold rounded-xl flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer"
             >
-              Revelar Resposta (Espaço / Enter)
+              <span>Errei</span>
+              <kbd className="px-2 py-0.5 bg-red-950/80 border border-red-800/60 rounded text-[10px] font-mono text-red-400 shadow-inner">
+                1
+              </kbd>
+            </button>
+            <button
+              disabled={submitting}
+              onClick={() => handleRating(2)}
+              className="flex-1 py-3 bg-amber-900/40 hover:bg-amber-900/60 text-amber-200 border border-amber-800/50 font-bold rounded-xl flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer"
+            >
+              <span>Difícil</span>
+              <kbd className="px-2 py-0.5 bg-amber-950/80 border border-amber-800/60 rounded text-[10px] font-mono text-amber-400 shadow-inner">
+                2
+              </kbd>
+            </button>
+            <button
+              disabled={submitting}
+              onClick={() => handleRating(3)}
+              className="flex-1 py-3 bg-blue-900/40 hover:bg-blue-900/60 text-blue-200 border border-blue-800/50 font-bold rounded-xl flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer"
+            >
+              <span>Bom</span>
+              <kbd className="px-2 py-0.5 bg-blue-950/80 border border-blue-800/60 rounded text-[10px] font-mono text-blue-400 shadow-inner">
+                3
+              </kbd>
+            </button>
+            <button
+              disabled={submitting}
+              onClick={() => handleRating(4)}
+              className="flex-1 py-3 bg-emerald-900/40 hover:bg-emerald-900/60 text-emerald-200 border border-emerald-800/50 font-bold rounded-xl flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer"
+            >
+              <span>Fácil</span>
+              <kbd className="px-2 py-0.5 bg-emerald-950/80 border border-emerald-800/60 rounded text-[10px] font-mono text-emerald-400 shadow-inner">
+                4
+              </kbd>
             </button>
           </div>
         )}
       </div>
 
-      {/* Botões de Avaliação (Flexbox) */}
-      {showAnswer && (
-        <div className="flex flex-wrap w-full gap-3 pt-2">
-          <button
-            onClick={() => handleRating(1)}
-            disabled={submitting}
-            className="flex-1 min-w-[calc(50%-0.375rem)] sm:min-w-0 flex flex-col items-center justify-center p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 hover:bg-rose-500/20 active:scale-95 transition disabled:opacity-50"
-          >
-            <span className="font-semibold text-sm">Errei</span>
-            <span className="text-xs text-rose-400/70 mt-0.5">Teclado: 1</span>
-          </button>
-          <button
-            onClick={() => handleRating(2)}
-            disabled={submitting}
-            className="flex-1 min-w-[calc(50%-0.375rem)] sm:min-w-0 flex flex-col items-center justify-center p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 hover:bg-amber-500/20 active:scale-95 transition disabled:opacity-50"
-          >
-            <span className="font-semibold text-sm">Difícil</span>
-            <span className="text-xs text-amber-400/70 mt-0.5">Teclado: 2</span>
-          </button>
-          <button
-            onClick={() => handleRating(3)}
-            disabled={submitting}
-            className="flex-1 min-w-[calc(50%-0.375rem)] sm:min-w-0 flex flex-col items-center justify-center p-3 rounded-xl bg-blue-500/10 border border-blue-500/30 text-blue-300 hover:bg-blue-500/20 active:scale-95 transition disabled:opacity-50"
-          >
-            <span className="font-semibold text-sm">Bom</span>
-            <span className="text-xs text-blue-400/70 mt-0.5">Teclado: 3</span>
-          </button>
-          <button
-            onClick={() => handleRating(4)}
-            disabled={submitting}
-            className="flex-1 min-w-[calc(50%-0.375rem)] sm:min-w-0 flex flex-col items-center justify-center p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20 active:scale-95 transition disabled:opacity-50"
-          >
-            <span className="font-semibold text-sm">Fácil</span>
-            <span className="text-xs text-emerald-400/70 mt-0.5">
-              Teclado: 4
-            </span>
-          </button>
+      {/* 🔵 GHOST PRE-FETCHING:
+          Força o React a calcular a Árvore Sintática Abstrata (AST) do LaTeX
+          do próximo cartão em Background (invisível e inacessível por leitores de tela),
+          anulando a latência de renderização.
+      */}
+      {nextCard && (
+        <div
+          aria-hidden="true"
+          className="absolute opacity-0 pointer-events-none -z-50 select-none"
+        >
+          <MarkdownRenderer content={nextCard.front ?? ""} />
+          <MarkdownRenderer content={nextCard.back ?? ""} />
         </div>
       )}
     </div>
   );
-}
-
-export default StudySession;
+};

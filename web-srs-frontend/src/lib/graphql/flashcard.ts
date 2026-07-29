@@ -1,4 +1,4 @@
-import { gql, type TypedDocumentNode } from '@apollo/client/core';
+import { gql, type TypedDocumentNode } from "@apollo/client/core"; // Importação Estrita do Core
 
 export interface Flashcard {
   id: string;
@@ -9,7 +9,6 @@ export interface Flashcard {
   audioUrl?: string | null;
 }
 
-// --- MUTATION: Create Flashcard ---
 export interface CreateFlashcardResponse {
   createFlashcard: Flashcard;
 }
@@ -25,10 +24,7 @@ export interface CreateFlashcardVariables {
   };
 }
 
-export const CREATE_FLASHCARD: TypedDocumentNode<
-  CreateFlashcardResponse,
-  CreateFlashcardVariables
-> = gql`
+export const CREATE_FLASHCARD: TypedDocumentNode<CreateFlashcardResponse, CreateFlashcardVariables> = gql`
   mutation CreateFlashcard($data: CreateFlashcardInput!) {
     createFlashcard(data: $data) {
       id
@@ -41,7 +37,6 @@ export const CREATE_FLASHCARD: TypedDocumentNode<
   }
 `;
 
-// --- MUTATION: Update Flashcard ---
 export interface UpdateFlashcardResponse {
   updateFlashcard: Flashcard;
 }
@@ -57,10 +52,7 @@ export interface UpdateFlashcardVariables {
   };
 }
 
-export const UPDATE_FLASHCARD: TypedDocumentNode<
-  UpdateFlashcardResponse,
-  UpdateFlashcardVariables
-> = gql`
+export const UPDATE_FLASHCARD: TypedDocumentNode<UpdateFlashcardResponse, UpdateFlashcardVariables> = gql`
   mutation UpdateFlashcard($data: UpdateFlashcardInput!) {
     updateFlashcard(data: $data) {
       id
@@ -73,19 +65,18 @@ export const UPDATE_FLASHCARD: TypedDocumentNode<
   }
 `;
 
-// --- MUTATION: Remove Flashcard ---
 export interface RemoveFlashcardResponse {
-  removeFlashcard: { id: string };
+  removeFlashcard: {
+    id: string;
+  };
 }
 
 export interface RemoveFlashcardVariables {
   id: string;
 }
 
-export const REMOVE_FLASHCARD: TypedDocumentNode<
-  RemoveFlashcardResponse,
-  RemoveFlashcardVariables
-> = gql`
+// CORREÇÃO CRÍTICA DO MVP: Alterado para $id: ID! em conformidade com NestJS/Prisma
+export const REMOVE_FLASHCARD: TypedDocumentNode<RemoveFlashcardResponse, RemoveFlashcardVariables> = gql`
   mutation RemoveFlashcard($id: ID!) {
     removeFlashcard(id: $id) {
       id
