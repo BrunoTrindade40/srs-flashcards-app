@@ -1,10 +1,10 @@
-import { gql, type TypedDocumentNode } from '@apollo/client/core';
-import type { Flashcard } from './flashcard';
+import { gql, type TypedDocumentNode } from "@apollo/client/core";
+import type { Flashcard } from "./flashcard";
 
 export interface Deck {
   id: string;
   title: string;
-  description?: string | null; // 🔴 CRÍTICO CORRIGIDO: Tipagem estendida para suportar null
+  description?: string | null;
   sourceLanguage?: string | null;
   targetLanguage?: string | null;
   isArchived?: boolean | null;
@@ -14,12 +14,14 @@ export interface Deck {
   flashcards?: Flashcard[];
 }
 
-// --- QUERY: Get My Decks ---
 export interface GetMyDecksResponse {
   myDecks: Deck[];
 }
 
-export const GET_MY_DECKS: TypedDocumentNode<GetMyDecksResponse, Record<string, never>> = gql`
+export const GET_MY_DECKS: TypedDocumentNode<
+  GetMyDecksResponse,
+  Record<string, never>
+> = gql`
   query GetMyDecks {
     myDecks {
       id
@@ -27,6 +29,7 @@ export const GET_MY_DECKS: TypedDocumentNode<GetMyDecksResponse, Record<string, 
       description
       sourceLanguage
       targetLanguage
+      isArchived
       _count {
         flashcards
       }
@@ -34,7 +37,6 @@ export const GET_MY_DECKS: TypedDocumentNode<GetMyDecksResponse, Record<string, 
   }
 `;
 
-// --- QUERY: Get Deck Details ---
 export interface GetDeckDetailsResponse {
   deck: Deck;
 }
@@ -43,7 +45,10 @@ export interface GetDeckDetailsVariables {
   id: string;
 }
 
-export const GET_DECK_DETAILS: TypedDocumentNode<GetDeckDetailsResponse, GetDeckDetailsVariables> = gql`
+export const GET_DECK_DETAILS: TypedDocumentNode<
+  GetDeckDetailsResponse,
+  GetDeckDetailsVariables
+> = gql`
   query GetDeckDetails($id: ID!) {
     deck(id: $id) {
       id
@@ -51,6 +56,7 @@ export const GET_DECK_DETAILS: TypedDocumentNode<GetDeckDetailsResponse, GetDeck
       description
       sourceLanguage
       targetLanguage
+      isArchived
       _count {
         flashcards
       }
@@ -58,26 +64,31 @@ export const GET_DECK_DETAILS: TypedDocumentNode<GetDeckDetailsResponse, GetDeck
         id
         front
         back
+        sourceContext
       }
     }
   }
 `;
 
-// --- MUTATION: Create Deck ---
+export interface CreateDeckInput {
+  title: string;
+  description?: string | null;
+  sourceLanguage?: string | null;
+  targetLanguage?: string | null;
+}
+
 export interface CreateDeckResponse {
   createDeck: Deck;
 }
 
 export interface CreateDeckVariables {
-  data: {
-    title: string;
-    description?: string | null; // 🔴 CRÍTICO CORRIGIDO
-    sourceLanguage?: string | null; // 🔴 CRÍTICO CORRIGIDO
-    targetLanguage?: string | null; // 🔴 CRÍTICO CORRIGIDO
-  };
+  data: CreateDeckInput;
 }
 
-export const CREATE_DECK: TypedDocumentNode<CreateDeckResponse, CreateDeckVariables> = gql`
+export const CREATE_DECK: TypedDocumentNode<
+  CreateDeckResponse,
+  CreateDeckVariables
+> = gql`
   mutation CreateDeck($data: CreateDeckInput!) {
     createDeck(data: $data) {
       id
@@ -85,6 +96,7 @@ export const CREATE_DECK: TypedDocumentNode<CreateDeckResponse, CreateDeckVariab
       description
       sourceLanguage
       targetLanguage
+      isArchived
       _count {
         flashcards
       }
@@ -92,23 +104,27 @@ export const CREATE_DECK: TypedDocumentNode<CreateDeckResponse, CreateDeckVariab
   }
 `;
 
-// --- MUTATION: Update Deck ---
+export interface UpdateDeckInput {
+  id: string;
+  title?: string;
+  description?: string | null;
+  sourceLanguage?: string | null;
+  targetLanguage?: string | null;
+  isArchived?: boolean | null;
+}
+
 export interface UpdateDeckResponse {
   updateDeck: Deck;
 }
 
 export interface UpdateDeckVariables {
-  data: {
-    id: string;
-    title?: string | null;
-    description?: string | null; // 🔴 CRÍTICO CORRIGIDO
-    sourceLanguage?: string | null; // 🔴 CRÍTICO CORRIGIDO
-    targetLanguage?: string | null; // 🔴 CRÍTICO CORRIGIDO
-    isArchived?: boolean | null;
-  };
+  data: UpdateDeckInput;
 }
 
-export const UPDATE_DECK: TypedDocumentNode<UpdateDeckResponse, UpdateDeckVariables> = gql`
+export const UPDATE_DECK: TypedDocumentNode<
+  UpdateDeckResponse,
+  UpdateDeckVariables
+> = gql`
   mutation UpdateDeck($data: UpdateDeckInput!) {
     updateDeck(data: $data) {
       id
@@ -121,17 +137,23 @@ export const UPDATE_DECK: TypedDocumentNode<UpdateDeckResponse, UpdateDeckVariab
   }
 `;
 
-// --- MUTATION: Delete Deck ---
 export interface DeleteDeckResponse {
-  removeDeck: boolean;
+  removeDeck: {
+    id: string;
+  };
 }
 
 export interface DeleteDeckVariables {
   id: string;
 }
 
-export const DELETE_DECK: TypedDocumentNode<DeleteDeckResponse, DeleteDeckVariables> = gql`
+export const DELETE_DECK: TypedDocumentNode<
+  DeleteDeckResponse,
+  DeleteDeckVariables
+> = gql`
   mutation DeleteDeck($id: ID!) {
-    removeDeck(id: $id)
+    removeDeck(id: $id) {
+      id
+    }
   }
 `;

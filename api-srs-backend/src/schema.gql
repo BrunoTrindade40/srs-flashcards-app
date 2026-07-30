@@ -87,6 +87,7 @@ type Query {
 
 type Mutation {
   updateMySettings(data: UpdateUserSettingsInput!): User!
+  anonymizeMe: Boolean!
   createDeck(data: CreateDeckInput!): Deck!
   updateDeck(data: UpdateDeckInput!): Deck!
   removeDeck(id: ID!): Boolean!

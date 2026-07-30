@@ -1,51 +1,62 @@
 import { useEffect } from "react";
 
-export interface UseStudyKeyboardOptions {
-  /** Flag booleana indicando se a resposta já está visível */
+interface UseStudyKeyboardProps {
   showAnswer: boolean;
-  /** Callback acionado ao pressionar Espaço ou Enter para revelar a resposta */
   onShowAnswer: () => void;
-  /** Callback acionado ao pressionar as teclas 1, 2, 3 ou 4 para classificar a retenção */
   onRate: (rating: number) => void;
-  /** Desativa temporariamente a escuta de eventos (ex: durante carregamento) */
+  // 🟢 REGRA APLICADA: Novo contrato para o atalho de saída global
+  onExit?: () => void;
   disabled?: boolean;
 }
 
-/**
-  * SRP: Hook responsável exclusivamente por capturar atalhos de teclado globais da sessão de estudos.
-  */
-export const useStudyKeyboard = ({
+export function useStudyKeyboard({
   showAnswer,
   onShowAnswer,
   onRate,
+  onExit,
   disabled = false,
-}: UseStudyKeyboardOptions) => {
+}: UseStudyKeyboardProps) {
   useEffect(() => {
-    if (disabled) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignora atalhos se o sistema estiver processando/carregando
+      if (disabled) return;
 
-    const handleKeyDown = (event: KeyboardEvent) => {
-      // Evita disparar atalhos se o usuário estiver digitando em um campo de texto
-      if (
-        event.target instanceof HTMLInputElement ||
-        event.target instanceof HTMLTextAreaElement
-      ) {
+      // 🟢 OTIMIZAÇÃO: Escape para sair da sessão instantaneamente
+      if (e.key === "Escape") {
+        e.preventDefault();
+        if (onExit) onExit();
         return;
       }
 
-      if (!showAnswer) {
-        if (event.code === "Space" || event.key === "Enter") {
-          event.preventDefault();
+      // Previne o "scroll" padrão da página ao apertar Espaço
+      if (e.key === " " || e.code === "Space") {
+        e.preventDefault();
+        if (!showAnswer) {
           onShowAnswer();
         }
-      } else {
-        if (event.key === "1") onRate(1);
-        if (event.key === "2") onRate(2);
-        if (event.key === "3") onRate(3);
-        if (event.key === "4") onRate(4);
+        return;
+      }
+
+      // Avaliação Estocástica (1, 2, 3, 4) só funciona se o verso estiver visível
+      if (showAnswer) {
+        switch (e.key) {
+          case "1":
+            onRate(1);
+            break;
+          case "2":
+            onRate(2);
+            break;
+          case "3":
+            onRate(3);
+            break;
+          case "4":
+            onRate(4);
+            break;
+        }
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [showAnswer, onShowAnswer, onRate, disabled]);
-};
+  }, [showAnswer, onShowAnswer, onRate, onExit, disabled]);
+}

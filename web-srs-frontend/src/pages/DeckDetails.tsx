@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from "@apollo/client/react"; // Importação estrita
+import { useApolloClient, useMutation, useQuery } from "@apollo/client/react"; // 🟢 Importação estrita + uso do client para limpar cache
 import React, { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ConfirmModal } from "../components/ConfirmModal";
@@ -7,7 +7,12 @@ import { EditDeckModal } from "../components/EditDeckModal";
 import { EditFlashcardModal } from "../components/EditFlashcardModal";
 import { MarkdownRenderer } from "../components/MarkdownRenderer";
 import { useToast } from "../hooks/useToast";
-import { GET_DECK_DETAILS } from "../lib/graphql/deck";
+import {
+  DELETE_DECK,
+  GET_DECK_DETAILS,
+  GET_MY_DECKS,
+  UPDATE_DECK, // 🟢 Import da Mutation
+} from "../lib/graphql/deck"; // 🟢 Adicionada mutation de deleção
 import { REMOVE_FLASHCARD, UPDATE_FLASHCARD } from "../lib/graphql/flashcard";
 
 interface Flashcard {
@@ -20,11 +25,15 @@ export const DeckDetails: React.FC = () => {
   const { deckId } = useParams<{ deckId: string }>();
   const navigate = useNavigate();
   const { showToast } = useToast();
+  const client = useApolloClient();
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditDeckOpen, setIsEditDeckOpen] = useState(false);
   const [editingCard, setEditingCard] = useState<Flashcard | null>(null);
+
+  // 🟢 Máquinas de estado isoladas para os dois modais de confirmação
   const [deletingCardId, setDeletingCardId] = useState<string | null>(null);
+  const [isDeletingDeck, setIsDeletingDeck] = useState(false);
 
   const { data, loading, error } = useQuery(GET_DECK_DETAILS, {
     variables: { id: deckId || "" },
@@ -35,11 +44,41 @@ export const DeckDetails: React.FC = () => {
   const [removeFlashcard] = useMutation(REMOVE_FLASHCARD);
   const [updateFlashcard] = useMutation(UPDATE_FLASHCARD);
 
+  // 🟢 Mutation para excluir o Deck (RF02)
+  const [deleteDeck, { loading: deletingDeck }] = useMutation(DELETE_DECK);
+  const [updateDeck, { loading: updatingArchive }] = useMutation(UPDATE_DECK);
+
   useEffect(() => {
     if (error) {
       showToast(`Erro ao carregar detalhes do deck: ${error.message}`, "error");
     }
   }, [error, showToast]);
+
+  // 🟢 Ação Direta (Optimistic UI Update)
+  const handleToggleArchive = async () => {
+    if (!data?.deck) return;
+    try {
+      const newStatus = !data.deck.isArchived;
+      await updateDeck({
+        variables: {
+          data: {
+            id: data.deck.id,
+            isArchived: newStatus,
+          },
+        },
+      });
+      showToast(
+        newStatus
+          ? "Baralho enviado para o arquivo."
+          : "Baralho reativado com sucesso.",
+        "success",
+      );
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        showToast(`Erro ao alterar status: ${err.message}`, "error");
+      }
+    }
+  };
 
   const handleSaveEdit = async (front: string, back: string) => {
     if (!editingCard) return;
@@ -56,7 +95,7 @@ export const DeckDetails: React.FC = () => {
     }
   };
 
-  const handleConfirmDelete = async () => {
+  const handleConfirmDeleteCard = async () => {
     if (!deletingCardId) return;
     try {
       await removeFlashcard({
@@ -67,7 +106,7 @@ export const DeckDetails: React.FC = () => {
             __typename: "Flashcard",
           });
           cache.evict({ id: normalizedId });
-          cache.gc(); // Purga o card da memória RAM instantaneamente
+          cache.gc();
         },
       });
       showToast("Flashcard removido do baralho.", "success");
@@ -75,6 +114,36 @@ export const DeckDetails: React.FC = () => {
     } catch (err: unknown) {
       if (err instanceof Error) {
         showToast(`Erro ao deletar cartão: ${err.message}`, "error");
+      }
+    }
+  };
+
+  // 🟢 Lógica de deleção do baralho com limpeza de cache
+  const handleConfirmDeleteDeck = async () => {
+    if (!deckId) return;
+    try {
+      await deleteDeck({
+        variables: { id: deckId },
+        update(cache) {
+          // 1. Remove o baralho do cache local
+          const normalizedId = cache.identify({
+            id: deckId,
+            __typename: "Deck",
+          });
+          cache.evict({ id: normalizedId });
+          cache.gc();
+        },
+      });
+
+      // 2. Força um refetch limpo da lista no painel para remover rastros
+      await client.refetchQueries({ include: [GET_MY_DECKS] });
+
+      showToast("Baralho excluído permanentemente.", "success");
+      setIsDeletingDeck(false);
+      navigate("/dashboard");
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        showToast(`Erro ao excluir baralho: ${err.message}`, "error");
       }
     }
   };
@@ -108,8 +177,7 @@ export const DeckDetails: React.FC = () => {
   const deck = data.deck;
 
   return (
-    <div className="flex flex-col w-full max-w-5xl mx-auto gap-6 p-6">
-      {/* 📍 EIXO Y: Link posicionado exatamente abaixo do Header e acima do Título */}
+    <div className="flex flex-col w-full max-w-5xl mx-auto gap-6 p-6 animate-fadeIn">
       <div className="flex items-center w-full">
         <Link
           to="/dashboard"
@@ -125,12 +193,35 @@ export const DeckDetails: React.FC = () => {
             <h1 className="text-3xl font-extrabold text-slate-100">
               {deck.title}
             </h1>
-            <button
-              onClick={() => setIsEditDeckOpen(true)}
-              className="px-3 py-1 text-xs font-semibold bg-slate-800 text-slate-300 hover:text-white rounded border border-slate-700 transition-colors cursor-pointer"
-            >
-              ✏️ Editar
-            </button>
+            {deck.isArchived && (
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 bg-slate-800 border border-slate-700 px-2 py-0.5 rounded">
+                Arquivado
+              </span>
+            )}
+            <div className="flex gap-2 ml-2">
+              <button
+                onClick={() => setIsEditDeckOpen(true)}
+                className="px-3 py-1 text-xs font-semibold bg-slate-800 text-slate-300 hover:text-white rounded border border-slate-700 transition-colors cursor-pointer shadow-sm"
+              >
+                ✏️ Editar
+              </button>
+
+              {/* 🟢 Novo Botão de Arquivamento (RF02) */}
+              <button
+                onClick={handleToggleArchive}
+                disabled={updatingArchive}
+                className="px-3 py-1 text-xs font-semibold bg-slate-800 text-slate-300 hover:text-white rounded border border-slate-700 transition-colors cursor-pointer shadow-sm disabled:opacity-50"
+              >
+                {deck.isArchived ? "📦 Reativar" : "📦 Arquivar"}
+              </button>
+
+              <button
+                onClick={() => setIsDeletingDeck(true)}
+                className="px-3 py-1 text-xs font-semibold bg-rose-950/30 text-rose-400 hover:bg-rose-900/50 rounded border border-rose-900/50 transition-colors cursor-pointer shadow-sm"
+              >
+                🗑️ Excluir
+              </button>
+            </div>
           </div>
           <p className="text-slate-400 text-sm">
             {deck.description || "Sem descrição."}
@@ -140,13 +231,23 @@ export const DeckDetails: React.FC = () => {
         <div className="flex gap-3 w-full md:w-auto">
           <button
             onClick={() => navigate(`/study/${deck.id}`)}
-            className="flex-1 md:flex-none px-5 py-2.5 bg-amber-500 text-slate-950 font-bold rounded-lg hover:bg-amber-400 transition-colors cursor-pointer"
+            disabled={
+              deck.isArchived ||
+              !deck.flashcards ||
+              deck.flashcards.length === 0
+            }
+            className={`flex-1 md:flex-none px-5 py-2.5 font-bold rounded-lg transition-colors shadow-md ${
+              deck.isArchived
+                ? "bg-slate-800 text-slate-500 cursor-not-allowed"
+                : "bg-amber-500 text-slate-950 hover:bg-amber-400 cursor-pointer disabled:opacity-50"
+            }`}
           >
-            Iniciar Estudo ⚡
+            {deck.isArchived ? "Pausado 📦" : "Iniciar Estudo ⚡"}
           </button>
+
           <button
             onClick={() => setIsCreateOpen(true)}
-            className="flex-1 md:flex-none px-5 py-2.5 bg-slate-800 text-slate-100 font-bold rounded-lg hover:bg-slate-700 border border-slate-700 transition-colors cursor-pointer"
+            className="flex-1 md:flex-none px-5 py-2.5 bg-slate-800 text-slate-100 font-bold rounded-lg hover:bg-slate-700 border border-slate-700 transition-colors cursor-pointer shadow-sm"
           >
             + Criar Card
           </button>
@@ -200,7 +301,7 @@ export const DeckDetails: React.FC = () => {
                   </button>
                   <button
                     onClick={() => setDeletingCardId(card.id)}
-                    className="px-3 py-1.5 text-xs font-semibold bg-red-950/40 text-red-300 hover:bg-red-900/60 rounded border border-red-900/50 transition-colors cursor-pointer"
+                    className="px-3 py-1.5 text-xs font-semibold bg-rose-950/40 text-rose-300 hover:bg-rose-900/60 rounded border border-rose-900/50 transition-colors cursor-pointer"
                   >
                     Excluir
                   </button>
@@ -230,12 +331,27 @@ export const DeckDetails: React.FC = () => {
         isOpen={isEditDeckOpen}
         onClose={() => setIsEditDeckOpen(false)}
       />
+
+      {/* 🟢 Modal de confirmação para Flashcards (Original mantido) */}
       <ConfirmModal
         isOpen={!!deletingCardId}
         title="Excluir Flashcard"
         message="Tem certeza que deseja remover este cartão do baralho?"
         onClose={() => setDeletingCardId(null)}
-        onConfirm={handleConfirmDelete}
+        onConfirm={handleConfirmDeleteCard}
+        isDanger={true}
+      />
+
+      {/* 🟢 Modal de confirmação para o Deck inteiro (Novidade) */}
+      <ConfirmModal
+        isOpen={isDeletingDeck}
+        loading={deletingDeck}
+        title="Excluir Baralho Inteiro"
+        message={`Esta ação apagará permanentemente o baralho "${deck.title}" e TODOS os seus ${deck.flashcards?.length || 0} cartões. O algoritmo FSRS perderá o histórico desses estudos. Deseja prosseguir?`}
+        confirmText="Sim, Apagar Tudo"
+        isDanger={true}
+        onClose={() => setIsDeletingDeck(false)}
+        onConfirm={handleConfirmDeleteDeck}
       />
     </div>
   );

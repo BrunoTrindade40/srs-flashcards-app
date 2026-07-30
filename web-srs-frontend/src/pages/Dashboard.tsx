@@ -7,8 +7,12 @@ import { useToast } from "../hooks/useToast";
 import { GET_MY_DECKS, type Deck } from "../lib/graphql/deck";
 import { GET_ME } from "../lib/graphql/settings";
 
+type ViewTab = "ACTIVE" | "ARCHIVED";
+
 export function Dashboard() {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  // 🟢 Máquina de estado local para controle das abas (Design Pattern Wizard)
+  const [currentTab, setCurrentTab] = useState<ViewTab>("ACTIVE");
   const { showToast } = useToast();
 
   const {
@@ -34,12 +38,18 @@ export function Dashboard() {
       console.error("Erro ao sincronizar perfil do usuário:", errorMe.message);
   }, [errorMe]);
 
-  const decks = (dataDecks?.myDecks as Deck[]) || [];
+  const allDecks = (dataDecks?.myDecks as Deck[]) || [];
+
+  // 🟢 Separação Lógica em Memória (Filtro Client-Side O(N))
+  const activeDecks = allDecks.filter((deck) => !deck.isArchived);
+  const archivedDecks = allDecks.filter((deck) => deck.isArchived);
+
+  const displayedDecks = currentTab === "ACTIVE" ? activeDecks : archivedDecks;
+
   const userStats = dataMe?.me;
-  // 🔵 TRAVA DE SEGURANÇA ATIVADA (Fim do Mock)
   const { todayReviewCount } = useDailyReviewTracker(userStats?.id ?? null);
   const isConsolidationDay = new Date().getDay() === 0;
-  // Cálculo derivado reativo (Render Phase Update)
+
   const hasReachedDailyLimit = userStats?.maxDailyReviews
     ? todayReviewCount >= userStats.maxDailyReviews
     : false;
@@ -61,7 +71,6 @@ export function Dashboard() {
         </div>
 
         <div className="flex flex-wrap items-center justify-center gap-3 w-full md:w-auto">
-          {/* Modo Caos Desabilitado - Proteção Fase 1 */}
           <button
             disabled
             title="Funcionalidade mapeada para a Fase 2 (TCC 2)"
@@ -104,57 +113,32 @@ export function Dashboard() {
         </div>
       )}
 
-      <div className="flex flex-wrap gap-4 w-full">
-        <div className="flex-1 min-w-55 bg-slate-900 border border-slate-800 rounded-2xl p-4 flex items-center gap-4 shadow-md">
-          <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 text-2xl shrink-0">
-            🔥
-          </div>
-          <div className="flex flex-col">
-            <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
-              Ofensiva Atual
-            </span>
-            <span className="text-xl font-black text-slate-100">
-              {userStats?.currentStreak ?? 0}{" "}
-              {userStats?.currentStreak === 1 ? "dia" : "dias"}
-            </span>
-          </div>
-        </div>
-
-        <div className="flex-1 min-w-55 bg-slate-900 border border-slate-800 rounded-2xl p-4 flex items-center gap-4 shadow-md">
-          <div className="w-12 h-12 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-orange-400 text-2xl shrink-0">
-            🏆
-          </div>
-          <div className="flex flex-col">
-            <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
-              Maior Sequência
-            </span>
-            <span className="text-xl font-black text-slate-100">
-              {userStats?.longestStreak ?? 0}{" "}
-              {userStats?.longestStreak === 1 ? "dia" : "dias"}
-            </span>
-          </div>
-        </div>
-
-        <div className="flex-1 min-w-55 bg-slate-900 border border-slate-800 rounded-2xl p-4 flex items-center gap-4 shadow-md">
-          <div className="w-12 h-12 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 text-2xl shrink-0">
-            ⚡
-          </div>
-          <div className="flex flex-col">
-            <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
-              XP Total
-            </span>
-            <span className="text-xl font-black text-slate-100">
-              {userStats?.totalXp ?? 0} XP
-            </span>
-          </div>
-        </div>
-      </div>
-
       <div className="flex flex-col gap-4">
-        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-          <h2 className="text-lg font-bold text-slate-200 flex items-center gap-2">
-            <span>📚</span> Seus Baralhos ({decks.length})
-          </h2>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-slate-800 pb-3 gap-4">
+          <div className="flex items-center gap-2 border border-slate-800 bg-slate-900 rounded-lg p-1 w-full sm:w-auto">
+            {/* 🟢 Implementação Estrutural de Flexbox para as Abas */}
+            <button
+              onClick={() => setCurrentTab("ACTIVE")}
+              className={`flex-1 sm:flex-none px-4 py-1.5 text-xs font-bold rounded-md transition-all cursor-pointer ${
+                currentTab === "ACTIVE"
+                  ? "bg-slate-800 text-amber-400 shadow-sm"
+                  : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              Ativos ({activeDecks.length})
+            </button>
+            <button
+              onClick={() => setCurrentTab("ARCHIVED")}
+              className={`flex-1 sm:flex-none px-4 py-1.5 text-xs font-bold rounded-md transition-all cursor-pointer ${
+                currentTab === "ARCHIVED"
+                  ? "bg-slate-800 text-slate-100 shadow-sm"
+                  : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              Arquivados ({archivedDecks.length})
+            </button>
+          </div>
+
           <button
             onClick={() => refetchDecks()}
             className="text-xs font-semibold text-slate-400 hover:text-amber-400 transition cursor-pointer"
@@ -163,7 +147,7 @@ export function Dashboard() {
           </button>
         </div>
 
-        {loadingDecks && decks.length === 0 && (
+        {loadingDecks && allDecks.length === 0 && (
           <div className="flex items-center justify-center min-h-[30vh]">
             <p className="text-slate-400 text-sm font-medium">
               Carregando seus baralhos...
@@ -171,29 +155,39 @@ export function Dashboard() {
           </div>
         )}
 
-        {!loadingDecks && !errorDecks && decks.length === 0 && (
+        {!loadingDecks && !errorDecks && displayedDecks.length === 0 && (
           <div className="flex flex-col items-center justify-center py-16 bg-slate-900/40 border border-slate-800/80 rounded-2xl text-center px-4">
-            <span className="text-4xl mb-3">📭</span>
+            <span className="text-4xl mb-3">
+              {currentTab === "ACTIVE" ? "📭" : "📦"}
+            </span>
             <h3 className="text-base font-bold text-slate-200">
-              Nenhum baralho encontrado
+              {currentTab === "ACTIVE"
+                ? "Nenhum baralho ativo encontrado"
+                : "Seu arquivo está vazio"}
             </h3>
             <p className="text-xs text-slate-400 max-w-sm mt-1 mb-4">
-              Você ainda não criou nenhum deck. Crie seu primeiro baralho para
-              começar.
+              {currentTab === "ACTIVE"
+                ? "Você não possui decks disponíveis para estudo. Crie um novo!"
+                : "Os baralhos arquivados ficam protegidos contra exclusão acidental e não aparecem na sua rotina diária."}
             </p>
-            <button
-              onClick={() => setIsModalOpen(true)}
-              className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-xs transition cursor-pointer"
-            >
-              + Criar Primeiro Baralho
-            </button>
+            {currentTab === "ACTIVE" && (
+              <button
+                onClick={() => setIsModalOpen(true)}
+                className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-xs transition cursor-pointer"
+              >
+                + Criar Primeiro Baralho
+              </button>
+            )}
           </div>
         )}
 
-        {decks.length > 0 && (
+        {displayedDecks.length > 0 && (
           <div className="flex flex-wrap -mx-2">
-            {decks.map((deck) => (
-              <div key={deck.id} className="w-full sm:w-1/2 lg:w-1/3 p-2 flex">
+            {displayedDecks.map((deck) => (
+              <div
+                key={deck.id}
+                className={`w-full sm:w-1/2 lg:w-1/3 p-2 flex ${deck.isArchived ? "opacity-75 hover:opacity-100 transition-opacity" : ""}`}
+              >
                 <div className="w-full bg-slate-900 border border-slate-800 hover:border-amber-500/40 rounded-2xl p-5 flex flex-col justify-between transition-all shadow-md hover:shadow-xl group">
                   <div className="flex flex-col gap-2">
                     <div className="flex items-start justify-between gap-2">
@@ -202,11 +196,13 @@ export function Dashboard() {
                       </h3>
                       <span
                         className={`text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-md shrink-0 border transition-colors ${
-                          hasReachedDailyLimit
+                          hasReachedDailyLimit && !deck.isArchived
                             ? "bg-rose-500/10 text-rose-400 border-rose-500/20"
-                            : isConsolidationDay
+                            : isConsolidationDay && !deck.isArchived
                               ? "bg-blue-500/10 text-blue-400 border-blue-500/20"
-                              : "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                              : deck.isArchived
+                                ? "bg-slate-800 text-slate-400 border-slate-700"
+                                : "bg-amber-500/10 text-amber-400 border-amber-500/20"
                         }`}
                       >
                         {deck._count?.flashcards || 0} cards
@@ -218,25 +214,31 @@ export function Dashboard() {
                   </div>
 
                   <div className="flex items-center gap-2 pt-5 mt-4 border-t border-slate-800/80">
-                    <Link
-                      to={hasReachedDailyLimit ? "#" : `/study/${deck.id}`}
-                      onClick={(e) =>
-                        hasReachedDailyLimit && e.preventDefault()
-                      }
-                      className={`flex-1 py-2 text-center text-xs font-bold rounded-xl transition border ${
-                        hasReachedDailyLimit
-                          ? "bg-slate-800/50 text-slate-500 border-slate-700/50 cursor-not-allowed"
+                    {!deck.isArchived ? (
+                      <Link
+                        to={hasReachedDailyLimit ? "#" : `/study/${deck.id}`}
+                        onClick={(e) =>
+                          hasReachedDailyLimit && e.preventDefault()
+                        }
+                        className={`flex-1 py-2 text-center text-xs font-bold rounded-xl transition border ${
+                          hasReachedDailyLimit
+                            ? "bg-slate-800/50 text-slate-500 border-slate-700/50 cursor-not-allowed"
+                            : isConsolidationDay
+                              ? "bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border-blue-500/30"
+                              : "bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                        }`}
+                      >
+                        {hasReachedDailyLimit
+                          ? "Limite Atingido 🛑"
                           : isConsolidationDay
-                            ? "bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border-blue-500/30"
-                            : "bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
-                      }`}
-                    >
-                      {hasReachedDailyLimit
-                        ? "Limite Atingido 🛑"
-                        : isConsolidationDay
-                          ? "Limpar Passivo 🧹"
-                          : "Estudar ⚡"}
-                    </Link>
+                            ? "Limpar Passivo 🧹"
+                            : "Estudar ⚡"}
+                      </Link>
+                    ) : (
+                      <div className="flex-1 py-2 text-center text-xs font-bold rounded-xl transition border bg-slate-800/40 text-slate-500 border-slate-700/50 cursor-not-allowed">
+                        Conteúdo Pausado 📦
+                      </div>
+                    )}
                     <Link
                       to={`/deck/${deck.id}`}
                       className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-center text-xs font-semibold rounded-xl transition border border-slate-700/50"

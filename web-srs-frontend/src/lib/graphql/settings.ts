@@ -1,48 +1,39 @@
-import { gql, type TypedDocumentNode } from '@apollo/client/core';
+import { gql, type TypedDocumentNode } from "@apollo/client/core";
 
 export interface UserSettings {
   id: string;
   dailyNewCardLimit: number;
   maxDailyReviews: number;
   timezone: string;
-  totalXp: number;
-  currentStreak: number;
-  longestStreak: number;
 }
 
-// --- QUERY: Get Me (Obter usuário logado, configurações e métricas de gamificação) ---
 export interface GetMeResponse {
   me: UserSettings;
 }
 
-export const GET_ME: TypedDocumentNode<
-  GetMeResponse,
-  Record<string, never>
-> = gql`
+export const GET_ME: TypedDocumentNode<GetMeResponse, Record<string, never>> = gql`
   query GetMe {
     me {
       id
       dailyNewCardLimit
       maxDailyReviews
       timezone
-      totalXp
-      currentStreak
-      longestStreak
     }
   }
 `;
 
-// --- MUTATION: Update Settings ---
+export interface UpdateMySettingsInput {
+  dailyNewCardLimit?: number;
+  maxDailyReviews?: number;
+  timezone?: string;
+}
+
 export interface UpdateMySettingsResponse {
   updateMySettings: UserSettings;
 }
 
 export interface UpdateMySettingsVariables {
-  data: {
-    dailyNewCardLimit?: number;
-    maxDailyReviews?: number;
-    timezone?: string;
-  };
+  data: UpdateMySettingsInput;
 }
 
 export const UPDATE_MY_SETTINGS: TypedDocumentNode<
@@ -55,9 +46,19 @@ export const UPDATE_MY_SETTINGS: TypedDocumentNode<
       dailyNewCardLimit
       maxDailyReviews
       timezone
-      totalXp
-      currentStreak
-      longestStreak
     }
+  }
+`;
+
+export interface AnonymizeMeResponse {
+  anonymizeMe: boolean;
+}
+
+export const ANONYMIZE_ME: TypedDocumentNode<
+  AnonymizeMeResponse,
+  Record<string, never>
+> = gql`
+  mutation AnonymizeMe {
+    anonymizeMe
   }
 `;

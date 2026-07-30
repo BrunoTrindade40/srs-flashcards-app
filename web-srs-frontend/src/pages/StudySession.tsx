@@ -1,99 +1,39 @@
-import { useApolloClient, useMutation, useQuery } from "@apollo/client/react";
-import React, { useCallback, useRef, useState } from "react";
+import React from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { MarkdownRenderer } from "../components/MarkdownRenderer";
-import { useDailyReviewTracker } from "../hooks/useDailyReviewTracker";
+import { useStudyEngine } from "../hooks/useStudyEngine"; // 🟢 Injeção de dependência
 import { useStudyKeyboard } from "../hooks/useStudyKeyboard";
-import { useToast } from "../hooks/useToast";
-import { GET_MY_DECKS } from "../lib/graphql/deck";
-import { GET_ME } from "../lib/graphql/settings";
-import { GET_DUE_FLASHCARDS, SUBMIT_REVIEW } from "../lib/graphql/study";
 
 export const StudySession: React.FC = () => {
   const { deckId } = useParams<{ deckId: string }>();
   const navigate = useNavigate();
-  const client = useApolloClient();
-  const { showToast } = useToast();
 
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [isFlipped, setIsFlipped] = useState(false);
+  // 🟢 CORREÇÃO DO ERRO (KISS): Higienização da fronteira.
+  // Transformamos o 'undefined' do React Router no 'null' exigido pelas nossas regras internas.
+  const safeDeckId = deckId ?? null;
 
-  const flipTimeRef = useRef<number>(0);
-
-  const { data: dataMe } = useQuery(GET_ME, { fetchPolicy: "cache-first" });
-  const userStats = dataMe?.me;
-
-  const { todayReviewCount, incrementReviewCount } = useDailyReviewTracker(
-    userStats?.id ?? null,
-  );
-
-  const hasReachedDailyLimit = userStats?.maxDailyReviews
-    ? todayReviewCount >= userStats.maxDailyReviews
-    : false;
-
-  const { data, loading, error } = useQuery(GET_DUE_FLASHCARDS, {
-    variables: { deckId: deckId || "" },
-    skip: !deckId,
-    fetchPolicy: "network-only",
-  });
-
-  const [submitReview, { loading: submitting }] = useMutation(SUBMIT_REVIEW);
-
-  const cards = data?.dueFlashcards || [];
-  const currentCard = cards[currentIndex];
-
-  // 🔵 PRÉ-FETCHING: Prepara a referência do próximo cartão
-  const nextCard =
-    currentIndex + 1 < cards.length ? cards[currentIndex + 1] : null;
-
-  const handleShowAnswer = useCallback(() => {
-    setIsFlipped(true);
-    flipTimeRef.current = Date.now();
-  }, []);
-
-  const handleRating = async (rating: number) => {
-    if (!currentCard || submitting || !isFlipped) return;
-
-    const reviewDurationMs = Date.now() - flipTimeRef.current;
-
-    try {
-      await submitReview({
-        variables: {
-          flashcardId: currentCard.id,
-          rating,
-          reviewDurationMs,
-        },
-      });
-
-      incrementReviewCount();
-      setIsFlipped(false);
-      flipTimeRef.current = 0;
-
-      if (currentIndex + 1 < cards.length) {
-        setCurrentIndex((prev) => prev + 1);
-      } else {
-        await Promise.all([
-          client.query({ query: GET_ME, fetchPolicy: "network-only" }),
-          client.query({ query: GET_MY_DECKS, fetchPolicy: "network-only" }),
-        ]);
-
-        showToast(
-          "Brilhante! XP e Ofensiva atualizados com sucesso.",
-          "success",
-        );
-        navigate("/dashboard");
-      }
-    } catch (err: unknown) {
-      if (err instanceof Error) {
-        showToast(`Erro ao registrar revisão: ${err.message}`, "error");
-      }
-    }
-  };
+  // 🟢 A lógica inteira do motor é consumida de forma limpa e declarativa
+  const {
+    currentCard,
+    nextCard,
+    currentIndex,
+    totalCards,
+    isFlipped,
+    loading,
+    error,
+    submitting,
+    hasReachedDailyLimit,
+    maxDailyReviews,
+    handleShowAnswer,
+    handleRating,
+    handleExit,
+  } = useStudyEngine(safeDeckId);
 
   useStudyKeyboard({
     showAnswer: isFlipped,
     onShowAnswer: handleShowAnswer,
     onRate: handleRating,
+    onExit: handleExit,
     disabled: loading || submitting || !currentCard,
   });
 
@@ -117,9 +57,9 @@ export const StudySession: React.FC = () => {
         </h2>
         <p className="text-slate-400 max-w-md leading-relaxed">
           Você atingiu sua trava de segurança de{" "}
-          <b>{userStats?.maxDailyReviews} revisões hoje</b>. Continuar forçando
-          o algoritmo agora causará o <i>Efeito Bola de Neve</i>. O aprendizado
-          de longo prazo exige que você durma para consolidar. Retorne amanhã!
+          <b>{maxDailyReviews} revisões hoje</b>. Continuar forçando o algoritmo
+          agora causará o <i>Efeito Bola de Neve</i>. O aprendizado de longo
+          prazo exige que você durma para consolidar. Retorne amanhã!
         </p>
         <button
           onClick={() => navigate("/dashboard")}
@@ -131,7 +71,7 @@ export const StudySession: React.FC = () => {
     );
   }
 
-  if (error || cards.length === 0) {
+  if (error || totalCards === 0) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen w-full bg-slate-950 gap-5 p-4 text-center animate-fadeIn">
         <span className="text-6xl drop-shadow-2xl mb-2">🏆</span>
@@ -158,13 +98,16 @@ export const StudySession: React.FC = () => {
       <div className="flex flex-col items-center w-full max-w-3xl mx-auto gap-6 z-10">
         <div className="flex justify-between items-center w-full text-slate-400 text-sm font-semibold">
           <span>
-            Cartão {currentIndex + 1} de {cards.length}
+            Cartão {currentIndex + 1} de {totalCards}
           </span>
           <button
-            onClick={() => navigate("/dashboard")}
-            className="hover:text-slate-200 transition-colors cursor-pointer"
+            onClick={handleExit}
+            className="hover:text-slate-200 transition-colors cursor-pointer flex items-center gap-2"
           >
-            Encerrar Sessão
+            <span>Encerrar Sessão</span>
+            <kbd className="px-1.5 py-0.5 bg-slate-900 border border-slate-700 rounded text-[9px] font-mono text-slate-400 shadow-inner tracking-wider">
+              ESC
+            </kbd>
           </button>
         </div>
 
@@ -173,7 +116,7 @@ export const StudySession: React.FC = () => {
             <span className="text-xs font-bold text-amber-500 uppercase tracking-wider">
               Pergunta
             </span>
-            <MarkdownRenderer content={currentCard.front ?? ""} />
+            <MarkdownRenderer content={currentCard?.front ?? ""} />
           </div>
 
           {isFlipped && (
@@ -182,10 +125,10 @@ export const StudySession: React.FC = () => {
                 <span className="text-xs font-bold text-emerald-500 uppercase tracking-wider">
                   Resposta
                 </span>
-                <MarkdownRenderer content={currentCard.back ?? ""} />
+                <MarkdownRenderer content={currentCard?.back ?? ""} />
               </div>
 
-              {currentCard.sourceContext && (
+              {currentCard?.sourceContext && (
                 <div className="flex flex-col gap-1 bg-slate-950 p-3 rounded border border-slate-800/60 mt-2">
                   <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
                     Contexto de Origem
@@ -213,6 +156,7 @@ export const StudySession: React.FC = () => {
 
         {isFlipped && (
           <div className="flex flex-wrap md:flex-nowrap w-full gap-3 animate-fadeIn">
+            {/* Botões de Rating Ocultados por brevidade (A estrutura de Flexbox foi rigorosamente mantida) */}
             <button
               disabled={submitting}
               onClick={() => handleRating(1)}
@@ -257,18 +201,14 @@ export const StudySession: React.FC = () => {
         )}
       </div>
 
-      {/* 🔵 GHOST PRE-FETCHING:
-          Força o React a calcular a Árvore Sintática Abstrata (AST) do LaTeX
-          do próximo cartão em Background (invisível e inacessível por leitores de tela),
-          anulando a latência de renderização.
-      */}
+      {/* Ghost Pre-fetching */}
       {nextCard && (
         <div
           aria-hidden="true"
           className="absolute opacity-0 pointer-events-none -z-50 select-none"
         >
-          <MarkdownRenderer content={nextCard.front ?? ""} />
-          <MarkdownRenderer content={nextCard.back ?? ""} />
+          <MarkdownRenderer content={nextCard?.front ?? ""} />
+          <MarkdownRenderer content={nextCard?.back ?? ""} />
         </div>
       )}
     </div>

@@ -30,11 +30,9 @@ export class StudyService {
 
   private getStartOfStudyDay(userTimezone: string = 'America/Sao_Paulo'): Date {
     let localTime = dayjs().tz(userTimezone);
-
     if (localTime.hour() < 4) {
       localTime = localTime.subtract(1, 'day');
     }
-
     return localTime.hour(4).minute(0).second(0).millisecond(0).toDate();
   }
 
@@ -48,6 +46,10 @@ export class StudyService {
     });
   }
 
+  /**
+   * RF04: Construção rigorosa da Fila de Estudos diária.
+   * A prevenção do Efeito Bola de Neve ocorre ESTRITAMENTE aqui.
+   */
   async dueFlashcards(
     userId: string,
     deckId: string,
@@ -69,10 +71,10 @@ export class StudyService {
     const baseNewCardLimit = user?.dailyNewCardLimit ?? 20;
     const maxDailyReviews = user?.maxDailyReviews ?? 100;
 
-    const now = new Date();
     const rolloverThreshold = this.getRolloverThreshold(user?.timezone);
     const todayStart = this.getStartOfStudyDay(user?.timezone);
 
+    // 1. Controle de Revisões Gerais (Gargalo principal)
     const distinctCardsReviewedToday = await this.prisma.reviewLog.groupBy({
       by: ['flashcardId'],
       where: { userId, createdAt: { gte: todayStart } },
@@ -81,10 +83,15 @@ export class StudyService {
     const reviewsDoneToday = distinctCardsReviewedToday.length;
     const remainingReviewsQuota = Math.max(0, maxDailyReviews - reviewsDoneToday);
 
+    // 2. Cartões Críticos (Estados 1 e 3: Learning e Relearning)
     const criticalRecords = await this.prisma.cardFSRSData.findMany({
       where: {
         userId,
-        due: { lte: now },
+        // 🟢 MUDANÇA ESTRATÉGICA:
+        // Em vez de 'now', usamos o limite do dia (rolloverThreshold).
+        // Se o FSRS agendou o repasse para +5 minutos, mas o aluno quer revisar
+        // agora para fechar o app, o sistema puxa o cartão antecipadamente.
+        due: { lte: rolloverThreshold },
         state: { in: [1, 3] },
         flashcard: { deckId, front: { not: ANONYMIZED_PAYLOAD } },
       },
@@ -100,11 +107,12 @@ export class StudyService {
         where: {
           userId,
           due: { lte: rolloverThreshold },
-          state: 2,
+          state: 2, // Cartões em estágio de Review normal
           flashcard: { deckId, front: { not: ANONYMIZED_PAYLOAD } },
         },
       });
 
+      // Se o passivo de revisões for muito alto, abortamos a inserção de novos cards (Modulação)
       if (pendingReviewsCount >= maxDailyReviews) {
         effectiveNewCardLimit = 0;
       } else if (pendingReviewsCount > (maxDailyReviews * 0.8)) {
@@ -127,7 +135,19 @@ export class StudyService {
     }
 
     let newRecords: FSRSRecordWithFlashcard[] = [];
-    if (effectiveNewCardLimit > 0) {
+
+    // 3. 🔴 CORREÇÃO CRÍTICA: Subtrair os cartões novos já introduzidos HOJE.
+    // O Prisma gera o createdAt do CardFSRSData no momento do primeiro Review.
+    const cardsIntroducedToday = await this.prisma.cardFSRSData.count({
+      where: {
+        userId,
+        createdAt: { gte: todayStart },
+      },
+    });
+
+    const remainingNewQuota = Math.max(0, effectiveNewCardLimit - cardsIntroducedToday);
+
+    if (remainingNewQuota > 0) {
       newRecords = await this.prisma.cardFSRSData.findMany({
         where: {
           userId,
@@ -135,7 +155,7 @@ export class StudyService {
           flashcard: { deckId, front: { not: ANONYMIZED_PAYLOAD } },
         },
         orderBy: { createdAt: 'asc' },
-        take: effectiveNewCardLimit,
+        take: remainingNewQuota, // O limite estrito é garantido pelo DB
         include: { flashcard: { include: { deck: true } } },
       });
     }
@@ -163,6 +183,14 @@ export class StudyService {
     if (!validRatings.includes(rating)) {
       throw new ForbiddenException('Avaliação inválida. Use 1 (Again) a 4 (Easy).');
     }
+
+    // 🟡 ALERTA CORRIGIDO: Zero Trust Paradigm.
+    // 1. Garantimos que não seja negativo (Math.max com 0).
+    // 2. Garantimos que não passe de 1 minuto (Math.min com 60000),
+    //    pois um card estudado por 10 minutos seguidos é um _outlier_
+    //    que destruiria o treinamento da Rede Neural do FSRS depois.
+    // 3. Forçamos a segurança garantindo que seja um Integer no banco.
+    const sanitizedDurationMs = Math.max(0, Math.min(Math.round(reviewDurationMs), 60000));
 
     const flashcard = await this.prisma.flashcard.findUnique({
       where: { id: flashcardId },
@@ -249,7 +277,6 @@ export class StudyService {
     const reviewResult = activeFsrs.next(currentFsrsCard, now, rating);
     const nextState = reviewResult.card;
 
-    const sanitizedDurationMs = Math.min(reviewDurationMs, 60000);
 
     // --- 3. A TRANSAÇÃO ATÔMICA ---
     await this.prisma.$transaction([

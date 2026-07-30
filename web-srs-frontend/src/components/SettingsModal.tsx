@@ -1,8 +1,9 @@
-import { useMutation, useQuery } from "@apollo/client/react";
+import { useApolloClient, useMutation, useQuery } from "@apollo/client/react";
 import React, { useEffect, useState } from "react";
 import { useAuth } from "../hooks/useAuth";
 import { useToast } from "../hooks/useToast";
 import {
+  ANONYMIZE_ME,
   GET_ME,
   UPDATE_MY_SETTINGS,
   type UserSettings,
@@ -48,7 +49,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fadeIn">
-      <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl flex flex-col gap-6 max-h-[90vh] overflow-y-auto">
+      <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl flex flex-col gap-6 max-h-[90vh] overflow-y-auto custom-scrollbar">
         <div className="flex items-center justify-between border-b border-slate-800 pb-4 shrink-0">
           <div className="flex items-center gap-2">
             <span className="text-xl">⚙️</span>
@@ -87,6 +88,7 @@ const SettingsForm: React.FC<SettingsFormProps> = ({
 }) => {
   const { showToast } = useToast();
   const { logout } = useAuth();
+  const client = useApolloClient();
 
   const [dailyNewCardLimit, setDailyNewCardLimit] = useState<number | "">(
     initialData.dailyNewCardLimit,
@@ -94,8 +96,11 @@ const SettingsForm: React.FC<SettingsFormProps> = ({
   const [maxDailyReviews, setMaxDailyReviews] = useState<number | "">(
     initialData.maxDailyReviews,
   );
+  const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+
   const [updateSettings, { loading: mutationLoading }] =
     useMutation(UPDATE_MY_SETTINGS);
+  const [anonymizeMe, { loading: anonymizing }] = useMutation(ANONYMIZE_ME);
 
   const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -127,12 +132,20 @@ const SettingsForm: React.FC<SettingsFormProps> = ({
   };
 
   const handleDeleteAccount = async () => {
-    showToast(
-      "Solicitação de anonimização (LGPD) enviada ao administrador.",
-      "success",
-    );
-    onClose();
-    await logout();
+    try {
+      await anonymizeMe();
+      showToast(
+        "Direito ao esquecimento exercido. Seus dados foram anonimizados com sucesso.",
+        "success",
+      );
+      onClose();
+      await client.clearStore();
+      await logout();
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        showToast(`Erro na anonimização: ${err.message}`, "error");
+      }
+    }
   };
 
   return (
@@ -149,9 +162,9 @@ const SettingsForm: React.FC<SettingsFormProps> = ({
           onChange={(e) =>
             setDailyNewCardLimit(e.target.value ? Number(e.target.value) : "")
           }
-          disabled={mutationLoading}
+          disabled={mutationLoading || anonymizing}
           required
-          className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 text-sm focus:outline-none focus:border-amber-500"
+          className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 text-sm focus:outline-none focus:border-amber-500 font-sans"
         />
         <p className="text-[10px] text-slate-500">
           Controle para mitigar a bola de neve algorítmica.
@@ -170,9 +183,9 @@ const SettingsForm: React.FC<SettingsFormProps> = ({
           onChange={(e) =>
             setMaxDailyReviews(e.target.value ? Number(e.target.value) : "")
           }
-          disabled={mutationLoading}
+          disabled={mutationLoading || anonymizing}
           required
-          className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 text-sm focus:outline-none focus:border-amber-500"
+          className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 text-sm focus:outline-none focus:border-amber-500 font-sans"
         />
         <p className="text-[10px] text-slate-500">
           Trava de segurança diária de Burnout cognitivo.
@@ -186,21 +199,18 @@ const SettingsForm: React.FC<SettingsFormProps> = ({
             Notificações
           </h3>
           <span className="text-[10px] font-extrabold uppercase tracking-wider bg-slate-800 text-amber-400 px-2 py-0.5 rounded border border-amber-500/20 shadow-sm">
-            (Em Breve na Fase 2)
+            (Em Breve)
           </span>
         </div>
-
-        {/* Container em Flexbox para o alinhamento horizontal */}
         <div className="flex items-center justify-between p-4 bg-slate-950/40 border border-slate-800/50 rounded-xl opacity-60 cursor-not-allowed">
           <div className="flex flex-col gap-1 pr-4">
             <span className="text-sm font-semibold text-slate-400">
-              Lembretes Diários de Estudo
+              Lembretes Diários
             </span>
             <span className="text-[10px] text-slate-500 leading-relaxed">
-              Receba pílulas de estudo diretamente via WhatsApp ou Telegram.
+              Pílulas de estudo via WhatsApp/Telegram.
             </span>
           </div>
-          {/* Mock Toggle Switch construído 100% com Flexbox */}
           <div className="w-11 h-6 bg-slate-800 rounded-full flex items-center p-1 shrink-0 border border-slate-700/50">
             <div className="w-4 h-4 bg-slate-600 rounded-full shadow-sm"></div>
           </div>
@@ -226,13 +236,36 @@ const SettingsForm: React.FC<SettingsFormProps> = ({
             Ao excluir sua conta, você exerce o <b>direito ao esquecimento</b>.
             Seus dados pessoais serão <b>anonimizados irreversivelmente</b>.
           </p>
-          <button
-            type="button"
-            onClick={handleDeleteAccount}
-            className="shrink-0 px-4 py-2 bg-rose-950 text-rose-400 font-bold text-[11px] rounded-lg border border-rose-900/50 hover:bg-rose-900 hover:text-rose-100 transition-all cursor-pointer"
-          >
-            Excluir Conta
-          </button>
+
+          {!showConfirmDelete ? (
+            <button
+              type="button"
+              onClick={() => setShowConfirmDelete(true)}
+              disabled={mutationLoading || anonymizing}
+              className="shrink-0 px-4 py-2 bg-rose-950 text-rose-400 font-bold text-[11px] rounded-lg border border-rose-900/50 hover:bg-rose-900 hover:text-rose-100 transition-all cursor-pointer disabled:opacity-50"
+            >
+              Excluir Conta
+            </button>
+          ) : (
+            <div className="shrink-0 flex flex-col sm:flex-row items-center gap-2 animate-fadeIn">
+              <button
+                type="button"
+                disabled={anonymizing}
+                onClick={() => setShowConfirmDelete(false)}
+                className="w-full sm:w-auto px-3 py-2 bg-slate-800 text-slate-300 font-bold text-[11px] rounded-lg border border-slate-700 hover:bg-slate-700 transition-all cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={anonymizing}
+                onClick={handleDeleteAccount}
+                className="w-full sm:w-auto px-3 py-2 bg-rose-600 text-white font-bold text-[11px] rounded-lg hover:bg-rose-700 transition-all cursor-pointer disabled:opacity-50 flex items-center justify-center"
+              >
+                {anonymizing ? "Anonimizando..." : "Confirmar Exclusão"}
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -240,8 +273,8 @@ const SettingsForm: React.FC<SettingsFormProps> = ({
         <button
           type="button"
           onClick={onClose}
-          disabled={mutationLoading}
-          className="px-4 py-2 text-xs font-medium text-slate-400 hover:text-slate-200 cursor-pointer"
+          disabled={mutationLoading || anonymizing}
+          className="px-4 py-2 text-xs font-medium text-slate-400 hover:text-slate-200 cursor-pointer disabled:opacity-50"
         >
           Cancelar
         </button>
@@ -249,6 +282,7 @@ const SettingsForm: React.FC<SettingsFormProps> = ({
           type="submit"
           disabled={
             mutationLoading ||
+            anonymizing ||
             dailyNewCardLimit === "" ||
             maxDailyReviews === ""
           }

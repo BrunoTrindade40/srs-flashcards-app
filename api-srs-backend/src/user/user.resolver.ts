@@ -2,7 +2,6 @@ import { UseGuards } from '@nestjs/common';
 import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { GqlAuthGuard } from '../auth/guards/gql-auth.guard';
-// 🔴 CORREÇÃO CRÍTICA: Importação da CLASSE real, resolvendo o colapso do reflect-metadata.
 import { UpdateUserSettingsInput, User } from './models/user.model';
 import { UserService } from './user.service';
 
@@ -23,5 +22,12 @@ export class UserResolver {
     @Args('data') data: UpdateUserSettingsInput,
   ): Promise<User> {
     return this.userService.updateSettings(user.id, data);
+  }
+
+  // 🟢 REGRA APLICADA: Exposição da Mutation para o Apollo Client
+  @Mutation(() => Boolean, { name: 'anonymizeMe' })
+  @UseGuards(GqlAuthGuard)
+  async anonymizeMe(@CurrentUser() user: User): Promise<boolean> {
+    return this.userService.anonymizeUser(user.id);
   }
 }

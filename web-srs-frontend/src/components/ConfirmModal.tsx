@@ -1,14 +1,14 @@
-import React from "react";
+import React, { useEffect } from "react";
 
 interface ConfirmModalProps {
   isOpen: boolean;
   title: string;
   message: string;
-  confirmText?: string; // Adicionado para customizar o texto do botão
-  isDanger?: boolean; // Adicionado para alternar entre azul (seguro) e vermelho (perigo)
+  confirmText?: string;
+  isDanger?: boolean;
   onConfirm: () => void;
-  onClose: () => void; // Alterado de 'onCancel' para 'onClose'
-  loading?: boolean; // Alterado de 'isLoading' para 'loading'
+  onClose: () => void;
+  loading?: boolean;
 }
 
 export const ConfirmModal: React.FC<ConfirmModalProps> = ({
@@ -21,40 +21,63 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
   onClose,
   loading = false,
 }) => {
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isOpen && !loading) {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, loading, onClose]);
+
   if (!isOpen) return null;
 
-  // Renderização dinâmica de cores baseada na prop isDanger
   const baseButtonClass =
-    "px-4 py-2 text-white font-bold rounded-lg shadow-sm transition-colors";
+    "px-4 py-2.5 text-sm font-bold rounded-lg shadow-md transition-colors cursor-pointer flex items-center justify-center";
   const buttonColorClass = isDanger
     ? loading
-      ? "bg-rose-400 cursor-not-allowed"
-      : "bg-rose-600 hover:bg-rose-700"
+      ? "bg-rose-900/50 text-rose-300 border border-rose-900/50 cursor-not-allowed opacity-70"
+      : "bg-rose-600 hover:bg-rose-700 text-white shadow-rose-900/20"
     : loading
-      ? "bg-blue-400 cursor-not-allowed"
-      : "bg-blue-600 hover:bg-blue-700";
+      ? "bg-indigo-900/50 text-indigo-300 border border-indigo-900/50 cursor-not-allowed opacity-70"
+      : "bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-900/20";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 animate-fade-in">
-        <h2 className="text-xl font-extrabold text-slate-900 mb-2">{title}</h2>
-        <p className="text-gray-600 font-medium mb-6">{message}</p>
+    <div className="fixed inset-0 z-100 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fadeIn">
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden flex flex-col">
+        <div
+          className={`h-1.5 w-full ${isDanger ? "bg-rose-500" : "bg-indigo-500"}`}
+        ></div>
 
-        <div className="flex justify-end space-x-3">
-          <button
-            onClick={onClose}
-            disabled={loading}
-            className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 font-bold rounded-lg transition-colors"
-          >
-            Cancelar
-          </button>
-          <button
-            onClick={onConfirm}
-            disabled={loading}
-            className={`${baseButtonClass} ${buttonColorClass}`}
-          >
-            {loading ? "Processando..." : confirmText}
-          </button>
+        <div className="p-6">
+          <div className="flex items-center gap-3 mb-3">
+            <span className="text-2xl">{isDanger ? "⚠️" : "❓"}</span>
+            <h2 className="text-lg font-extrabold text-slate-100 leading-tight">
+              {title}
+            </h2>
+          </div>
+
+          <p className="text-slate-400 text-sm leading-relaxed mb-6">
+            {message}
+          </p>
+
+          <div className="flex flex-col sm:flex-row justify-end gap-3 border-t border-slate-800/80 pt-5">
+            <button
+              onClick={onClose}
+              disabled={loading}
+              className="px-4 py-2 text-sm text-slate-300 bg-slate-800 hover:bg-slate-700 hover:text-white font-bold rounded-lg transition-colors border border-slate-700 cursor-pointer disabled:opacity-50"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={onConfirm}
+              disabled={loading}
+              className={`${baseButtonClass} ${buttonColorClass}`}
+            >
+              {loading ? "Processando..." : confirmText}
+            </button>
+          </div>
         </div>
       </div>
     </div>

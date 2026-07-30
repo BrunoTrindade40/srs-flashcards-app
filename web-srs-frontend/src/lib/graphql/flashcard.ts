@@ -1,4 +1,4 @@
-import { gql, type TypedDocumentNode } from "@apollo/client/core"; // Importação Estrita do Core
+import { gql, type TypedDocumentNode } from "@apollo/client/core";
 
 export interface Flashcard {
   id: string;
@@ -18,13 +18,16 @@ export interface CreateFlashcardVariables {
     deckId: string;
     front: string;
     back: string;
-    sourceContext?: string;
-    imageUrl?: string;
-    audioUrl?: string;
+    sourceContext?: string | null;
+    imageUrl?: string | null;
+    audioUrl?: string | null;
   };
 }
 
-export const CREATE_FLASHCARD: TypedDocumentNode<CreateFlashcardResponse, CreateFlashcardVariables> = gql`
+export const CREATE_FLASHCARD: TypedDocumentNode<
+  CreateFlashcardResponse,
+  CreateFlashcardVariables
+> = gql`
   mutation CreateFlashcard($data: CreateFlashcardInput!) {
     createFlashcard(data: $data) {
       id
@@ -46,13 +49,16 @@ export interface UpdateFlashcardVariables {
     id: string;
     front?: string;
     back?: string;
-    sourceContext?: string;
-    imageUrl?: string;
-    audioUrl?: string;
+    sourceContext?: string | null;
+    imageUrl?: string | null;
+    audioUrl?: string | null;
   };
 }
 
-export const UPDATE_FLASHCARD: TypedDocumentNode<UpdateFlashcardResponse, UpdateFlashcardVariables> = gql`
+export const UPDATE_FLASHCARD: TypedDocumentNode<
+  UpdateFlashcardResponse,
+  UpdateFlashcardVariables
+> = gql`
   mutation UpdateFlashcard($data: UpdateFlashcardInput!) {
     updateFlashcard(data: $data) {
       id
@@ -75,8 +81,10 @@ export interface RemoveFlashcardVariables {
   id: string;
 }
 
-// CORREÇÃO CRÍTICA DO MVP: Alterado para $id: ID! em conformidade com NestJS/Prisma
-export const REMOVE_FLASHCARD: TypedDocumentNode<RemoveFlashcardResponse, RemoveFlashcardVariables> = gql`
+export const REMOVE_FLASHCARD: TypedDocumentNode<
+  RemoveFlashcardResponse,
+  RemoveFlashcardVariables
+> = gql`
   mutation RemoveFlashcard($id: ID!) {
     removeFlashcard(id: $id) {
       id
