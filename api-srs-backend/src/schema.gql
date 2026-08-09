@@ -9,6 +9,7 @@ type User {
   isAnonymized: Boolean!
   totalXp: Int!
   timezone: String!
+  dailyRolloverTime: String
   lastDataExportAt: DateTime
   lastNotificationSentAt: DateTime
   createdAt: DateTime!
@@ -27,13 +28,22 @@ scalar DateTime
 type Flashcard {
   id: ID!
   deckId: String!
-  front: String!
-  back: String!
+  frontContent: String!
+  backContent: String!
   sourceContext: String
   imageUrl: String
   audioUrl: String
+  isPublished: Boolean!
+  isEditedAfterAi: Boolean!
+  aiModelSource: String
   createdAt: DateTime!
   updatedAt: DateTime!
+
+  """Data agendada pelo FSRS"""
+  due: DateTime
+
+  """0=NEW, 1=LEARN, 2=REVIEW, 3=RELEARN"""
+  state: Int
 }
 
 """Agregador de contagem de relações do baralho"""
@@ -91,6 +101,8 @@ type Mutation {
   createDeck(data: CreateDeckInput!): Deck!
   updateDeck(data: UpdateDeckInput!): Deck!
   removeDeck(id: ID!): Boolean!
+  enrollInDeck(deckId: ID!): Boolean!
+  unenrollFromDeck(deckId: ID!): Boolean!
   createFlashcard(data: CreateFlashcardInput!): Flashcard!
   updateFlashcard(data: UpdateFlashcardInput!): Flashcard!
   removeFlashcard(id: ID!): Flashcard!
@@ -101,6 +113,7 @@ input UpdateUserSettingsInput {
   dailyNewCardLimit: Int
   maxDailyReviews: Int
   timezone: String
+  dailyRolloverTime: String
 }
 
 input CreateDeckInput {
@@ -122,19 +135,23 @@ input UpdateDeckInput {
 
 input CreateFlashcardInput {
   deckId: String!
-  front: String!
-  back: String!
+  frontContent: String!
+  backContent: String!
   sourceContext: String
   imageUrl: String
   audioUrl: String
+  isEditedAfterAi: Boolean = false
+  aiModelSource: String
 }
 
 input UpdateFlashcardInput {
   deckId: String
-  front: String
-  back: String
+  frontContent: String
+  backContent: String
   sourceContext: String
   imageUrl: String
   audioUrl: String
+  isEditedAfterAi: Boolean = false
+  aiModelSource: String
   id: String!
 }

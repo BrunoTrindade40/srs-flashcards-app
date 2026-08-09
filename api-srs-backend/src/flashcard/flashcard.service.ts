@@ -4,7 +4,6 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Flashcard as PrismaFlashcard } from '@prisma/client';
-import { Card, createEmptyCard } from 'ts-fsrs';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ANONYMIZED_PAYLOAD } from '../common/constants/domain.constants';
 import { CreateFlashcardInput } from './dto/create-flashcard.input';
@@ -15,48 +14,27 @@ import { UpdateFlashcardInput } from './dto/update-flashcard.input';
 export class FlashcardService {
   constructor(private readonly prisma: PrismaService) { }
 
-  async createFlashcard(
-    userId: string,
-    data: CreateFlashcardInput,
-  ): Promise<PrismaFlashcard> {
-    const emptyCard: Card = createEmptyCard();
-
+  async createFlashcard(userId: string, data: CreateFlashcardInput): Promise<PrismaFlashcard> {
     const deck = await this.prisma.deck.findUnique({
       where: { id: data.deckId },
       select: { creatorId: true, isArchived: true },
     });
 
-    if (!deck) {
-      throw new NotFoundException('Deck não encontrado.');
-    }
-
+    if (!deck) throw new NotFoundException('Deck não encontrado.');
     if (deck.creatorId !== userId || deck.isArchived) {
-      throw new ForbiddenException(
-        'Acesso negado. Você não é o proprietário ou o baralho foi excluído.',
-      );
+      throw new ForbiddenException('Acesso negado. Você não é o proprietário ou o baralho foi excluído.');
     }
 
-    // 🔵 SUGESTÃO APLICADA (Boy Scout): Desestruturação para mapeamento automático
-    const { deckId, ...cardData } = data;
+    const { deckId, isEditedAfterAi, aiModelSource, ...cardData } = data;
 
+    // 🟡 ALERTA CORRIGIDO: Remoção da injeção imediata de CardFSRSData. 
+    // É mais limpo, mais rápido e deixa o "Lazy Initialization" funcionar de forma homogênea.
     return this.prisma.flashcard.create({
       data: {
-        ...cardData, // Injeta front, back, sourceContext, imageUrl e audioUrl nativamente
+        ...cardData,
         deckId: deckId,
-        fsrsData: {
-          create: {
-            userId: userId,
-            stability: emptyCard.stability,
-            difficulty: emptyCard.difficulty,
-            elapsedDays: emptyCard.elapsed_days,
-            scheduledDays: emptyCard.scheduled_days,
-            reps: emptyCard.reps,
-            lapses: emptyCard.lapses,
-            state: emptyCard.state,
-            due: emptyCard.due,
-            lastReview: emptyCard.last_review || null,
-          },
-        },
+        isEditedAfterAi: isEditedAfterAi ?? false,
+        aiModelSource: aiModelSource ?? null,
       },
     });
   }
@@ -77,7 +55,7 @@ export class FlashcardService {
     return this.prisma.flashcard.findMany({
       where: {
         deckId,
-        front: { not: ANONYMIZED_PAYLOAD },
+        frontContent: { not: ANONYMIZED_PAYLOAD },
       },
       orderBy: { createdAt: 'desc' },
       take: 1000,
@@ -94,7 +72,7 @@ export class FlashcardService {
       throw new ForbiddenException('Flashcard não encontrado, acesso negado ou baralho excluído.');
     }
 
-    if (existingCard.front === ANONYMIZED_PAYLOAD) {
+    if (existingCard.frontContent === ANONYMIZED_PAYLOAD) {
       throw new ForbiddenException('Não é possível modificar um flashcard anonimizado.');
     }
 
@@ -107,10 +85,11 @@ export class FlashcardService {
     });
   }
 
-  async anonymizeFlashcard(
-    userId: string,
-    id: string,
-  ): Promise<PrismaFlashcard> {
+  /**
+   * FLUXO DE ANONIMIZAÇÃO IRREVERSÍVEL (LGPD / GDPR)
+   * Este método exemplifica por que a deleção do CardFSRSData é segura e necessária.
+   */
+  async anonymizeFlashcard(userId: string, id: string): Promise<PrismaFlashcard> {
     const flashcard = await this.prisma.flashcard.findUnique({
       where: { id },
       include: { deck: true },
@@ -120,15 +99,28 @@ export class FlashcardService {
       throw new NotFoundException('Flashcard não encontrado, acesso negado ou baralho já excluído.');
     }
 
-    return this.prisma.flashcard.update({
-      where: { id },
-      data: {
-        front: ANONYMIZED_PAYLOAD,
-        back: ANONYMIZED_PAYLOAD,
-        sourceContext: null,
-        imageUrl: null,
-        audioUrl: null,
-      },
+    // Transação Atômica: Garante que ou tudo acontece, ou nada acontece (Rollback em caso de falha)
+    return this.prisma.$transaction(async (tx) => {
+      // 1. A DELEÇÃO SEGURA: Removemos a "Folha da Árvore".
+      // Isso tira o cartão da fila de revisões futuras de TODOS os estudantes matriculados.
+      // O banco de dados não quebra pois não existem Foreign Keys apontando PARA esta tabela.
+      await tx.cardFSRSData.deleteMany({
+        where: { flashcardId: id },
+      });
+
+      // 2. A ANONIMIZAÇÃO FÍSICA: O "Galho da Árvore" (Flashcard) continua existindo, 
+      // mas seu conteúdo humano legível é permanentemente destruído.
+      // Os "ReviewLogs" passados continuam apontando para este ID, preservando a matemática do ML.
+      return tx.flashcard.update({
+        where: { id },
+        data: {
+          frontContent: ANONYMIZED_PAYLOAD,
+          backContent: ANONYMIZED_PAYLOAD,
+          sourceContext: null,
+          imageUrl: null,
+          audioUrl: null,
+        },
+      });
     });
   }
 }

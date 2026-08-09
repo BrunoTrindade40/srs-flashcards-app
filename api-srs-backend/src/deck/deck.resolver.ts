@@ -72,4 +72,23 @@ export class DeckResolver {
     const count = await this.deckService.countFlashcards(deck.id);
     return { flashcards: count };
   }
+
+  /**
+   * 🟢 MUTAÇÃO VITAL: Permite o consumo de baralhos por estudantes não-autores
+   */
+  @Mutation(() => Boolean, { name: 'enrollInDeck' })
+  async enrollInDeck(
+    @Args('deckId', { type: () => ID }) deckId: string,
+    @CurrentUser() user: User,
+  ): Promise<boolean> {
+    return this.deckService.enrollInDeck(deckId, user.id);
+  }
+
+  @Mutation(() => Boolean, { name: 'unenrollFromDeck' })
+  async unenrollFromDeck(
+    @Args('deckId', { type: () => ID }) deckId: string,
+    @CurrentUser() user: User,
+  ): Promise<boolean> {
+    return this.deckService.unenrollFromDeck(deckId, user.id);
+  }
 }

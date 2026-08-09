@@ -4,7 +4,6 @@ interface UseStudyKeyboardProps {
   showAnswer: boolean;
   onShowAnswer: () => void;
   onRate: (rating: number) => void;
-  // 🟢 REGRA APLICADA: Novo contrato para o atalho de saída global
   onExit?: () => void;
   disabled?: boolean;
 }
@@ -21,15 +20,17 @@ export function useStudyKeyboard({
       // Ignora atalhos se o sistema estiver processando/carregando
       if (disabled) return;
 
-      // 🟢 OTIMIZAÇÃO: Escape para sair da sessão instantaneamente
+      // Escape para sair da sessão instantaneamente
       if (e.key === "Escape") {
         e.preventDefault();
         if (onExit) onExit();
         return;
       }
 
-      // Previne o "scroll" padrão da página ao apertar Espaço
-      if (e.key === " " || e.code === "Space") {
+      // 🟢 CORREÇÃO (Conformidade com RF05): 
+      // Suporte simultâneo às teclas 'Espaço' e 'Enter' para redução de atrito.
+      // e.code mapeia espaços físicos, e.key mapeia o valor lógico.
+      if (e.key === " " || e.code === "Space" || e.key === "Enter") {
         e.preventDefault();
         if (!showAnswer) {
           onShowAnswer();

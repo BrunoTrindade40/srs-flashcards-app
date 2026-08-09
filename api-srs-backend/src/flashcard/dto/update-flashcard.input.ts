@@ -9,4 +9,8 @@ export class UpdateFlashcardInput extends PartialType(CreateFlashcardInput) {
   @IsUUID()
   @IsNotEmpty()
   id!: string;
+
+  @Field({ nullable: true }) frontContent?: string; // 🟢 CORREÇÃO
+  @Field({ nullable: true }) backContent?: string;  // 🟢 CORREÇÃO
+  @Field({ nullable: true }) sourceContext?: string; // 🟢 CORREÇÃO
 }

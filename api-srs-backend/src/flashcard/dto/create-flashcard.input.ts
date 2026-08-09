@@ -1,9 +1,8 @@
 import { Field, InputType } from '@nestjs/graphql';
-import { IsNotEmpty, IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsBoolean, IsNotEmpty, IsOptional, IsString, IsUUID } from 'class-validator';
 
 @InputType()
 export class CreateFlashcardInput {
-  // 🔴 CORREÇÃO: Uso do operador '!' indicando atribuição definida pelo NestJS
   @Field()
   @IsUUID()
   @IsNotEmpty()
@@ -12,14 +11,13 @@ export class CreateFlashcardInput {
   @Field()
   @IsString()
   @IsNotEmpty()
-  front!: string;
+  frontContent!: string;
 
   @Field()
   @IsString()
   @IsNotEmpty()
-  back!: string;
+  backContent!: string;
 
-  // Campos opcionais (Fase 2) não precisam do '!' pois já utilizam '?'
   @Field({ nullable: true })
   @IsString()
   @IsOptional()
@@ -34,4 +32,16 @@ export class CreateFlashcardInput {
   @IsString()
   @IsOptional()
   audioUrl?: string;
+
+  // 🔴 CORREÇÃO CRÍTICA: Recebimento opcional das flags de IA (UC16)
+  @Field(() => Boolean, { nullable: true, defaultValue: false })
+  @IsBoolean()
+  @IsOptional()
+  isEditedAfterAi?: boolean;
+
+  @Field(() => String, { nullable: true })
+  @IsString()
+  @IsOptional()
+  aiModelSource?: string;
+  
 }

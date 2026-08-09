@@ -7,6 +7,7 @@
   "license": "UNLICENSED",
   "scripts": {
     "build": "nest build",
+    "prebuild": "npx prisma generate",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest start --watch",
@@ -34,6 +35,7 @@
     "@supabase/supabase-js": "^2.105.4",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
+    "dataloader": "^2.2.3",
     "dayjs": "^1.11.21",
     "graphql": "^16.14.0",
     "jsonwebtoken": "^9.0.3",
@@ -88,6 +90,9 @@
     "testEnvironment": "node"
   },
   "overrides": {
-    "ws": "^8.20.2"
+    "ws": "^8.20.2",
+    "@apollo/server-plugin-landing-page-graphql-playground": {
+      "@apollo/server": "$@apollo/server"
+    }
   }
 }

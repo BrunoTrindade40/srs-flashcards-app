@@ -1,3 +1,4 @@
+// hooks/useDeckDetails.ts
 import { useApolloClient, useMutation, useQuery } from "@apollo/client/react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -45,7 +46,6 @@ export function useDeckDetails(deckId: string | null) {
   });
 
   const [removeFlashcard] = useMutation(REMOVE_FLASHCARD);
-  
   const [updateFlashcard] = useMutation<
     UpdateFlashcardMutation,
     UpdateFlashcardMutationVariables
@@ -54,6 +54,7 @@ export function useDeckDetails(deckId: string | null) {
   const [deleteDeck, { loading: deletingDeck }] = useMutation(DELETE_DECK);
   const [updateDeck, { loading: updatingArchive }] = useMutation(UPDATE_DECK);
 
+  // CORREÇÃO: Lógica integral restaurada consumindo client, navigate, etc.
   const handleToggleArchive = async () => {
     if (!data?.deck) return;
     try {
@@ -106,6 +107,7 @@ export function useDeckDetails(deckId: string | null) {
       await removeFlashcard({
         variables: { id: deletingCardId },
         update(cache) {
+          // Mantemos a manipulação do Apollo Cache através do ID em memória
           const normalizedId = cache.identify({
             id: deletingCardId,
             __typename: "Flashcard",

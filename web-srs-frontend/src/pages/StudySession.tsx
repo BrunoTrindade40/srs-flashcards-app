@@ -1,18 +1,15 @@
 import React from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { MarkdownRenderer } from "../components/MarkdownRenderer";
-import { useStudyEngine } from "../hooks/useStudyEngine"; // 🟢 Injeção de dependência
+import { useStudyEngine } from "../hooks/useStudyEngine";
 import { useStudyKeyboard } from "../hooks/useStudyKeyboard";
 
 export const StudySession: React.FC = () => {
   const { deckId } = useParams<{ deckId: string }>();
   const navigate = useNavigate();
 
-  // 🟢 CORREÇÃO DO ERRO (KISS): Higienização da fronteira.
-  // Transformamos o 'undefined' do React Router no 'null' exigido pelas nossas regras internas.
   const safeDeckId = deckId ?? null;
 
-  // 🟢 A lógica inteira do motor é consumida de forma limpa e declarativa
   const {
     currentCard,
     nextCard,
@@ -48,30 +45,31 @@ export const StudySession: React.FC = () => {
     );
   }
 
-  if (hasReachedDailyLimit) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen w-full bg-slate-950 gap-5 p-4 text-center animate-fadeIn">
-        <span className="text-6xl drop-shadow-2xl mb-2">🛑</span>
-        <h2 className="text-2xl sm:text-3xl font-extrabold text-rose-500">
-          Consolidação Cognitiva Atingida
-        </h2>
-        <p className="text-slate-400 max-w-md leading-relaxed">
-          Você atingiu sua trava de segurança de{" "}
-          <b>{maxDailyReviews} revisões hoje</b>. Continuar forçando o algoritmo
-          agora causará o <i>Efeito Bola de Neve</i>. O aprendizado de longo
-          prazo exige que você durma para consolidar. Retorne amanhã!
-        </p>
-        <button
-          onClick={() => navigate("/dashboard")}
-          className="mt-6 px-8 py-3 bg-rose-500/10 text-rose-400 border border-rose-500/20 font-bold rounded-xl hover:bg-rose-500/20 transition-all shadow-lg cursor-pointer"
-        >
-          Voltar ao Painel
-        </button>
-      </div>
-    );
-  }
+  const isSessionExhausted = !currentCard || totalCards === 0;
 
-  if (error || totalCards === 0) {
+  if (error || isSessionExhausted) {
+    if (hasReachedDailyLimit) {
+      return (
+        <div className="flex flex-col items-center justify-center min-h-screen w-full bg-slate-950 gap-5 p-4 text-center animate-fadeIn">
+          <span className="text-6xl drop-shadow-2xl mb-2">🛑</span>
+          <h2 className="text-2xl sm:text-3xl font-extrabold text-rose-500">
+            Consolidação Cognitiva Atingida
+          </h2>
+          <p className="text-slate-400 max-w-md leading-relaxed">
+            Você atingiu sua trava de segurança de <b>{maxDailyReviews} revisões hoje</b> e esgotou suas pendências imediatas.
+            Continuar forçando a aquisição de novos conceitos causará o <i>Efeito Bola de Neve</i>.
+            O aprendizado de longo prazo exige que você durma para consolidar. Retorne amanhã!
+          </p>
+          <button
+            onClick={() => navigate("/dashboard")}
+            className="mt-6 px-8 py-3 bg-rose-500/10 text-rose-400 border border-rose-500/20 font-bold rounded-xl hover:bg-rose-500/20 transition-all shadow-lg cursor-pointer"
+          >
+            Voltar ao Painel
+          </button>
+        </div>
+      );
+    }
+
     return (
       <div className="flex flex-col items-center justify-center min-h-screen w-full bg-slate-950 gap-5 p-4 text-center animate-fadeIn">
         <span className="text-6xl drop-shadow-2xl mb-2">🏆</span>
@@ -116,7 +114,7 @@ export const StudySession: React.FC = () => {
             <span className="text-xs font-bold text-amber-500 uppercase tracking-wider">
               Pergunta
             </span>
-            <MarkdownRenderer content={currentCard?.front ?? ""} />
+            <MarkdownRenderer content={currentCard?.frontContent ?? ""} />
           </div>
 
           {isFlipped && (
@@ -125,7 +123,7 @@ export const StudySession: React.FC = () => {
                 <span className="text-xs font-bold text-emerald-500 uppercase tracking-wider">
                   Resposta
                 </span>
-                <MarkdownRenderer content={currentCard?.back ?? ""} />
+                <MarkdownRenderer content={currentCard?.backContent ?? ""} />
               </div>
 
               {currentCard?.sourceContext && (
@@ -147,16 +145,21 @@ export const StudySession: React.FC = () => {
               className="w-full py-4 bg-slate-800 hover:bg-slate-700 text-slate-100 font-bold rounded-xl transition-all border border-slate-700 mt-4 cursor-pointer flex items-center justify-center gap-3"
             >
               <span>Mostrar Resposta</span>
-              <kbd className="px-2 py-1 bg-slate-950 border border-slate-700 rounded-md text-[10px] font-mono text-slate-400 uppercase tracking-wider shadow-inner">
-                Espaço
-              </kbd>
+              <div className="flex items-center gap-1.5">
+                <kbd className="px-2 py-1 bg-slate-950 border border-slate-700 rounded-md text-[10px] font-mono text-slate-400 uppercase tracking-wider shadow-inner">
+                  Espaço
+                </kbd>
+                <span className="text-slate-500 text-[10px] font-bold lowercase">ou</span>
+                <kbd className="px-2 py-1 bg-slate-950 border border-slate-700 rounded-md text-[10px] font-mono text-slate-400 uppercase tracking-wider shadow-inner">
+                  Enter
+                </kbd>
+              </div>
             </button>
           )}
         </div>
 
         {isFlipped && (
           <div className="flex flex-wrap md:flex-nowrap w-full gap-3 animate-fadeIn">
-            {/* Botões de Rating Ocultados por brevidade (A estrutura de Flexbox foi rigorosamente mantida) */}
             <button
               disabled={submitting}
               onClick={() => handleRating(1)}
@@ -201,14 +204,16 @@ export const StudySession: React.FC = () => {
         )}
       </div>
 
-      {/* Ghost Pre-fetching */}
+      {/* 🟢 CORREÇÃO (Isolamento de Ghost Pre-fetching):
+          Apenas a face frontal ('front') do próximo cartão é pré-renderizada para aquecimento de cache/assets.
+          A renderização do verso ('back') foi omitida do DOM invisível para impedir vazamentos 
+          de resposta em leitores de tela (Acessibilidade) e extensões do navegador. */}
       {nextCard && (
         <div
           aria-hidden="true"
           className="absolute opacity-0 pointer-events-none -z-50 select-none"
         >
-          <MarkdownRenderer content={nextCard?.front ?? ""} />
-          <MarkdownRenderer content={nextCard?.back ?? ""} />
+          <MarkdownRenderer content={nextCard?.frontContent ?? ""} />
         </div>
       )}
     </div>

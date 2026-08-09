@@ -1,5 +1,5 @@
 import { Field, ID, InputType, Int, ObjectType } from '@nestjs/graphql';
-import { IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsInt, IsOptional, IsString, Matches, Max, Min } from 'class-validator';
 
 @ObjectType()
 export class User {
@@ -18,9 +18,12 @@ export class User {
   @Field(() => Int)
   totalXp!: number;
 
-  // 🔴 CORREÇÃO: Alinhamento exato com o schema.prisma (Rollver Temporal)
   @Field(() => String)
   timezone!: string;
+
+  // 🟡 ALERTA CORRIGIDO: Exposição do campo movido do antigo modelo Settings
+  @Field(() => String, { nullable: true })
+  dailyRolloverTime?: string | null;
 
   @Field(() => Date, { nullable: true })
   lastDataExportAt?: Date | null;
@@ -34,7 +37,6 @@ export class User {
   @Field(() => Date)
   updatedAt!: Date;
 
-  // Parâmetros de Rollover & Gamificação (Integrados ao User)
   @Field(() => Int)
   dailyNewCardLimit!: number;
 
@@ -46,7 +48,6 @@ export class User {
 
   @Field(() => Int)
   longestStreak!: number;
-
 }
 
 @InputType()
@@ -65,10 +66,15 @@ export class UpdateUserSettingsInput {
   @Max(1000)
   maxDailyReviews?: number;
 
-  // 🔴 CORREÇÃO CRÍTICA: Exposição da propriedade real do banco de dados (timezone)
-  // Substitui o pillReminderTime que causaria falha transacional no Prisma.
   @Field(() => String, { nullable: true })
   @IsOptional()
   @IsString()
   timezone?: string;
+
+  // 🟡 ALERTA CORRIGIDO: Injeção do campo no InputType com validação severa
+  @Field(() => String, { nullable: true })
+  @IsOptional()
+  @IsString()
+  @Matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, { message: 'Formato inválido. Use HH:mm' })
+  dailyRolloverTime?: string;
 }

@@ -1,21 +1,5 @@
-feat(core): telemetria cognitiva, prevenção de burnout e curadoria visual (Fase 1)
-
-Este commit consolida o escopo do MVP (Fase 1) com refatorações arquiteturais baseadas no React 19, corrigindo anomalias de ciclo de vida e garantindo a fidelidade acadêmica ao Modelo Comportamental de Fogg e às métricas de Active Recall.
-
-* AUTH:
-  - fix: Resolução do crash de runtime (`logout is not a function`).
-  - refactor: Delegação da lógica de signout estritamente ao `AuthProvider` (SRP) com estabilidade de referência via `useCallback`.
-
-* MOTOR DE ESTUDO (SRS) & CIÊNCIA DE DADOS:
-  - feat: Implementação de Telemetria Cognitiva no `StudySession.tsx`. Captura da latência exata do Active Recall (`reviewDurationMs`) através de variáveis fantasmas (`useRef`) para o dataset de Machine Learning (FSRS).
-  - feat: Prevenção do "Efeito Bola de Neve". Criação do hook `useDailyReviewTracker.ts` atrelado ao `localStorage` para bloquear fisicamente a sessão quando o limite diário (`maxDailyReviews`) é atingido (Degradação Elegante).
-  - perf: Adicionado Ghost Pre-fetching em `StudySession.tsx`. Pré-renderização oculta da Árvore Sintática (AST) do KaTeX do próximo cartão para zerar a latência do DOM durante a transição.
-
-* UX/UI (REACT 19 WAY):
-  - feat: Cumprimento do requisito UI05. Transformação do `CreateFlashcardModal.tsx` em um Wizard de 2 etapas (Rascunho -> Curadoria Visual de Markdown/LaTeX).
-  - feat: Inclusão do mock visual inativo de "Notificações Diárias" no `SettingsModal.tsx` (Graceful Degradation do UC07 para a Fase 2), construído estritamente com Tailwind Flexbox nativo.
-
-* ARQUITETURA & CLEAN CODE:
-  - refactor: Fim do Anti-pattern do `useEffect`. Substituição de renderizações em cascata (Cascading Renders) por Inicialização Preguiçosa (Lazy Initial State) e Atualização na Fase de Render.
-  - refactor: Harmonização estrita de Nulidade. Expurgo de tipos `undefined` nos estados do Apollo Client, utilizando `null` explícito e Nullish Coalescing (`?? null`) como fallback seguro.
-  - refactor: Isolamento cirúrgico de pacotes (`@apollo/client/react` vs `@apollo/client/core`).
+feat(backend): refatoracao estrutural fase 1, otimizacao FSRS e LGPD" -m "- refactor(schema): aplicacao de Type Stripping (remocao de Enums) e centralizacao de configuracoes do User (SSOT).
+- perf(schema): adicao de indices B-Tree nas tabelas Flashcard e ReviewLog (Prevenindo Sequential Scans).
+- fix(study): correcao do DataLoader (injecao de cacheKeyFn) para mitigar falha de memoria N+1.
+- feat(deck): implementacao atômica do UnenrollFromDeck e purga profunda do FSRS no arquivamento (Conformidade LGPD).
+- refactor(flashcard): conversao do campo status(String) para isPublished(Boolean).

@@ -1,8 +1,5 @@
-import { Field, ID, ObjectType } from '@nestjs/graphql';
+import { Field, ID, Int, ObjectType } from '@nestjs/graphql';
 
-/**
- * Mapeamento do Modelo GraphQL (Code-First) para a entidade Flashcard.
- */
 @ObjectType()
 export class Flashcard {
   @Field(() => ID)
@@ -12,13 +9,11 @@ export class Flashcard {
   deckId!: string;
 
   @Field()
-  front!: string;
+  frontContent!: string;
 
   @Field()
-  back!: string;
+  backContent!: string;
 
-  // 🔴 CORREÇÃO CRÍTICA: Declaração explícita de tipo (() => String)
-  // exigida pelo NestJS quando a tipagem TS é uma união (string | null).
   @Field(() => String, { nullable: true })
   sourceContext?: string | null;
 
@@ -28,9 +23,26 @@ export class Flashcard {
   @Field(() => String, { nullable: true })
   audioUrl?: string | null;
 
+  // 🔴 CORREÇÃO CRÍTICA: Conversão da Magic String (status) para Booleano (isPublished)
+  @Field(() => Boolean, { defaultValue: true })
+  isPublished!: boolean;
+
+  @Field(() => Boolean, { defaultValue: false })
+  isEditedAfterAi!: boolean;
+
+  @Field(() => String, { nullable: true })
+  aiModelSource?: string | null;
+
   @Field()
   createdAt!: Date;
 
   @Field()
   updatedAt!: Date;
+
+  // 🔵 VIRTUAL FIELDS: Resolvidos nativamente pelo Dataloader
+  @Field(() => Date, { nullable: true, description: 'Data agendada pelo FSRS' })
+  due?: Date | null;
+
+  @Field(() => Int, { nullable: true, description: '0=NEW, 1=LEARN, 2=REVIEW, 3=RELEARN' })
+  state?: number | null;
 }

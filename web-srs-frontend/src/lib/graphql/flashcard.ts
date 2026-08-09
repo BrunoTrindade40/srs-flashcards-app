@@ -1,93 +1,36 @@
-import { gql, type TypedDocumentNode } from "@apollo/client/core";
+import { graphql } from "../../gql";
 
-export interface Flashcard {
-  id: string;
-  front: string;
-  back: string;
-  sourceContext?: string | null;
-  imageUrl?: string | null;
-  audioUrl?: string | null;
-}
-
-export interface CreateFlashcardResponse {
-  createFlashcard: Flashcard;
-}
-
-export interface CreateFlashcardVariables {
-  data: {
-    deckId: string;
-    front: string;
-    back: string;
-    sourceContext?: string | null;
-    imageUrl?: string | null;
-    audioUrl?: string | null;
-  };
-}
-
-export const CREATE_FLASHCARD: TypedDocumentNode<
-  CreateFlashcardResponse,
-  CreateFlashcardVariables
-> = gql`
+export const CREATE_FLASHCARD = graphql(`
   mutation CreateFlashcard($data: CreateFlashcardInput!) {
     createFlashcard(data: $data) {
       id
-      front
-      back
+      frontContent
+      backContent
       sourceContext
       imageUrl
       audioUrl
     }
   }
-`;
+`);
 
-export interface UpdateFlashcardResponse {
-  updateFlashcard: Flashcard;
-}
-
-export interface UpdateFlashcardVariables {
-  data: {
-    id: string;
-    front?: string;
-    back?: string;
-    sourceContext?: string | null;
-    imageUrl?: string | null;
-    audioUrl?: string | null;
-  };
-}
-
-export const UPDATE_FLASHCARD: TypedDocumentNode<
-  UpdateFlashcardResponse,
-  UpdateFlashcardVariables
-> = gql`
+export const UPDATE_FLASHCARD = graphql(`
   mutation UpdateFlashcard($data: UpdateFlashcardInput!) {
     updateFlashcard(data: $data) {
       id
-      front
-      back
+      frontContent
+      backContent
       sourceContext
       imageUrl
       audioUrl
     }
   }
-`;
+`);
 
-export interface RemoveFlashcardResponse {
-  removeFlashcard: {
-    id: string;
-  };
-}
-
-export interface RemoveFlashcardVariables {
-  id: string;
-}
-
-export const REMOVE_FLASHCARD: TypedDocumentNode<
-  RemoveFlashcardResponse,
-  RemoveFlashcardVariables
-> = gql`
+// CORREÇÃO: Restaurada a sintaxe correta e a seleção de subcampo '{ id }' exigida pelo Backend
+export const REMOVE_FLASHCARD = graphql(`
   mutation RemoveFlashcard($id: ID!) {
     removeFlashcard(id: $id) {
       id
     }
   }
-`;
+`);

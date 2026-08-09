@@ -7,128 +7,175 @@ datasource db {
   provider = "postgresql"
 }
 
-// --- Enums do Sistema ---
-
-enum StudyMode {
-  STANDARD
-  CHAOS
-}
-
-enum DeviceType {
-  PWA
-  IOT
-  WEB
-}
-
 // --- Modelos de Dados ---
+// -----------------------------------------------------------------------------
+// CAMADA 1: IDENTIDADE, GAMIFICAÇÃO E CONFIGURAÇÕES
+// -----------------------------------------------------------------------------
 
 model User {
-  id                    String         @id @default(uuid()) @db.Uuid
-  authId                String         @unique // Vínculo com Supabase Auth
-  name                  String?
-  email                 String         @unique
-  isAnonymized          Boolean        @default(false)
+  id           String  @id @default(uuid()) @db.Uuid
+  authId       String  @unique // Vínculo com Supabase Auth
+  name         String?
+  email        String  @unique
+  isAnonymized Boolean @default(false)
 
-  // CORREÇÃO: Adicionado timezone para viabilizar o Rollover Temporal (RN06)
-  timezone              String         @default("America/Sao_Paulo")
+  // 🔴 CORREÇÃO CRÍTICA: Fonte Única da Verdade (SSOT)
+  // O timezone e o rollover foram consolidados diretamente na entidade do usuário
+  timezone          String  @default("America/Sao_Paulo")
+  dailyRolloverTime String? @default("04:00") // Movido do antigo modelo UserSettings
 
-  // Gamificação e Configurações
-  totalXp               Int            @default(0)
-  fsrsWeights           Json?          // Pesos otimizados do ML para este usuário
-  dailyNewCardLimit     Int            @default(20)
-  maxDailyReviews       Int            @default(100)
-  currentStreak         Int            @default(0)
-  longestStreak         Int            @default(0)
+  // Gamificação e Configurações (DRY: Agora existem apenas aqui)
+  totalXp           Int   @default(0)
+  fsrsWeights       Json? // Pesos otimizados do ML para este usuário
+  dailyNewCardLimit Int   @default(20)
+  maxDailyReviews   Int   @default(100)
+  currentStreak     Int   @default(0)
+  longestStreak     Int   @default(0)
 
   // Timestamps
-  createdAt             DateTime       @default(now())
-  updatedAt             DateTime       @updatedAt
-  lastDataExportAt      DateTime?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+  lastDataExportAt       DateTime?
   lastNotificationSentAt DateTime?
 
   // Relacionamentos
-  decks                 Deck[]
-  reviewLogs            ReviewLog[]
-  studySessions         StudySession[]
-
-  // CORREÇÃO: Necessário referenciar a nova relação para o FSRS Data
-  fsrsData              CardFSRSData[]
+  decksCreated  Deck[]         @relation("DeckCreator")
+  reviewLogs    ReviewLog[]
+  studySessions StudySession[]
+  transactions  Transaction[]  @relation("BuyerTransactions")
+  enrollments   Enrollment[] 
+  biometricLogs BiometricLog[] 
+  fsrsData      CardFSRSData[]
 
   @@map("users")
 }
 
+// -----------------------------------------------------------------------------
+// CAMADA 2: DESIGN INSTRUCIONAL E CONTEÚDO (MARKETPLACE)
+// -----------------------------------------------------------------------------
+
 model Deck {
-  id              String         @id @default(uuid()) @db.Uuid
-  title           String
-  description     String?
-  sourceLanguage  String?        @default("pt-BR")
-  targetLanguage  String?
-  isArchived      Boolean        @default(false)
-
+  id             String   @id @default(uuid()) @db.Uuid
+  parentId       String?  @db.Uuid // 🟢 Hierarquia (Pastas/Sub-decks)
+  title          String
+  description    String?  @db.Text
+  sourceLanguage String?  @default("pt-BR")
+  targetLanguage String?  @default("en-US")
+  isArchived     Boolean  @default(false) // Proteção contra CASCADE de compras
+  isPublic       Boolean  @default(false) // 🟢 Vitrine do Marketplace (Fase 2)
+  price          Decimal? @db.Decimal(10, 2) // Preço do produto
   // Metadados
-  creatorId       String         @db.Uuid
+  creatorId      String   @db.Uuid // Autor original
 
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relacionamentos
-  flashcards      Flashcard[]
-  tags            DeckTag[]
+  flashcards   Flashcard[]
+  tags         DeckTag[]
+  parent       Deck?         @relation("DeckHierarchy", fields: [parentId], references: [id])
+  subDecks     Deck[]        @relation("DeckHierarchy")
+  creator      User          @relation("DeckCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+  enrollments  Enrollment[] // 🟢 Matrículas ativas neste baralho (Opcional para Fase 2)
+  transactions Transaction[] @relation("DeckTransactions") //(Opcional para Fase 2)
 
-  creator    User        @relation(fields: [creatorId], references: [id], onDelete: Cascade)
   @@map("decks")
 }
 
+// 🟢 MODELO ENROLLMENT: Entidade associativa de vínculo de consumo de estudo
+model Enrollment {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  deckId    String   @db.Uuid
+  status    String   @default("ACTIVE") // ACTIVE, PAUSED, DROPPED
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deck Deck @relation(fields: [deckId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, deckId])
+  @@index([userId])
+  @@index([deckId])
+  @@map("enrollments")
+}
+
 model Flashcard {
-  id              String         @id @default(uuid()) @db.Uuid // UUID
-  front           String         @db.Text
-  back            String         @db.Text
-  sourceContext   String?        @db.Text // Referencial original/contexto
+  id              String  @id @default(uuid()) @db.Uuid // UUID
+  sourceContext   String? @db.Text // Referencial original/contexto
 
   // CORREÇÃO: Adicionados campos para RF11 (Multimídia)
-  imageUrl        String?        @db.Text
-  audioUrl        String?        @db.Text
+  imageUrl        String? @db.Text
+  audioUrl        String? @db.Text
 
-  deckId          String         @db.Uuid
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+  deckId          String   @db.Uuid
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // 🟢 NOMENCLATURA PADRONIZADA: Mapeamento direto para Markdown/LaTeX
+  frontContent    String @db.Text
+  backContent     String @db.Text
+
+  // 🔴 CORREÇÃO CRÍTICA: Substituição da Magic String por Booleano Binário
+  isPublished     Boolean @default(true) // True = Ativo/Visível, False = Draft/Rejeitado
+  isEditedAfterAi Boolean @default(false) // 🟢 Flag de edição pós-IA (UC16)
+  aiModelSource   String? // Null se manual; Nome do modelo LLM se gerado por IA (UC16)
 
   // Relacionamentos
-  // CORREÇÃO: Agora um flashcard possui múltiplos metadados FSRS (um por usuário)
   fsrsData        CardFSRSData[]
   reviewLogs      ReviewLog[]
   tags            FlashcardTag[]
-
   deck            Deck           @relation(fields: [deckId], references: [id], onDelete: Cascade)
-  // Índice B-Tree crucial para o desempenho do Modo Chaos (O(log n))
+  media           Media[] // 🟢 Mídias opcionais (Anexos de áudio/imagem - Fase 2)
+
+  // 🟡 ALERTA CORRIGIDO: Índice de B-Tree para otimizar queries de listagem e geração de fila de estudos
+  @@index([deckId])
   @@map("flashcards")
 }
 
+// Suporte a Mídia (Opcional - Fase 2 / TCC 2)
+model Media {
+  id          String   @id @default(uuid()) @db.Uuid
+  flashcardId String   @db.Uuid
+  type        String // IMAGE, AUDIO
+  url         String
+  createdAt   DateTime @default(now())
+
+  flashcard Flashcard @relation(fields: [flashcardId], references: [id], onDelete: Cascade)
+
+  @@map("media")
+}
+
+// -----------------------------------------------------------------------------
+// CAMADA 3: TELEMETRIA E ALGORITMO FSRS (DATA SCIENCE READY)
+// -----------------------------------------------------------------------------
+
 model CardFSRSData {
-  id              String         @id @default(uuid()) @db.Uuid
+  id          String @id @default(uuid()) @db.Uuid
   // CORREÇÃO: Removido o @unique direto para permitir Desacoplamento e Marketplace
-  flashcardId     String         @db.Uuid
+  flashcardId String @db.Uuid
   // CORREÇÃO: Inclusão do Usuário dono deste progresso
-  userId          String         @db.Uuid
+  userId      String @db.Uuid
 
   // Atributos do Algoritmo FSRS
-  stability       Float          @default(0)
-  difficulty      Float          @default(0)
-  elapsedDays     Int            @default(0)
-  scheduledDays   Int            @default(0)
-  reps            Int            @default(0)
-  lapses          Int            @default(0)
+  stability     Float @default(0)
+  difficulty    Float @default(0)
+  elapsedDays   Int   @default(0)
+  scheduledDays Int   @default(0)
+  reps          Int   @default(0)
+  lapses        Int   @default(0)
 
-  // State: 0: NEW, 1: LEARNING, 2: REVIEW, 3: RELEARNING (FSRS Default)
-  state           Int            @default(0)
-  lastReview      DateTime?
-  due             DateTime       @default(now()) // Inicializa pendente para o dia atual
+  state      Int       @default(0) // State: 0: NEW, 1: LEARNING, 2: REVIEW, 3: RELEARNING (FSRS Default)
+  lastReview DateTime?
 
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+  //B-Tree Indexed para O(log n)
+  due DateTime @default(now()) // Inicializa pendente para o dia atual
 
-  flashcard       Flashcard      @relation(fields: [flashcardId], references: [id], onDelete: Cascade)
-  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  flashcard Flashcard @relation(fields: [flashcardId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   // CORREÇÃO VITAL: Chave única composta. Um usuário tem apenas 1 progresso para 1 card específico.
   @@unique([flashcardId, userId])
@@ -137,94 +184,131 @@ model CardFSRSData {
 }
 
 model ReviewLog {
-  id                String       @id @default(uuid())
+  id          String  @id @default(uuid())
   // Relacionamentos
-  flashcardId       String       @db.Uuid
-  userId            String       @db.Uuid
+  flashcardId String  @db.Uuid
+  userId      String  @db.Uuid
+  sessionId   String? @db.Uuid
 
-  rating            Int          // 1: Errei, 2: Difícil, 3: Bom, 4: Fácil
-  reviewDurationMs  Int          // Latência de resposta para telemetria
-  elapsedDays       Int          @default(0)   //os dias decorridos desde a última revisão
+  // 🟢 AÇÃO E ESTADO: Avaliação do usuário (1-4) e estado cognitivo do card no momento
+  rating Int // 1=Errei, 2=Difícil, 3=Bom, 4=Fácil
+  state  Int // 0=NEW, 1=LEARNING, 2=REVIEW, 3=RELEARNING
+
+  reviewDurationMs Int? // Latência Cognitiva Real (Active Recall)
+  elapsedDays      Int  @default(0) //os dias decorridos desde a última revisão
 
   // CORREÇÃO: Flag de Fadiga Cognitiva (RN08)
-  isFatiguedReview  Boolean      @default(false)
+  isFatiguedReview Boolean @default(false)
 
   // Snapshots FSRS para treinamento de ML (Immutable Data)
-  stabilityBefore   Float
-  difficultyBefore  Float
-  stabilityAfter    Float
-  difficultyAfter   Float
+  // 🟢 TRANSIÇÕES FSRS: Registro de Estado Anterior e Posterior (Machine Learning Dataset)
+  stabilityBefore  Float @default(0)
+  stabilityAfter   Float
+  difficultyBefore Float @default(0)
+  difficultyAfter  Float
 
-  createdAt         DateTime     @default(now())
+  scheduledDays Int
+  due           DateTime
+  createdAt     DateTime @default(now())
 
-  flashcard         Flashcard    @relation(fields: [flashcardId], references: [id], onDelete: Cascade)
-  user              User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  version   Int       @default(1) // 🟢 Concorrência PWA Offline (UC13)
+  // 🔴 CORREÇÃO CRÍTICA: Convertido de Enum nativo para String estrita
+  studyMode String    @default("STANDARD") // STANDARD, CHAOS // 🟢 STANDARD, CHAOS (UC10)
+
+  lapses Int @default(0)
+  reps   Int @default(0)
+
+  flashcard Flashcard     @relation(fields: [flashcardId], references: [id], onDelete: Cascade)
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  session   StudySession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+
+  // 🟡 ALERTA CORRIGIDO: Índice composto vital para performance do FSRS diário
+  @@index([userId, createdAt])
   @@map("review_logs")
 }
 
 model StudySession {
-  id                String       @id @default(uuid()) @db.Uuid
-  startAt           DateTime     @default(now())
-  finishAt          DateTime?
-  deviceType        DeviceType   @default(WEB)
-  studyMode         StudyMode    @default(STANDARD)
+  id         String     @id @default(uuid()) @db.Uuid
+  userId     String     @db.Uuid
+  startedAt  DateTime   @default(now()) // 🟢 CORREÇÃO: Alterado de createdAt para startedAt
+  finishedAt DateTime?
+  // 🔴 CORREÇÃO CRÍTICA: Convertidos de Enum nativo para String estrita
+  deviceType String     @default("WEB") // PWA, IOT, WEB
+  studyMode  String     @default("STANDARD") // STANDARD, CHAOS
 
   // Cache de performance da sessão
-  cardsReviewed     Int          @default(0)
-  correctCount      Int          @default(0)
-  wrongCount        Int          @default(0)
-  xpEarned          Int          @default(0)
+  cardsReviewed Int @default(0)
+  correctCount  Int @default(0)
+  wrongCount    Int @default(0)
+  xpEarned      Int @default(0)
 
-  userId            String       @db.Uuid
-  user              User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reviewLogs    ReviewLog[]
   biometricLogs BiometricLog[]
 
   @@map("study_sessions")
 }
 
-// --- Tabelas de Categorização ---
+model BiometricLog {
+  id           String   @id @default(uuid()) @db.Uuid
+  sessionId    String   @db.Uuid
+  userId       String   @db.Uuid // 🟢 Vínculo direto com o estudante
+  fatigueIndex Float? // 🟢 Cálculo IoT / Fadiga
+  avgHeartRate Int? // 🟢 BPM médio registrado
+  recordedAt   DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  session StudySession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user    User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("biometric_logs")
+}
+
+// -----------------------------------------------------------------------------
+// CAMADA 4: MARKETPLACE E ORGANIZAÇÃO POR TAGS
+// -----------------------------------------------------------------------------
+
+model Transaction {
+  id          String   @id @default(uuid()) @db.Uuid
+  buyerId     String   @db.Uuid
+  deckId      String   @db.Uuid
+  amountPaid  Decimal  @db.Decimal(10, 2)
+  purchasedAt DateTime @default(now())
+
+  buyer User @relation("BuyerTransactions", fields: [buyerId], references: [id], onDelete: Cascade)
+  deck  Deck @relation("DeckTransactions", fields: [deckId], references: [id], onDelete: Cascade)
+
+  @@map("transactions")
+}
 
 model Tag {
-  id          String         @id @default(uuid()) @db.Uuid
-  name        String         @unique
-  decks       DeckTag[]
-  flashcards  FlashcardTag[]
+  id         String         @id @default(uuid()) @db.Uuid
+  name       String         @unique
+  colorHex   String? // 🟢 Identidade visual na UI
+  decks      DeckTag[]
+  flashcards FlashcardTag[]
 
   @@map("tags")
 }
 
 model DeckTag {
-  deckId          String         @db.Uuid
-  tagId           String         @db.Uuid
-  deck            Deck @relation(fields: [deckId], references: [id], onDelete: Cascade)
-  tag             Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  // Filtros do Marketplace
+  deckId String @db.Uuid
+  tagId  String @db.Uuid
+  deck   Deck   @relation(fields: [deckId], references: [id], onDelete: Cascade)
+  tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
 
   @@id([deckId, tagId])
   @@map("deck_tags")
 }
 
 model FlashcardTag {
-  flashcardId     String          @db.Uuid
-  tagId           String          @db.Uuid
-  flashcard       Flashcard       @relation(fields: [flashcardId], references: [id], onDelete: Cascade)
-  tag             Tag             @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  flashcardId String    @db.Uuid
+  tagId       String    @db.Uuid
+  flashcard   Flashcard @relation(fields: [flashcardId], references: [id], onDelete: Cascade)
+  tag         Tag       @relation(fields: [tagId], references: [id], onDelete: Cascade)
 
   @@id([flashcardId, tagId])
   @@map("flashcard_tags")
-}
-
-model BiometricLog {
-  id           String      @id @default(uuid()) @db.Uuid
-
-  // OBRIGATÓRIO: Paridade com StudySession.id
-  sessionId    String      @db.Uuid
-
-  fatigueLevel Float?
-  bpm          Int?
-  recordedAt   DateTime    @default(now())
-
-  session      StudySession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-
-  @@map("biometric_logs")
 }

@@ -1,264 +1,256 @@
-import { useQuery } from "@apollo/client/react"; // Importação estrita
-import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import React from "react";
+import { useNavigate } from "react-router-dom";
 import { CreateDeckModal } from "../components/CreateDeckModal";
-import { useDailyReviewTracker } from "../hooks/useDailyReviewTracker";
-import { useToast } from "../hooks/useToast";
-import { GET_MY_DECKS, type Deck } from "../lib/graphql/deck";
-import { GET_ME } from "../lib/graphql/settings";
+import { SettingsModal } from "../components/SettingsModal";
+import { useDashboard } from "../hooks/useDashboard";
 
-type ViewTab = "ACTIVE" | "ARCHIVED";
+export const Dashboard: React.FC = () => {
+  const navigate = useNavigate();
 
-export function Dashboard() {
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  // 🟢 Máquina de estado local para controle das abas (Design Pattern Wizard)
-  const [currentTab, setCurrentTab] = useState<ViewTab>("ACTIVE");
-  const { showToast } = useToast();
-
+  // 🟢 Recebemos userName diretamente, sem precisar acessar objetos complexos na UI
   const {
-    data: dataDecks,
-    loading: loadingDecks,
-    error: errorDecks,
-    refetch: refetchDecks,
-  } = useQuery(GET_MY_DECKS, {
-    fetchPolicy: "cache-and-network",
-  });
+    userName,
+    activeDecks,
+    archivedDecks,
+    totalActiveCards,
+    streak,
+    showStreakBonus,
+    loading,
+    error,
+    isCreateDeckOpen,
+    setIsCreateDeckOpen,
+    isSettingsOpen,
+    setIsSettingsOpen,
+  } = useDashboard();
 
-  const { data: dataMe, error: errorMe } = useQuery(GET_ME, {
-    fetchPolicy: "cache-and-network",
-  });
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] w-full gap-4">
+        <div className="text-amber-500 text-4xl animate-pulse">🧠</div>
+        <div className="text-slate-400 font-medium text-sm animate-pulse tracking-wider uppercase">
+          Carregando seu painel cognitivo...
+        </div>
+      </div>
+    );
+  }
 
-  useEffect(() => {
-    if (errorDecks)
-      showToast(`Falha ao carregar baralhos: ${errorDecks.message}`, "error");
-  }, [errorDecks, showToast]);
-
-  useEffect(() => {
-    if (errorMe)
-      console.error("Erro ao sincronizar perfil do usuário:", errorMe.message);
-  }, [errorMe]);
-
-  const allDecks = (dataDecks?.myDecks as Deck[]) || [];
-
-  // 🟢 Separação Lógica em Memória (Filtro Client-Side O(N))
-  const activeDecks = allDecks.filter((deck) => !deck.isArchived);
-  const archivedDecks = allDecks.filter((deck) => deck.isArchived);
-
-  const displayedDecks = currentTab === "ACTIVE" ? activeDecks : archivedDecks;
-
-  const userStats = dataMe?.me;
-  const { todayReviewCount } = useDailyReviewTracker(userStats?.id ?? null);
-  const isConsolidationDay = new Date().getDay() === 0;
-
-  const hasReachedDailyLimit = userStats?.maxDailyReviews
-    ? todayReviewCount >= userStats.maxDailyReviews
-    : false;
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[50vh] w-full gap-4 p-6 text-center">
+        <span className="text-5xl">⚠️</span>
+        <h2 className="text-xl font-bold text-rose-500">
+          Erro ao carregar dados do Dashboard.
+        </h2>
+        <p className="text-sm text-slate-400 max-w-md">
+          {error.message ||
+            "Não foi possível sincronizar suas informações com o servidor."}
+        </p>
+      </div>
+    );
+  }
 
   return (
-    <div className="flex flex-col gap-8 max-w-7xl mx-auto px-4 py-4">
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 flex flex-col md:flex-row items-center justify-between gap-6 shadow-xl">
-        <div className="flex flex-col gap-2 max-w-xl text-center md:text-left">
-          <span className="text-xs font-semibold uppercase tracking-wider text-amber-400 bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/20 w-fit mx-auto md:mx-0">
-            Painel de Controle
-          </span>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-100">
-            Otimize sua retenção diária
+    <div className="flex flex-col w-full max-w-6xl mx-auto gap-8 p-6 animate-fadeIn">
+      {/* Cabeçalho do Dashboard */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-800 pb-6">
+        <div className="flex flex-col gap-1">
+          {/* 🟢 Uso da variável higienizada */}
+          <h1 className="text-3xl font-extrabold text-slate-100 flex items-center gap-3">
+            <span>Olá, {userName}</span>
+            <span className="text-2xl">👋</span>
           </h1>
-          <p className="text-sm text-slate-400">
-            Gerencie seus baralhos, adicione flashcards e inicie sessões de
-            estudo.
+          <p className="text-slate-400 text-sm">
+            Acompanhe o seu progresso e mantenha sua rotina de retenção ativa.
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center justify-center gap-3 w-full md:w-auto">
+        <div className="flex flex-wrap gap-3 w-full md:w-auto">
           <button
-            disabled
-            title="Funcionalidade mapeada para a Fase 2 (TCC 2)"
-            className="flex-1 md:flex-initial px-5 py-3 bg-slate-800/60 text-slate-500 border border-slate-700/60 font-bold rounded-xl text-xs uppercase tracking-wider cursor-not-allowed text-center flex items-center justify-center gap-2"
+            onClick={() => setIsSettingsOpen(true)}
+            className="flex-1 md:flex-none px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-slate-300 font-semibold text-xs rounded-xl border border-slate-800 transition-all cursor-pointer flex items-center justify-center gap-2"
           >
-            <span>⚡ Modo Chaos (Em Breve)</span>
+            ⚙️ Configurações
           </button>
+
           <button
-            onClick={() => setIsModalOpen(true)}
-            className="flex-1 md:flex-initial px-5 py-3 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-xs uppercase tracking-wider transition shadow-lg text-center cursor-pointer"
+            onClick={() => setIsCreateDeckOpen(true)}
+            className="flex-1 md:flex-none px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl transition-all shadow-md shadow-amber-500/10 cursor-pointer flex items-center justify-center gap-2"
           >
-            + Criar Novo Deck
+            <span>+ Criar Baralho</span>
           </button>
         </div>
       </div>
 
-      {(isConsolidationDay || hasReachedDailyLimit) && (
-        <div
-          className={`flex flex-col md:flex-row items-center justify-between p-5 rounded-2xl border shadow-lg ${hasReachedDailyLimit ? "bg-rose-900/20 border-rose-800/50" : "bg-blue-900/20 border-blue-800/50"} animate-fadeIn`}
-        >
-          <div className="flex items-center gap-4">
-            <span className="text-3xl shrink-0">
-              {hasReachedDailyLimit ? "🛑" : "🧘‍♂️"}
+      {/* O RESTANTE DA PÁGINA PERMANECE 100% IDÊNTICO À REFATORAÇÃO ANTERIOR (100% FLEXBOX) */}
+
+      {/* 🟢 Cards de Estatísticas estruturados exclusivamente em Flexbox (Sem Grid) */}
+      <div className="flex flex-col md:flex-row gap-4 w-full">
+        {/* Card de Ofensiva (Streak) */}
+        <div className="flex flex-col flex-1 bg-slate-900 border border-slate-800 p-5 rounded-2xl gap-2 shadow-xl">
+          <div className="flex justify-between items-center">
+            <span className="text-xs font-bold text-amber-500 uppercase tracking-wider">
+              Ofensiva Atual
             </span>
-            <div className="flex flex-col gap-1">
-              <h3
-                className={`text-sm font-extrabold uppercase tracking-wider ${hasReachedDailyLimit ? "text-rose-400" : "text-blue-400"}`}
-              >
-                {hasReachedDailyLimit
-                  ? "Limite Cognitivo Atingido"
-                  : "Hoje é Dia de Consolidação"}
+            <span className="text-xl">🔥</span>
+          </div>
+          <div className="flex items-baseline gap-2">
+            <span className="text-3xl font-black text-slate-100">{streak}</span>
+            <span className="text-xs text-slate-400 font-medium">
+              dias consecutivos
+            </span>
+          </div>
+          {showStreakBonus && (
+            <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded self-start mt-1">
+              ⚡ Foco Consistente!
+            </span>
+          )}
+        </div>
+
+        {/* Card de Baralhos Ativos */}
+        <div className="flex flex-col flex-1 bg-slate-900 border border-slate-800 p-5 rounded-2xl gap-2 shadow-xl">
+          <div className="flex justify-between items-center">
+            <span className="text-xs font-bold text-emerald-500 uppercase tracking-wider">
+              Baralhos Ativos
+            </span>
+            <span className="text-xl">📚</span>
+          </div>
+          <div className="flex items-baseline gap-2">
+            <span className="text-3xl font-black text-slate-100">
+              {activeDecks.length}
+            </span>
+            <span className="text-xs text-slate-400 font-medium">
+              agrupamentos
+            </span>
+          </div>
+        </div>
+
+        {/* Card de Total de Flashcards */}
+        <div className="flex flex-col flex-1 bg-slate-900 border border-slate-800 p-5 rounded-2xl gap-2 shadow-xl">
+          <div className="flex justify-between items-center">
+            <span className="text-xs font-bold text-blue-500 uppercase tracking-wider">
+              Total de Flashcards
+            </span>
+            <span className="text-xl">🎴</span>
+          </div>
+          <div className="flex items-baseline gap-2">
+            <span className="text-3xl font-black text-slate-100">
+              {totalActiveCards}
+            </span>
+            <span className="text-xs text-slate-400 font-medium">
+              cards criados
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Listagem de Baralhos Ativos */}
+      <div className="flex flex-col gap-4">
+        <div className="flex justify-between items-center">
+          <h2 className="text-xl font-bold text-slate-200">Seus Baralhos</h2>
+        </div>
+
+        {activeDecks.length === 0 ? (
+          <div className="flex flex-col items-center justify-center p-12 bg-slate-900/50 border border-slate-800/80 rounded-2xl text-center gap-4">
+            <span className="text-4xl">📭</span>
+            <div className="flex flex-col gap-1 max-w-sm">
+              <h3 className="text-base font-bold text-slate-300">
+                Nenhum baralho ativo encontrado
               </h3>
-              <p className="text-xs text-slate-300 max-w-3xl leading-relaxed">
-                {hasReachedDailyLimit
-                  ? `Você já atingiu o seu limite saudável de ${userStats?.maxDailyReviews ?? 0} revisões diárias. Descanse e retorne amanhã!`
-                  : "Para evitar a sobrecarga e o 'Efeito Bola de Neve', foque apenas na limpeza do seu passivo de revisões hoje."}
+              <p className="text-xs text-slate-500">
+                Crie seu primeiro baralho temático para começar a adicionar
+                flashcards e iniciar suas sessões de estudo.
               </p>
             </div>
+            <button
+              onClick={() => setIsCreateDeckOpen(true)}
+              className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl transition-all shadow-md cursor-pointer mt-2"
+            >
+              + Criar Primeiro Baralho
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {activeDecks.map((deck) => {
+              const cardCount =
+                deck.flashcards?.length ?? deck._count?.flashcards ?? 0;
+              return (
+                <div
+                  key={deck.id}
+                  className="flex flex-col md:flex-row justify-between items-start md:items-center bg-slate-900 border border-slate-800 p-5 rounded-2xl gap-4 hover:border-slate-700 transition-all shadow-md"
+                >
+                  <div className="flex flex-col gap-1 flex-1">
+                    <div className="flex items-center gap-3">
+                      <h3 className="text-lg font-bold text-slate-100">
+                        {deck.title}
+                      </h3>
+                      <span className="text-[10px] font-bold text-slate-400 bg-slate-800 border border-slate-700 px-2 py-0.5 rounded-full">
+                        {cardCount} {cardCount === 1 ? "card" : "cards"}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400 line-clamp-2">
+                      {deck.description || "Sem descrição informada."}
+                    </p>
+                  </div>
+
+                  <div className="flex gap-2 w-full md:w-auto justify-end">
+                    <button
+                      onClick={() => navigate(`/deck/${deck.id}`)}
+                      className="flex-1 md:flex-none px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs rounded-xl border border-slate-700 transition-all cursor-pointer"
+                    >
+                      Ver Detalhes
+                    </button>
+                    <button
+                      onClick={() => navigate(`/study/${deck.id}`)}
+                      disabled={cardCount === 0}
+                      className="flex-1 md:flex-none px-5 py-2 bg-amber-500 hover:bg-amber-400 disabled:opacity-40 disabled:cursor-not-allowed text-slate-950 font-bold text-xs rounded-xl transition-all shadow-md cursor-pointer"
+                    >
+                      Estudar ⚡
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Baralhos Arquivados (se houver) */}
+      {archivedDecks.length > 0 && (
+        <div className="flex flex-col gap-3 pt-4 border-t border-slate-800/80">
+          <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">
+            Baralhos Arquivados ({archivedDecks.length})
+          </h3>
+          <div className="flex flex-col gap-2">
+            {archivedDecks.map((deck) => (
+              <div
+                key={deck.id}
+                className="flex justify-between items-center bg-slate-900/40 border border-slate-800/60 p-4 rounded-xl gap-4"
+              >
+                <span className="text-sm font-semibold text-slate-400">
+                  {deck.title}
+                </span>
+                <button
+                  onClick={() => navigate(`/deck/${deck.id}`)}
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs rounded-lg border border-slate-700 transition-all cursor-pointer"
+                >
+                  Gerenciar
+                </button>
+              </div>
+            ))}
           </div>
         </div>
       )}
 
-      <div className="flex flex-col gap-4">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-slate-800 pb-3 gap-4">
-          <div className="flex items-center gap-2 border border-slate-800 bg-slate-900 rounded-lg p-1 w-full sm:w-auto">
-            {/* 🟢 Implementação Estrutural de Flexbox para as Abas */}
-            <button
-              onClick={() => setCurrentTab("ACTIVE")}
-              className={`flex-1 sm:flex-none px-4 py-1.5 text-xs font-bold rounded-md transition-all cursor-pointer ${
-                currentTab === "ACTIVE"
-                  ? "bg-slate-800 text-amber-400 shadow-sm"
-                  : "text-slate-400 hover:text-slate-200"
-              }`}
-            >
-              Ativos ({activeDecks.length})
-            </button>
-            <button
-              onClick={() => setCurrentTab("ARCHIVED")}
-              className={`flex-1 sm:flex-none px-4 py-1.5 text-xs font-bold rounded-md transition-all cursor-pointer ${
-                currentTab === "ARCHIVED"
-                  ? "bg-slate-800 text-slate-100 shadow-sm"
-                  : "text-slate-400 hover:text-slate-200"
-              }`}
-            >
-              Arquivados ({archivedDecks.length})
-            </button>
-          </div>
-
-          <button
-            onClick={() => refetchDecks()}
-            className="text-xs font-semibold text-slate-400 hover:text-amber-400 transition cursor-pointer"
-          >
-            🔄 Atualizar
-          </button>
-        </div>
-
-        {loadingDecks && allDecks.length === 0 && (
-          <div className="flex items-center justify-center min-h-[30vh]">
-            <p className="text-slate-400 text-sm font-medium">
-              Carregando seus baralhos...
-            </p>
-          </div>
-        )}
-
-        {!loadingDecks && !errorDecks && displayedDecks.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-16 bg-slate-900/40 border border-slate-800/80 rounded-2xl text-center px-4">
-            <span className="text-4xl mb-3">
-              {currentTab === "ACTIVE" ? "📭" : "📦"}
-            </span>
-            <h3 className="text-base font-bold text-slate-200">
-              {currentTab === "ACTIVE"
-                ? "Nenhum baralho ativo encontrado"
-                : "Seu arquivo está vazio"}
-            </h3>
-            <p className="text-xs text-slate-400 max-w-sm mt-1 mb-4">
-              {currentTab === "ACTIVE"
-                ? "Você não possui decks disponíveis para estudo. Crie um novo!"
-                : "Os baralhos arquivados ficam protegidos contra exclusão acidental e não aparecem na sua rotina diária."}
-            </p>
-            {currentTab === "ACTIVE" && (
-              <button
-                onClick={() => setIsModalOpen(true)}
-                className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-xs transition cursor-pointer"
-              >
-                + Criar Primeiro Baralho
-              </button>
-            )}
-          </div>
-        )}
-
-        {displayedDecks.length > 0 && (
-          <div className="flex flex-wrap -mx-2">
-            {displayedDecks.map((deck) => (
-              <div
-                key={deck.id}
-                className={`w-full sm:w-1/2 lg:w-1/3 p-2 flex ${deck.isArchived ? "opacity-75 hover:opacity-100 transition-opacity" : ""}`}
-              >
-                <div className="w-full bg-slate-900 border border-slate-800 hover:border-amber-500/40 rounded-2xl p-5 flex flex-col justify-between transition-all shadow-md hover:shadow-xl group">
-                  <div className="flex flex-col gap-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <h3 className="text-base font-bold text-slate-100 group-hover:text-amber-400 transition-colors line-clamp-1">
-                        {deck.title}
-                      </h3>
-                      <span
-                        className={`text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-md shrink-0 border transition-colors ${
-                          hasReachedDailyLimit && !deck.isArchived
-                            ? "bg-rose-500/10 text-rose-400 border-rose-500/20"
-                            : isConsolidationDay && !deck.isArchived
-                              ? "bg-blue-500/10 text-blue-400 border-blue-500/20"
-                              : deck.isArchived
-                                ? "bg-slate-800 text-slate-400 border-slate-700"
-                                : "bg-amber-500/10 text-amber-400 border-amber-500/20"
-                        }`}
-                      >
-                        {deck._count?.flashcards || 0} cards
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">
-                      {deck.description || "Sem descrição."}
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-2 pt-5 mt-4 border-t border-slate-800/80">
-                    {!deck.isArchived ? (
-                      <Link
-                        to={hasReachedDailyLimit ? "#" : `/study/${deck.id}`}
-                        onClick={(e) =>
-                          hasReachedDailyLimit && e.preventDefault()
-                        }
-                        className={`flex-1 py-2 text-center text-xs font-bold rounded-xl transition border ${
-                          hasReachedDailyLimit
-                            ? "bg-slate-800/50 text-slate-500 border-slate-700/50 cursor-not-allowed"
-                            : isConsolidationDay
-                              ? "bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border-blue-500/30"
-                              : "bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
-                        }`}
-                      >
-                        {hasReachedDailyLimit
-                          ? "Limite Atingido 🛑"
-                          : isConsolidationDay
-                            ? "Limpar Passivo 🧹"
-                            : "Estudar ⚡"}
-                      </Link>
-                    ) : (
-                      <div className="flex-1 py-2 text-center text-xs font-bold rounded-xl transition border bg-slate-800/40 text-slate-500 border-slate-700/50 cursor-not-allowed">
-                        Conteúdo Pausado 📦
-                      </div>
-                    )}
-                    <Link
-                      to={`/deck/${deck.id}`}
-                      className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-center text-xs font-semibold rounded-xl transition border border-slate-700/50"
-                    >
-                      Detalhes
-                    </Link>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
+      {/* Renderização condicional dos Modais */}
       <CreateDeckModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        isOpen={isCreateDeckOpen}
+        onClose={() => setIsCreateDeckOpen(false)}
+      />
+
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
       />
     </div>
   );
-}
-
-export default Dashboard;
+};

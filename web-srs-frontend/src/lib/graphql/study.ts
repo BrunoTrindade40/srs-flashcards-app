@@ -1,58 +1,31 @@
-import { gql, type TypedDocumentNode } from "@apollo/client/core";
+import { graphql } from "../../gql";
 
-export interface CardFSRSData {
-  state: string;
-  repetitions: number;
-}
+// Enumeração isolada e segura para controle de fluxo no Frontend
+export const FSRSState = {
+  NEW: "NEW",
+  LEARNING: "LEARNING",
+  REVIEW: "REVIEW",
+  RELEARNING: "RELEARNING",
+} as const;
 
-export interface FlashcardInStudy {
-  id: string;
-  front?: string | null;
-  back?: string | null;
-  sourceContext?: string | null;
-  fsrsData?: CardFSRSData | null;
-}
+export type FSRSState = (typeof FSRSState)[keyof typeof FSRSState];
 
-export interface GetDueFlashcardsResponse {
-  dueFlashcards: FlashcardInStudy[];
-}
-
-export interface GetDueFlashcardsVariables {
-  deckId: string;
-}
-
-export const GET_DUE_FLASHCARDS: TypedDocumentNode<
-  GetDueFlashcardsResponse,
-  GetDueFlashcardsVariables
-> = gql`
+export const GET_DUE_FLASHCARDS = graphql(`
   query GetDueFlashcards($deckId: ID!) {
     dueFlashcards(deckId: $deckId) {
       id
-      front
-      back
+      frontContent
+      backContent
       sourceContext
-      fsrsData {
-        state
-        repetitions
-      }
+      
+      # Lemos apenas o 'state', que é efetivamente utilizado pelo useStudyEngine.
+      # O campo 'repetitions' foi removido por YAGNI (Over-fetching).
+      state
     }
   }
-`;
+`);
 
-export interface SubmitReviewVariables {
-  flashcardId: string;
-  rating: number;
-  reviewDurationMs: number;
-}
-
-export interface SubmitReviewResponse {
-  submitReview: boolean;
-}
-
-export const SUBMIT_REVIEW: TypedDocumentNode<
-  SubmitReviewResponse,
-  SubmitReviewVariables
-> = gql`
+export const SUBMIT_REVIEW = graphql(`
   mutation SubmitReview(
     $flashcardId: ID!
     $rating: Int!
@@ -64,4 +37,4 @@ export const SUBMIT_REVIEW: TypedDocumentNode<
       reviewDurationMs: $reviewDurationMs
     )
   }
-`;
+`);
