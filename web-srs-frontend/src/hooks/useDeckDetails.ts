@@ -1,4 +1,3 @@
-// hooks/useDeckDetails.ts
 import { useApolloClient, useMutation, useQuery } from "@apollo/client/react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -10,19 +9,12 @@ import {
 } from "../lib/graphql/deck";
 import { REMOVE_FLASHCARD, UPDATE_FLASHCARD } from "../lib/graphql/flashcard";
 import { useToast } from "./useToast";
-
 import type {
-  GetDeckDetailsQuery,
-  GetDeckDetailsQueryVariables,
-  UpdateFlashcardMutation,
-  UpdateFlashcardMutationVariables,
+  Flashcard // Importado para uso do Utility Type
 } from "../gql/graphql";
 
-export interface EditingCardState {
-  id: string;
-  frontContent: string;
-  backContent: string;
-}
+// Correção: Tipagem blindada via Pick referenciando o Schema GraphQL (DRY)
+export type EditingCardState = Pick<Flashcard, 'id' | 'frontContent' | 'backContent' | 'sourceContext'>;
 
 export function useDeckDetails(deckId: string | null) {
   const navigate = useNavigate();
@@ -31,26 +23,21 @@ export function useDeckDetails(deckId: string | null) {
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditDeckOpen, setIsEditDeckOpen] = useState(false);
-  
   const [editingCard, setEditingCard] = useState<EditingCardState | null>(null);
   const [deletingCardId, setDeletingCardId] = useState<string | null>(null);
   const [isDeletingDeck, setIsDeletingDeck] = useState(false);
 
-  const { data, loading, error } = useQuery<
-    GetDeckDetailsQuery,
-    GetDeckDetailsQueryVariables
-  >(GET_DECK_DETAILS, {
+  // Correção ALERTA: Removidos os genéricos explícitos. 
+  // GET_DECK_DETAILS é um TypedDocumentNode que injeta os tipos no Apollo automaticamente.
+  const { data, loading, error } = useQuery(GET_DECK_DETAILS, {
     variables: { id: deckId || "" },
     skip: !deckId,
     fetchPolicy: "network-only",
   });
 
   const [removeFlashcard] = useMutation(REMOVE_FLASHCARD);
-  const [updateFlashcard] = useMutation<
-    UpdateFlashcardMutation,
-    UpdateFlashcardMutationVariables
-  >(UPDATE_FLASHCARD);
-  
+  // Correção ALERTA: Removidos os genéricos explícitos para UPDATE_FLASHCARD.
+  const [updateFlashcard] = useMutation(UPDATE_FLASHCARD);
   const [deleteDeck, { loading: deletingDeck }] = useMutation(DELETE_DECK);
   const [updateDeck, { loading: updatingArchive }] = useMutation(UPDATE_DECK);
 
@@ -80,18 +67,26 @@ export function useDeckDetails(deckId: string | null) {
     }
   };
 
-  const handleSaveEdit = async (frontContent: string, backContent: string) => {
+  // Correção CRÍTICA: Assinatura atualizada para recepcionar o 'sourceContext'
+  const handleSaveEdit = async (
+    frontContent: string, 
+    backContent: string, 
+    sourceContext?: string | null
+  ) => {
     if (!editingCard) return;
     try {
       await updateFlashcard({
         variables: {
-          data: { 
-            id: editingCard.id, 
-            frontContent, 
-            backContent 
-          }
+          data: {
+             id: editingCard.id,
+             frontContent,
+             backContent,
+             // Se houver valor ou for string vazia passamos nulo (para limpeza intencional no banco)
+             sourceContext: sourceContext || null 
+           }
         },
       });
+      
       showToast("Cartão atualizado com sucesso!", "success");
       setEditingCard(null);
     } catch (err: unknown) {

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { CreateDeckModal } from "../components/CreateDeckModal";
 import { SettingsModal } from "../components/SettingsModal";
@@ -22,6 +22,10 @@ export const Dashboard: React.FC = () => {
     isSettingsOpen,
     setIsSettingsOpen,
   } = useDashboard();
+
+  // Correção: Estabilização de referências (YAGNI evitado, mas KISS aplicado para performance)
+  const closeCreateDeck = useCallback(() => setIsCreateDeckOpen(false), [setIsCreateDeckOpen]);
+  const closeSettings = useCallback(() => setIsSettingsOpen(false), [setIsSettingsOpen]);
 
   if (loading) {
     return (
@@ -244,12 +248,12 @@ export const Dashboard: React.FC = () => {
       {/* Renderização condicional dos Modais */}
       <CreateDeckModal
         isOpen={isCreateDeckOpen}
-        onClose={() => setIsCreateDeckOpen(false)}
+        onClose={closeCreateDeck} // Agora a referência é estável
       />
-
+      
       <SettingsModal
         isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
+        onClose={closeSettings} // Agora a referência é estável
       />
     </div>
   );

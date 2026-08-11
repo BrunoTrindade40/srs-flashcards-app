@@ -57,6 +57,7 @@ export class StudyResolver {
     @Args('limit', { type: () => Int, defaultValue: 50, nullable: true })
     limit: number,
   ): Promise<Flashcard[]> { // <-- Alterado de PrismaFlashcard[] para Flashcard[]
+    // 🔵 SUGESTÃO APLICADA: Cast removido. Confiamos no Duck Typing do TypeScript.
     return this.studyService.getChaosStudyQueue(user.id, limit);
   }
 }

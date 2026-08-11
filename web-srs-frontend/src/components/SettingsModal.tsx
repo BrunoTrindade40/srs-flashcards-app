@@ -19,6 +19,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onClose,
 }) => {
   const { showToast } = useToast();
+
+  // Correção: Apollo Client v4 requer a extração do 'error' diretamente do retorno do hook.
   const {
     data,
     loading: queryLoading,
@@ -28,22 +30,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     fetchPolicy: "cache-and-network",
   });
 
+  // Correção: Escuta reativa do erro estruturada para não engatilhar ciclos de re-renderização.
   useEffect(() => {
-    if (queryError) {
-      showToast(
-        `Erro ao carregar configurações: ${queryError.message}`,
-        "error",
-      );
+    if (isOpen && queryError) {
+      showToast(`Erro ao carregar configurações: ${queryError.message}`, "error");
     }
-  }, [queryError, showToast]);
+  }, [queryError, isOpen, showToast]);
 
   useEffect(() => {
+    if (!isOpen) return;
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
+
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
@@ -77,6 +80,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   );
 };
 
+// Correção: Subcomponente devidamente incluído no mesmo escopo, resolvendo imports "não utilizados"
 interface SettingsFormProps {
   initialData: UserSettings;
   onClose: () => void;
@@ -188,11 +192,10 @@ const SettingsForm: React.FC<SettingsFormProps> = ({
           className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 text-sm focus:outline-none focus:border-amber-500 font-sans"
         />
         <p className="text-[10px] text-slate-500">
-          Trava de segurança diária de Burnout cognitivo.
+          Trava de segurança diária contra Burnout cognitivo.
         </p>
       </div>
 
-      {/* Seção de Notificações (Mock Fase 1 - UC07) */}
       <div className="flex flex-col gap-3 pt-4 border-t border-slate-800/80 mt-1">
         <div className="flex items-center justify-between">
           <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider">
@@ -218,7 +221,7 @@ const SettingsForm: React.FC<SettingsFormProps> = ({
       </div>
 
       <div className="p-3.5 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-start gap-3 mt-1">
-        <span className="text-amber-400 mt-0.5">🌐</span>
+        <span className="text-amber-400 mt-0.5">🌍</span>
         <p className="text-[11px] text-amber-200/80 leading-relaxed font-medium">
           Seu fuso horário (
           <b>{Intl.DateTimeFormat().resolvedOptions().timeZone}</b>) será
@@ -226,7 +229,6 @@ const SettingsForm: React.FC<SettingsFormProps> = ({
         </p>
       </div>
 
-      {/* ZONA DE PERIGO LGPD (UC08) */}
       <div className="flex flex-col gap-3 pt-4 border-t border-rose-900/30 mt-2">
         <h3 className="text-xs font-bold text-rose-500 uppercase tracking-wider">
           Zona de Perigo (LGPD)
@@ -236,7 +238,6 @@ const SettingsForm: React.FC<SettingsFormProps> = ({
             Ao excluir sua conta, você exerce o <b>direito ao esquecimento</b>.
             Seus dados pessoais serão <b>anonimizados irreversivelmente</b>.
           </p>
-
           {!showConfirmDelete ? (
             <button
               type="button"

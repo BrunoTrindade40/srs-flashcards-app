@@ -1,28 +1,29 @@
 import React, { useState } from "react";
 
+// Correção: Propriedades e callback tipados com a nomenclatura exata do Schema GraphQL
 interface EditFlashcardModalProps {
   isOpen: boolean;
-  initialFront: string;
-  initialBack: string;
+  initialFrontContent: string;
+  initialBackContent: string;
   initialSourceContext?: string | null;
   onClose: () => void;
   onSave: (
-    front: string,
-    back: string,
+    frontContent: string,
+    backContent: string,
     sourceContext?: string | null,
   ) => Promise<void>;
 }
 
 export const EditFlashcardModal: React.FC<EditFlashcardModalProps> = ({
   isOpen,
-  initialFront,
-  initialBack,
+  initialFrontContent,
+  initialBackContent,
   initialSourceContext = "",
   onClose,
   onSave,
 }) => {
-  const [front, setFront] = useState(initialFront);
-  const [back, setBack] = useState(initialBack);
+  const [frontContent, setFrontContent] = useState(initialFrontContent);
+  const [backContent, setBackContent] = useState(initialBackContent);
   const [sourceContext, setSourceContext] = useState(
     initialSourceContext ?? "",
   );
@@ -32,13 +33,12 @@ export const EditFlashcardModal: React.FC<EditFlashcardModalProps> = ({
 
   const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!front.trim() || !back.trim() || loading) return;
-
+    if (!frontContent.trim() || !backContent.trim() || loading) return;
     try {
       setLoading(true);
       await onSave(
-        front,
-        back,
+        frontContent.trim(),
+        backContent.trim(),
         sourceContext.trim() ? sourceContext.trim() : null,
       );
       onClose();
@@ -69,8 +69,8 @@ export const EditFlashcardModal: React.FC<EditFlashcardModalProps> = ({
               Frente (Estímulo)
             </label>
             <textarea
-              value={front}
-              onChange={(e) => setFront(e.target.value)}
+              value={frontContent}
+              onChange={(e) => setFrontContent(e.target.value)}
               className="w-full h-28 px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 text-sm focus:outline-none focus:border-amber-500 resize-none font-mono"
               required
             />
@@ -81,8 +81,8 @@ export const EditFlashcardModal: React.FC<EditFlashcardModalProps> = ({
               Verso (Resposta Oculta)
             </label>
             <textarea
-              value={back}
-              onChange={(e) => setBack(e.target.value)}
+              value={backContent}
+              onChange={(e) => setBackContent(e.target.value)}
               className="w-full h-32 px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 text-sm focus:outline-none focus:border-amber-500 resize-none font-mono"
               required
             />
@@ -112,7 +112,7 @@ export const EditFlashcardModal: React.FC<EditFlashcardModalProps> = ({
             </button>
             <button
               type="submit"
-              disabled={loading || !front.trim() || !back.trim()}
+              disabled={loading || !frontContent.trim() || !backContent.trim()}
               className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-xs transition-all cursor-pointer disabled:opacity-50"
             >
               {loading ? "Salvando..." : "Salvar Alterações"}

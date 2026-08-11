@@ -1,5 +1,10 @@
-feat(backend): refatoracao estrutural fase 1, otimizacao FSRS e LGPD" -m "- refactor(schema): aplicacao de Type Stripping (remocao de Enums) e centralizacao de configuracoes do User (SSOT).
+feat(fullstack): refatoracao estrutural fase 1, otimizacao FSRS e tipagem end-to-end
+
+- refactor(schema): aplicacao de Type Stripping (remocao de Enums) e centralizacao de configuracoes do User (SSOT).
 - perf(schema): adicao de indices B-Tree nas tabelas Flashcard e ReviewLog (Prevenindo Sequential Scans).
 - fix(study): correcao do DataLoader (injecao de cacheKeyFn) para mitigar falha de memoria N+1.
 - feat(deck): implementacao atômica do UnenrollFromDeck e purga profunda do FSRS no arquivamento (Conformidade LGPD).
 - refactor(flashcard): conversao do campo status(String) para isPublished(Boolean).
+- feat(frontend): implementacao do graphql-codegen e geracao de TypedDocumentNodes nativos para o Apollo Client.
+- chore(frontend): atualizacao do package.json com travamento seguro de versoes para o cli e client-preset.
+- refactor(frontend): purga de tipagens GraphQL manuais em favor da inferencia estrita baseada no NestJS (SSOT).

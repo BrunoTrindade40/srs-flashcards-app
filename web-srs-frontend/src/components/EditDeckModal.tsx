@@ -1,13 +1,16 @@
 import { useMutation } from "@apollo/client/react";
 import React, { useEffect, useState } from "react";
 import { useToast } from "../hooks/useToast";
-import { UPDATE_DECK, type Deck } from "../lib/graphql/deck";
+import { UPDATE_DECK } from "../lib/graphql/deck";
+// Correção CRÍTICA: Tipo 'Deck' importado da fonte oficial gerada pelo codegen
+import type { Deck } from "../gql/graphql";
 
+// Correção CRÍTICA: Utilização de Pick para extrair estritamente os campos que o Modal gerencia.
+// Isso evita o erro estrutural de incompatibilidade com arrays aninhados (ex: flashcards) omitidos na Query.
 interface EditDeckModalProps {
   isOpen: boolean;
   onClose: () => void;
-  // Rigor na Tipagem: Assumimos que o objeto parcial possui os dados mapeados em graphql/deck.ts
-  deck: Partial<Deck> & { id: string; title: string };
+  deck: Pick<Deck, "id" | "title" | "description" | "sourceLanguage" | "targetLanguage">;
 }
 
 export const EditDeckModal: React.FC<EditDeckModalProps> = ({
@@ -35,15 +38,12 @@ export const EditDeckModal: React.FC<EditDeckModalProps> = ({
   const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!title.trim() || loading) return;
-
     try {
       await updateDeck({
         variables: {
           data: {
             id: deck.id,
             title: title.trim(),
-            // 🔴 CRÍTICO CORRIGIDO: Forçando o envio do valor `null` quando o usuário limpa o campo.
-            // O operador '|| null' garante que strings vazias ("") engatilhem a remoção do dado no banco.
             description: description.trim() || null,
             sourceLanguage: sourceLanguage || null,
             targetLanguage: targetLanguage || null,
@@ -112,7 +112,6 @@ export const EditDeckModal: React.FC<EditDeckModalProps> = ({
             />
           </div>
 
-          {/* Seção de Idiomas: Replicando o design consistente (DRY visual) */}
           <div className="flex flex-col sm:flex-row gap-4 border-t border-slate-800/50 pt-3 mt-1">
             <div className="flex flex-col gap-1.5 flex-1">
               <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">

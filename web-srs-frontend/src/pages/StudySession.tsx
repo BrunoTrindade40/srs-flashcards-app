@@ -8,19 +8,17 @@ export const StudySession: React.FC = () => {
   const { deckId } = useParams<{ deckId: string }>();
   const navigate = useNavigate();
 
+  // 🛃 Higienização de Fronteira (undefined -> null)
   const safeDeckId = deckId ?? null;
 
   const {
     currentCard,
     nextCard,
-    currentIndex,
     totalCards,
     isFlipped,
     loading,
     error,
     submitting,
-    hasReachedDailyLimit,
-    maxDailyReviews,
     handleShowAnswer,
     handleRating,
     handleExit,
@@ -39,7 +37,7 @@ export const StudySession: React.FC = () => {
       <div className="flex flex-col items-center justify-center min-h-screen w-full bg-slate-950 gap-4">
         <div className="text-amber-500 text-4xl animate-pulse">🧠</div>
         <div className="text-slate-400 font-medium text-sm animate-pulse tracking-wider uppercase">
-          Preparando seu ambiente de foco...
+          Sincronizando Rede Neural...
         </div>
       </div>
     );
@@ -48,28 +46,6 @@ export const StudySession: React.FC = () => {
   const isSessionExhausted = !currentCard || totalCards === 0;
 
   if (error || isSessionExhausted) {
-    if (hasReachedDailyLimit) {
-      return (
-        <div className="flex flex-col items-center justify-center min-h-screen w-full bg-slate-950 gap-5 p-4 text-center animate-fadeIn">
-          <span className="text-6xl drop-shadow-2xl mb-2">🛑</span>
-          <h2 className="text-2xl sm:text-3xl font-extrabold text-rose-500">
-            Consolidação Cognitiva Atingida
-          </h2>
-          <p className="text-slate-400 max-w-md leading-relaxed">
-            Você atingiu sua trava de segurança de <b>{maxDailyReviews} revisões hoje</b> e esgotou suas pendências imediatas.
-            Continuar forçando a aquisição de novos conceitos causará o <i>Efeito Bola de Neve</i>.
-            O aprendizado de longo prazo exige que você durma para consolidar. Retorne amanhã!
-          </p>
-          <button
-            onClick={() => navigate("/dashboard")}
-            className="mt-6 px-8 py-3 bg-rose-500/10 text-rose-400 border border-rose-500/20 font-bold rounded-xl hover:bg-rose-500/20 transition-all shadow-lg cursor-pointer"
-          >
-            Voltar ao Painel
-          </button>
-        </div>
-      );
-    }
-
     return (
       <div className="flex flex-col items-center justify-center min-h-screen w-full bg-slate-950 gap-5 p-4 text-center animate-fadeIn">
         <span className="text-6xl drop-shadow-2xl mb-2">🏆</span>
@@ -77,9 +53,8 @@ export const StudySession: React.FC = () => {
           Você está em dia!
         </h2>
         <p className="text-slate-400 max-w-md leading-relaxed">
-          Você dominou todos os cartões pendentes deste baralho para hoje.
-          Excelente trabalho! Agora, descanse e permita que seu cérebro
-          consolide essas memórias.
+          Você dominou todos os cartões atrasados ou atingiu sua cota de retenção segura para hoje.
+          Excelente trabalho! Agora, descanse e permita que seu cérebro consolide essas memórias.
         </p>
         <button
           onClick={() => navigate("/dashboard")}
@@ -95,8 +70,9 @@ export const StudySession: React.FC = () => {
     <div className="min-h-screen w-full bg-slate-950 flex flex-col items-center py-8 px-4 relative overflow-hidden">
       <div className="flex flex-col items-center w-full max-w-3xl mx-auto gap-6 z-10">
         <div className="flex justify-between items-center w-full text-slate-400 text-sm font-semibold">
-          <span>
-            Cartão {currentIndex + 1} de {totalCards}
+          <span className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+            Restam {totalCards} {totalCards === 1 ? "cartão" : "cartões"} na fila
           </span>
           <button
             onClick={handleExit}
@@ -204,16 +180,13 @@ export const StudySession: React.FC = () => {
         )}
       </div>
 
-      {/* 🟢 CORREÇÃO (Isolamento de Ghost Pre-fetching):
-          Apenas a face frontal ('front') do próximo cartão é pré-renderizada para aquecimento de cache/assets.
-          A renderização do verso ('back') foi omitida do DOM invisível para impedir vazamentos 
-          de resposta em leitores de tela (Acessibilidade) e extensões do navegador. */}
+      {/* Pré-renderização cega do próximo cartão para aquecimento de KaTeX / LaTeX */}
       {nextCard && (
         <div
           aria-hidden="true"
           className="absolute opacity-0 pointer-events-none -z-50 select-none"
         >
-          <MarkdownRenderer content={nextCard?.frontContent ?? ""} />
+          <MarkdownRenderer content={nextCard.frontContent} />
         </div>
       )}
     </div>

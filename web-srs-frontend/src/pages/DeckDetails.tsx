@@ -192,6 +192,8 @@ export const DeckDetails: React.FC = () => {
                         id: card.id,
                         frontContent: card.frontContent,
                         backContent: card.backContent,
+                        // Correção CRÍTICA: Lendo e injetando o contexto do banco no estado da UI
+                        sourceContext: card.sourceContext,
                       })
                     }
                     className="px-3 py-1.5 text-xs font-semibold bg-slate-800 text-slate-300 hover:text-white rounded border border-slate-700 transition-colors cursor-pointer"
@@ -221,8 +223,9 @@ export const DeckDetails: React.FC = () => {
       {editingCard && (
         <EditFlashcardModal
           isOpen={true}
-          initialFront={editingCard.frontContent}
-          initialBack={editingCard.backContent}
+          initialFrontContent={editingCard.frontContent}
+          initialBackContent={editingCard.backContent}
+          initialSourceContext={editingCard.sourceContext}
           onClose={() => setEditingCard(null)}
           onSave={handleSaveEdit}
         />

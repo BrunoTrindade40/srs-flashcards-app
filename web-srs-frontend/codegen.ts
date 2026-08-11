@@ -13,6 +13,10 @@ const config: CodegenConfig = {
       preset: 'client',
       presetConfig: {
         fragmentMasking: false,
+      },
+      // CORREÇÃO: Força o uso de "import type" para apaziguar o verbatimModuleSyntax do Vite
+      config: {
+        useTypeImports: true
       }
     }
   }

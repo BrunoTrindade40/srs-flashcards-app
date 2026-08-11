@@ -1,6 +1,6 @@
 /* eslint-disable */
 import * as types from './graphql';
-import { TypedDocumentNode as DocumentNode } from '@graphql-typed-document-node/core';
+import type { TypedDocumentNode as DocumentNode } from '@graphql-typed-document-node/core';
 
 /**
  * Map of all GraphQL operations in the project.
@@ -25,8 +25,8 @@ const documents = {
     "\n  query GetMe {\n    me {\n      id\n      dailyNewCardLimit\n      maxDailyReviews\n      timezone\n    }\n  }\n": types.GetMeDocument,
     "\n  mutation UpdateMySettings($data: UpdateUserSettingsInput!) {\n    updateMySettings(data: $data) {\n      id\n      dailyNewCardLimit\n      maxDailyReviews\n      timezone\n    }\n  }\n": types.UpdateMySettingsDocument,
     "\n  mutation AnonymizeMe {\n    anonymizeMe\n  }\n": types.AnonymizeMeDocument,
-    "\n  query GetDueFlashcards($deckId: ID!) {\n    dueFlashcards(deckId: $deckId) {\n      id\n      frontContent\n      backContent\n      sourceContext\n      \n      # Lemos apenas o 'state', que é efetivamente utilizado pelo useStudyEngine.\n      # O campo 'repetitions' foi removido por YAGNI (Over-fetching).\n      state\n    }\n  }\n": types.GetDueFlashcardsDocument,
-    "\n  mutation SubmitReview(\n    $flashcardId: ID!\n    $rating: Int!\n    $reviewDurationMs: Int!\n  ) {\n    submitReview(\n      flashcardId: $flashcardId\n      rating: $rating\n      reviewDurationMs: $reviewDurationMs\n    )\n  }\n": types.SubmitReviewDocument,
+    "\n  query GetDueFlashcards($deckId: ID!) {\n    dueFlashcards(deckId: $deckId) {\n      id\n      frontContent\n      backContent\n      sourceContext\n    }\n  }\n": types.GetDueFlashcardsDocument,
+    "\n  mutation SubmitReview($flashcardId: ID!, $rating: Int!, $reviewDurationMs: Int!) {\n    submitReview(\n      flashcardId: $flashcardId, \n      rating: $rating, \n      reviewDurationMs: $reviewDurationMs \n    )\n  }\n": types.SubmitReviewDocument,
 };
 
 /**
@@ -94,11 +94,11 @@ export function graphql(source: "\n  mutation AnonymizeMe {\n    anonymizeMe\n  
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function graphql(source: "\n  query GetDueFlashcards($deckId: ID!) {\n    dueFlashcards(deckId: $deckId) {\n      id\n      frontContent\n      backContent\n      sourceContext\n      \n      # Lemos apenas o 'state', que é efetivamente utilizado pelo useStudyEngine.\n      # O campo 'repetitions' foi removido por YAGNI (Over-fetching).\n      state\n    }\n  }\n"): (typeof documents)["\n  query GetDueFlashcards($deckId: ID!) {\n    dueFlashcards(deckId: $deckId) {\n      id\n      frontContent\n      backContent\n      sourceContext\n      \n      # Lemos apenas o 'state', que é efetivamente utilizado pelo useStudyEngine.\n      # O campo 'repetitions' foi removido por YAGNI (Over-fetching).\n      state\n    }\n  }\n"];
+export function graphql(source: "\n  query GetDueFlashcards($deckId: ID!) {\n    dueFlashcards(deckId: $deckId) {\n      id\n      frontContent\n      backContent\n      sourceContext\n    }\n  }\n"): (typeof documents)["\n  query GetDueFlashcards($deckId: ID!) {\n    dueFlashcards(deckId: $deckId) {\n      id\n      frontContent\n      backContent\n      sourceContext\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function graphql(source: "\n  mutation SubmitReview(\n    $flashcardId: ID!\n    $rating: Int!\n    $reviewDurationMs: Int!\n  ) {\n    submitReview(\n      flashcardId: $flashcardId\n      rating: $rating\n      reviewDurationMs: $reviewDurationMs\n    )\n  }\n"): (typeof documents)["\n  mutation SubmitReview(\n    $flashcardId: ID!\n    $rating: Int!\n    $reviewDurationMs: Int!\n  ) {\n    submitReview(\n      flashcardId: $flashcardId\n      rating: $rating\n      reviewDurationMs: $reviewDurationMs\n    )\n  }\n"];
+export function graphql(source: "\n  mutation SubmitReview($flashcardId: ID!, $rating: Int!, $reviewDurationMs: Int!) {\n    submitReview(\n      flashcardId: $flashcardId, \n      rating: $rating, \n      reviewDurationMs: $reviewDurationMs \n    )\n  }\n"): (typeof documents)["\n  mutation SubmitReview($flashcardId: ID!, $rating: Int!, $reviewDurationMs: Int!) {\n    submitReview(\n      flashcardId: $flashcardId, \n      rating: $rating, \n      reviewDurationMs: $reviewDurationMs \n    )\n  }\n"];
 
 export function graphql(source: string) {
   return (documents as any)[source] ?? {};

@@ -1,40 +1,32 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-
-// Importação estrita compatível com Apollo Client v4.1.9
 import { useMutation } from "@apollo/client/react";
-
-import type {
-  CreateDeckResponse,
-  CreateDeckVariables,
-  GetMyDecksResponse,
-} from "../lib/graphql/deck";
 import { CREATE_DECK, GET_MY_DECKS } from "../lib/graphql/deck";
 
 export const CreateDeck: React.FC = () => {
   const navigate = useNavigate();
 
-  // Controlo de Formulário Controlado
+  // Controle de Formulário Controlado
   const [title, setTitle] = useState<string>("");
   const [description, setDescription] = useState<string>("");
   const [formError, setFormError] = useState<string | null>(null);
 
-  // Instanciação da Mutation com atualização de Cache
-  const [createDeck, { loading }] = useMutation<
-    CreateDeckResponse,
-    CreateDeckVariables
-  >(CREATE_DECK, {
+  // Correção ALERTA e CRÍTICO: Remoção das tipagens genéricas importadas incorretamente.
+  // O Apollo Client v4 infere `data` e `variables` diretamente da constante `CREATE_DECK`.
+  const [createDeck, { loading }] = useMutation(CREATE_DECK, {
     // O 'update' permite-nos injetar o novo deck no cache do Apollo,
     // poupando uma requisição HTTP quando voltarmos ao Dashboard.
     update(cache, { data }) {
       if (!data?.createDeck) return;
 
-      const existingDecks = cache.readQuery<GetMyDecksResponse>({
+      // Correção ALERTA: readQuery e writeQuery também inferem o tipo nativamente 
+      // a partir de GET_MY_DECKS (TypedDocumentNode).
+      const existingDecks = cache.readQuery({
         query: GET_MY_DECKS,
       });
 
       if (existingDecks && existingDecks.myDecks) {
-        cache.writeQuery<GetMyDecksResponse>({
+        cache.writeQuery({
           query: GET_MY_DECKS,
           data: {
             myDecks: [data.createDeck, ...existingDecks.myDecks],
@@ -91,10 +83,10 @@ export const CreateDeck: React.FC = () => {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-5">
-          <div>
+          <div className="flex flex-col gap-1">
             <label
               htmlFor="title"
-              className="block text-sm font-medium text-gray-700 mb-1"
+              className="text-sm font-medium text-gray-700"
             >
               Título do Deck <span className="text-red-500">*</span>
             </label>
@@ -110,10 +102,10 @@ export const CreateDeck: React.FC = () => {
             />
           </div>
 
-          <div>
+          <div className="flex flex-col gap-1">
             <label
               htmlFor="description"
-              className="block text-sm font-medium text-gray-700 mb-1"
+              className="text-sm font-medium text-gray-700"
             >
               Descrição (Opcional)
             </label>
@@ -129,12 +121,12 @@ export const CreateDeck: React.FC = () => {
             />
           </div>
 
-          <div className="flex items-center justify-end space-x-3 pt-4 border-t border-gray-100">
+          <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
             <button
               type="button"
               onClick={() => navigate(-1)}
               disabled={loading}
-              className="px-5 py-2.5 text-gray-600 bg-gray-100 hover:bg-gray-200 font-medium rounded-lg transition-colors"
+              className="px-5 py-2.5 text-gray-600 bg-gray-100 hover:bg-gray-200 font-medium rounded-lg transition-colors cursor-pointer"
             >
               Cancelar
             </button>
@@ -144,7 +136,7 @@ export const CreateDeck: React.FC = () => {
               className={`px-5 py-2.5 text-white font-medium rounded-lg shadow-sm transition-colors ${
                 loading
                   ? "bg-blue-400 cursor-not-allowed"
-                  : "bg-blue-600 hover:bg-blue-700"
+                  : "bg-blue-600 hover:bg-blue-700 cursor-pointer"
               }`}
             >
               {loading ? "A criar..." : "Criar Deck"}

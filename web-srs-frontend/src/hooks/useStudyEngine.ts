@@ -1,172 +1,127 @@
 import { useApolloClient, useMutation, useQuery } from "@apollo/client/react";
-import { useState } from "react";
+// 🔴 CORREÇÃO CRÍTICA: Manutenção da importação nativa de Reference
+import type { Reference } from "@apollo/client/core";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  DELETE_DECK,
-  GET_DECK_DETAILS,
-  GET_MY_DECKS,
-  UPDATE_DECK,
-} from "../lib/graphql/deck";
-import { REMOVE_FLASHCARD, UPDATE_FLASHCARD } from "../lib/graphql/flashcard";
+import { GET_DECK_DETAILS, GET_MY_DECKS } from "../lib/graphql/deck";
+import { GET_ME } from "../lib/graphql/settings";
+import { GET_DUE_FLASHCARDS, SUBMIT_REVIEW } from "../lib/graphql/study";
 import { useToast } from "./useToast";
 
-import type {
-  GetDeckDetailsQuery,
-  GetDeckDetailsQueryVariables,
-  UpdateFlashcardMutation,
-  UpdateFlashcardMutationVariables,
-} from "../gql/graphql";
-
-export interface EditingCardState {
-  id: string;
-  frontContent: string;
-  backContent: string;
-}
-
-export function useDeckDetails(deckId: string | null) {
+export function useStudyEngine(deckId: string | null) {
   const navigate = useNavigate();
-  const { showToast } = useToast();
   const client = useApolloClient();
+  const { showToast } = useToast();
 
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [isEditDeckOpen, setIsEditDeckOpen] = useState(false);
-  
-  const [editingCard, setEditingCard] = useState<EditingCardState | null>(null);
-  const [deletingCardId, setDeletingCardId] = useState<string | null>(null);
-  const [isDeletingDeck, setIsDeletingDeck] = useState(false);
+  const [isFlipped, setIsFlipped] = useState(false);
 
-  const { data, loading, error } = useQuery<
-    GetDeckDetailsQuery,
-    GetDeckDetailsQueryVariables
-  >(GET_DECK_DETAILS, {
-    variables: { id: deckId || "" },
+  // ⏱️ Telemetria Monotônica
+  const cardStartTimeRef = useRef<number>(0);
+
+  // 🧠 O Padrão Terminal Burro
+  const { data, loading, error, refetch } = useQuery(GET_DUE_FLASHCARDS, {
+    variables: { deckId: deckId ?? "" },
     skip: !deckId,
     fetchPolicy: "network-only",
   });
 
-  const [removeFlashcard] = useMutation(REMOVE_FLASHCARD);
-  
-  const [updateFlashcard] = useMutation<
-    UpdateFlashcardMutation,
-    UpdateFlashcardMutationVariables
-  >(UPDATE_FLASHCARD);
-  
-  const [deleteDeck, { loading: deletingDeck }] = useMutation(DELETE_DECK);
-  const [updateDeck, { loading: updatingArchive }] = useMutation(UPDATE_DECK);
-
-  const handleToggleArchive = async () => {
-    if (!data?.deck) return;
-    try {
-      const newStatus = !data.deck.isArchived;
-      await updateDeck({
-        variables: {
-          data: {
-            id: data.deck.id,
-            isArchived: newStatus,
+  // 🔄 Fechamento de Loop Stateless
+  const [submitReview, { loading: submitting }] = useMutation(SUBMIT_REVIEW, {
+    update(cache, { data: mutationData }, { variables }) {
+      if (mutationData?.submitReview && variables?.flashcardId) {
+        cache.modify({
+          fields: {
+            // 🔴 CORREÇÃO CRÍTICA: Aplicação do modificador 'readonly'
+            // Isso satisfaz o contrato do Apollo Client v4 de que o cache original nunca será mutado diretamente.
+            dueFlashcards(existingCards: readonly Reference[] = [], { readField }) {
+              return existingCards.filter(
+                (cardRef) => readField("id", cardRef) !== variables?.flashcardId
+              );
+            },
           },
-        },
-      });
-      showToast(
-        newStatus
-          ? "Baralho enviado para o arquivo."
-          : "Baralho reativado com sucesso.",
-        "success"
-      );
-    } catch (err: unknown) {
-      if (err instanceof Error) {
-        showToast(`Erro ao alterar status: ${err.message}`, "error");
+        });
       }
-    }
-  };
+    },
+  });
 
-  const handleSaveEdit = async (frontContent: string, backContent: string) => {
-    if (!editingCard) return;
+  const sessionQueue = data?.dueFlashcards ?? [];
+
+  // 🔵 Orquestração Stateless
+  const currentCard = sessionQueue[0] ?? null;
+  const nextCard = sessionQueue[1] ?? null;
+
+  useEffect(() => {
+    if (currentCard?.id && !isFlipped) {
+      cardStartTimeRef.current = performance.now();
+    }
+  }, [currentCard?.id, isFlipped]);
+
+  const handleExit = useCallback(() => navigate("/dashboard"), [navigate]);
+
+  const handleShowAnswer = useCallback(() => {
+    setIsFlipped(true);
+  }, []);
+
+  const handleRating = async (rating: number) => {
+    if (!currentCard || submitting || !isFlipped) return;
+
+    const reviewDurationMs = Math.max(
+      0,
+      Math.round(performance.now() - cardStartTimeRef.current)
+    );
+
     try {
-      await updateFlashcard({
+      await submitReview({
         variables: {
-          data: { 
-            id: editingCard.id, 
-            frontContent, 
-            backContent 
-          }
+          flashcardId: currentCard.id,
+          rating,
+          reviewDurationMs,
         },
       });
-      showToast("Cartão atualizado com sucesso!", "success");
-      setEditingCard(null);
-    } catch (err: unknown) {
-      if (err instanceof Error) {
-        showToast(`Erro ao atualizar cartão: ${err.message}`, "error");
-      }
-    }
-  };
 
-  const handleConfirmDeleteCard = async () => {
-    if (!deletingCardId) return;
-    try {
-      await removeFlashcard({
-        variables: { id: deletingCardId },
-        update(cache) {
-          const normalizedId = cache.identify({
-            id: deletingCardId,
-            __typename: "Flashcard",
-          });
-          cache.evict({ id: normalizedId });
-          cache.gc();
-        },
-      });
-      showToast("Flashcard removido do baralho.", "success");
-      setDeletingCardId(null);
-    } catch (err: unknown) {
-      if (err instanceof Error) {
-        showToast(`Erro ao deletar cartão: ${err.message}`, "error");
-      }
-    }
-  };
+      setIsFlipped(false);
+      cardStartTimeRef.current = 0;
 
-  const handleConfirmDeleteDeck = async () => {
-    if (!deckId) return;
-    try {
-      await deleteDeck({
-        variables: { id: deckId },
-        update(cache) {
-          const normalizedId = cache.identify({
-            id: deckId,
-            __typename: "Deck",
-          });
-          cache.evict({ id: normalizedId });
-          cache.gc();
-        },
-      });
-      await client.refetchQueries({ include: [GET_MY_DECKS] });
-      showToast("Baralho excluído permanentemente.", "success");
-      setIsDeletingDeck(false);
-      navigate("/dashboard");
+      if (sessionQueue.length <= 1) {
+        const { data: newData } = await refetch();
+        const remainingCards = newData?.dueFlashcards ?? [];
+
+        if (remainingCards.length > 0) {
+          showToast("Sincronizando próxima rodada de cartões...", "info");
+        } else {
+          await Promise.all([
+            client.query({ query: GET_ME, fetchPolicy: "network-only" }),
+            client.query({
+              query: GET_DECK_DETAILS,
+              variables: { id: deckId ?? "" },
+              fetchPolicy: "network-only",
+            }),
+            client.query({ query: GET_MY_DECKS, fetchPolicy: "network-only" }),
+          ]);
+          showToast(
+            "Brilhante! O loop de consolidação foi concluído.",
+            "success"
+          );
+          navigate("/dashboard");
+        }
+      }
     } catch (err: unknown) {
       if (err instanceof Error) {
-        showToast(`Erro ao excluir baralho: ${err.message}`, "error");
+        showToast(`Erro ao registrar revisão: ${err.message}`, "error");
       }
     }
   };
 
   return {
-    deck: data?.deck,
+    currentCard,
+    nextCard,
+    totalCards: sessionQueue.length,
+    isFlipped,
     loading,
     error,
-    updatingArchive,
-    deletingDeck,
-    isCreateOpen,
-    setIsCreateOpen,
-    isEditDeckOpen,
-    setIsEditDeckOpen,
-    editingCard,
-    setEditingCard,
-    deletingCardId,
-    setDeletingCardId,
-    isDeletingDeck,
-    setIsDeletingDeck,
-    handleToggleArchive,
-    handleSaveEdit,
-    handleConfirmDeleteCard,
-    handleConfirmDeleteDeck,
+    submitting,
+    handleShowAnswer,
+    handleRating,
+    handleExit,
   };
 }
