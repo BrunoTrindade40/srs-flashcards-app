@@ -1,10 +1,7 @@
-feat(fullstack): refatoracao estrutural fase 1, otimizacao FSRS e tipagem end-to-end
+refactor(frontend): adocao de POJO imutavel para modelagem FSRS e mapeamento declarativo de UI
 
-- refactor(schema): aplicacao de Type Stripping (remocao de Enums) e centralizacao de configuracoes do User (SSOT).
-- perf(schema): adicao de indices B-Tree nas tabelas Flashcard e ReviewLog (Prevenindo Sequential Scans).
-- fix(study): correcao do DataLoader (injecao de cacheKeyFn) para mitigar falha de memoria N+1.
-- feat(deck): implementacao atômica do UnenrollFromDeck e purga profunda do FSRS no arquivamento (Conformidade LGPD).
-- refactor(flashcard): conversao do campo status(String) para isPublished(Boolean).
-- feat(frontend): implementacao do graphql-codegen e geracao de TypedDocumentNodes nativos para o Apollo Client.
-- chore(frontend): atualizacao do package.json com travamento seguro de versoes para o cli e client-preset.
-- refactor(frontend): purga de tipagens GraphQL manuais em favor da inferencia estrita baseada no NestJS (SSOT).
+- refactor(frontend): substituicao do enum FsrsState por objeto constante (as const) e derivacao estatica de tipos em src/domain/fsrs.ts, eliminando violacao de 'erasableSyntaxOnly' sob compilacao estrita do Vite.
+- feat(frontend): implementacao do Type Guard isValidFsrsState para saneamento de fronteira de rede (Network Boundary) em tempo O(1), contornando ausencia de validadores de runtime no ecossistema de dependencias.
+- refactor(frontend): reestruturacao do componente FsrsStateBadge utilizando o padrao Dictionary (Record<FsrsState, ...>), eliminando dead initializations (lets) e vazamento de declaracao lexical no case block.
+- perf(frontend): garantia de checagem exaustiva de tipos em tempo de compilacao sem necessidade de switch/case mutavel ou clausula never.
+- style(frontend): manutencao do padrao 100% Flexbox para renderizacao atomica e estavel do componente de badge de estado cognitivo.

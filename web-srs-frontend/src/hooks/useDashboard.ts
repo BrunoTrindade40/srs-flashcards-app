@@ -14,16 +14,6 @@ export interface DeckSummary {
   } | null;
 }
 
-export interface DashboardUser {
-  id: string;
-  name?: string | null;
-  currentStreak?: number | null;
-  settings?: {
-    currentStreak?: number | null;
-    maxDailyReviews?: number | null;
-  } | null;
-}
-
 export function useDashboard() {
   const [isCreateDeckOpen, setIsCreateDeckOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -43,8 +33,6 @@ export function useDashboard() {
   } = useQuery(GET_MY_DECKS, {
     fetchPolicy: "cache-and-network",
   });
-
-  const user = (dataMe?.me as unknown as DashboardUser) ?? null;
 
   // 🟢 CORREÇÃO: Estabilização de Referência de Memória
   // Agora, se 'dataDecks?.myDecks' for undefined, o array vazio '[]'
@@ -70,7 +58,11 @@ export function useDashboard() {
     }, 0);
   }, [activeDecks]);
 
-  const streak = user?.currentStreak ?? user?.settings?.currentStreak ?? 0;
+  // Saneamento: Duck Typing nativo, sem coerção 'as unknown'
+  const user = dataMe?.me ?? null;
+
+  // Leitura segura garantida pela extração corrigida na Query GET_ME
+  const streak = user?.currentStreak ?? 0;
   const showStreakBonus = streak >= 3;
   const userName = user?.name ?? "Estudante";
 

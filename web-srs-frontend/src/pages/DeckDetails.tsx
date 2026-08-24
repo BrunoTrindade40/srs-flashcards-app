@@ -5,7 +5,7 @@ import { CreateFlashcardModal } from "../components/CreateFlashcardModal";
 import { EditDeckModal } from "../components/EditDeckModal";
 import { EditFlashcardModal } from "../components/EditFlashcardModal";
 import { MarkdownRenderer } from "../components/MarkdownRenderer";
-import { useDeckDetails } from "../hooks/useDeckDetails"; // 🟢 Injeção do Domínio
+import { useDeckDetails } from "../hooks/useDeckDetails";
 import { useToast } from "../hooks/useToast";
 
 export const DeckDetails: React.FC = () => {
@@ -13,15 +13,12 @@ export const DeckDetails: React.FC = () => {
   const navigate = useNavigate();
   const { showToast } = useToast();
 
-  // 🟢 HIGIENIZAÇÃO DE FRONTEIRA: 'undefined' é interceptado e vira 'null' no milissegundo 0
   const safeDeckId = deckId ?? null;
 
-  // 🟢 Toda a caixa de ferramentas é entregue pronta
   const {
     deck,
     loading,
     error,
-    updatingArchive,
     deletingDeck,
     isCreateOpen,
     setIsCreateOpen,
@@ -33,20 +30,17 @@ export const DeckDetails: React.FC = () => {
     setDeletingCardId,
     isDeletingDeck,
     setIsDeletingDeck,
-    handleToggleArchive,
     handleSaveEdit,
     handleConfirmDeleteCard,
     handleConfirmDeleteDeck,
   } = useDeckDetails(safeDeckId);
 
-  // O Toast de erro precisa reagir à View, então mantemos a subscrição limpa aqui
   useEffect(() => {
     if (error) {
       showToast(`Erro ao carregar detalhes do deck: ${error.message}`, "error");
     }
   }, [error, showToast]);
 
-  // 🟢 Zero FOUC: Loading explícito e blindado
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh] w-full">
@@ -57,7 +51,6 @@ export const DeckDetails: React.FC = () => {
     );
   }
 
-  // 🟢 Tratamento de Rota Resiliente
   if (!safeDeckId || error || !deck) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4 p-6 text-center w-full">
@@ -85,18 +78,15 @@ export const DeckDetails: React.FC = () => {
         </Link>
       </div>
 
-      {/* 🟢 Flexbox rigoroso (sem grid) aplicado na estrutura visual superior */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-800 pb-6 gap-4">
         <div className="flex flex-col gap-2 w-full md:w-auto">
           <div className="flex items-center gap-3 flex-wrap">
             <h1 className="text-3xl font-extrabold text-slate-100">
               {deck.title}
             </h1>
-            {deck.isArchived && (
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 bg-slate-800 border border-slate-700 px-2 py-0.5 rounded">
-                Arquivado
-              </span>
-            )}
+            
+            {/* 🟡 ALERTA: Removido o badge 'Arquivado' que não deve mais existir na Fase 1 */}
+
             <div className="flex flex-wrap gap-2 md:ml-2 mt-2 md:mt-0">
               <button
                 onClick={() => setIsEditDeckOpen(true)}
@@ -104,14 +94,8 @@ export const DeckDetails: React.FC = () => {
               >
                 ✏️ Editar
               </button>
-
-              <button
-                onClick={handleToggleArchive}
-                disabled={updatingArchive}
-                className="px-3 py-1 text-xs font-semibold bg-slate-800 text-slate-300 hover:text-white rounded border border-slate-700 transition-colors cursor-pointer shadow-sm disabled:opacity-50"
-              >
-                {deck.isArchived ? "📦 Reativar" : "📦 Arquivar"}
-              </button>
+              
+              {/* 🔴 CRÍTICO: Botão de Arquivamento/Reativamento totalmente removido */}
 
               <button
                 onClick={() => setIsDeletingDeck(true)}
@@ -129,20 +113,11 @@ export const DeckDetails: React.FC = () => {
         <div className="flex gap-3 w-full md:w-auto">
           <button
             onClick={() => navigate(`/study/${deck.id}`)}
-            disabled={
-              deck.isArchived ||
-              !deck.flashcards ||
-              deck.flashcards.length === 0
-            }
-            className={`flex-1 md:flex-none px-5 py-2.5 font-bold rounded-lg transition-colors shadow-md ${
-              deck.isArchived
-                ? "bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700"
-                : "bg-amber-500 text-slate-950 hover:bg-amber-400 cursor-pointer disabled:opacity-50"
-            }`}
+            disabled={!deck.flashcards || deck.flashcards.length === 0}
+            className="flex-1 md:flex-none px-5 py-2.5 font-bold rounded-lg transition-colors shadow-md bg-amber-500 text-slate-950 hover:bg-amber-400 cursor-pointer disabled:opacity-50"
           >
-            {deck.isArchived ? "Pausado 📦" : "Iniciar Estudo ⚡"}
+            Iniciar Estudo 🧠
           </button>
-
           <button
             onClick={() => setIsCreateOpen(true)}
             className="flex-1 md:flex-none px-5 py-2.5 bg-slate-800 text-slate-100 font-bold rounded-lg hover:bg-slate-700 border border-slate-700 transition-colors cursor-pointer shadow-sm"
@@ -152,11 +127,11 @@ export const DeckDetails: React.FC = () => {
         </div>
       </div>
 
+      {/* O restante do mapeamento de flashcards permanece idêntico... */}
       <div className="flex flex-col gap-4">
         <h2 className="text-lg font-bold text-slate-300">
           Cartões no Baralho ({deck.flashcards?.length || 0})
         </h2>
-
         {!deck.flashcards || deck.flashcards.length === 0 ? (
           <div className="p-8 bg-slate-900 border border-slate-800 rounded-xl text-center text-slate-500 flex items-center justify-center">
             <span>Nenhum cartão cadastrado neste baralho ainda.</span>
@@ -164,56 +139,43 @@ export const DeckDetails: React.FC = () => {
         ) : (
           <div className="flex flex-col gap-4">
             {deck.flashcards.map((card) => (
-              <div
-                key={card.id}
-                className="flex flex-col md:flex-row justify-between items-start md:items-center bg-slate-900 border border-slate-800 p-5 rounded-xl gap-4 hover:border-slate-700 transition-all"
-              >
-                <div className="flex flex-col md:flex-row flex-1 gap-6 w-full overflow-hidden">
-                  <div className="flex flex-col flex-1 gap-1 min-w-0">
-                    <span className="text-[10px] font-bold text-amber-500 uppercase tracking-wider">
-                      Frente
-                    </span>
-                    {/* CORREÇÃO: Mapeamento lendo a nova chave do Schema */}
-                    <MarkdownRenderer content={card.frontContent ?? ""} />
-                  </div>
-                  <div className="flex flex-col flex-1 gap-1 min-w-0 border-t md:border-t-0 md:border-l border-slate-800 pt-3 md:pt-0 md:pl-6">
-                    <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-wider">
-                      Verso
-                    </span>
-                    {/* CORREÇÃO: Mapeamento lendo a nova chave do Schema */}
-                    <MarkdownRenderer content={card.backContent ?? ""} />
-                  </div>
-                </div>
-
-                <div className="flex gap-2 self-end md:self-center border-t md:border-t-0 border-slate-800/80 pt-3 md:pt-0 w-full md:w-auto justify-end">
-                  <button
-                    onClick={() =>
-                      setEditingCard({
-                        id: card.id,
-                        frontContent: card.frontContent,
-                        backContent: card.backContent,
-                        // Correção CRÍTICA: Lendo e injetando o contexto do banco no estado da UI
-                        sourceContext: card.sourceContext,
-                      })
-                    }
-                    className="px-3 py-1.5 text-xs font-semibold bg-slate-800 text-slate-300 hover:text-white rounded border border-slate-700 transition-colors cursor-pointer"
-                  >
-                    Editar
-                  </button>
-                  <button
-                    onClick={() => setDeletingCardId(card.id)}
-                    className="px-3 py-1.5 text-xs font-semibold bg-rose-950/40 text-rose-300 hover:bg-rose-900/60 rounded border border-rose-900/50 transition-colors cursor-pointer"
-                  >
-                    Excluir
-                  </button>
-                </div>
-              </div>
+               <div
+                 key={card.id}
+                 className="flex flex-col md:flex-row justify-between items-start md:items-center bg-slate-900 border border-slate-800 p-5 rounded-xl gap-4 hover:border-slate-700 transition-all"
+               >
+                 {/* ... Conteúdo inalterado das renderizações dos cartões ... */}
+                 <div className="flex flex-col md:flex-row flex-1 gap-6 w-full overflow-hidden">
+                   <div className="flex flex-col flex-1 gap-1 min-w-0">
+                     <span className="text-[10px] font-bold text-amber-500 uppercase tracking-wider">Frente</span>
+                     <MarkdownRenderer content={card.frontContent ?? ""} />
+                   </div>
+                   <div className="flex flex-col flex-1 gap-1 min-w-0 border-t md:border-t-0 md:border-l border-slate-800 pt-3 md:pt-0 md:pl-6">
+                     <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-wider">Verso</span>
+                     <MarkdownRenderer content={card.backContent ?? ""} />
+                   </div>
+                 </div>
+                 <div className="flex gap-2 self-end md:self-center border-t md:border-t-0 border-slate-800/80 pt-3 md:pt-0 w-full md:w-auto justify-end">
+                   <button
+                     onClick={() => setEditingCard({
+                         id: card.id,
+                         frontContent: card.frontContent,
+                         backContent: card.backContent,
+                         sourceContext: card.sourceContext,
+                       })}
+                     className="px-3 py-1.5 text-xs font-semibold bg-slate-800 text-slate-300 hover:text-white rounded border border-slate-700 transition-colors cursor-pointer"
+                   >Editar</button>
+                   <button
+                     onClick={() => setDeletingCardId(card.id)}
+                     className="px-3 py-1.5 text-xs font-semibold bg-rose-950/40 text-rose-300 hover:bg-rose-900/60 rounded border border-rose-900/50 transition-colors cursor-pointer"
+                   >Excluir</button>
+                 </div>
+               </div>
             ))}
           </div>
         )}
       </div>
 
-      {/* Renderização condicional e limpa dos Modais */}
+      {/* Renderiza o condicional e limpa dos Modais */}
       <CreateFlashcardModal
         deckId={deck.id}
         isOpen={isCreateOpen}

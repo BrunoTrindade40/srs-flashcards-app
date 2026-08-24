@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 interface UseStudyKeyboardProps {
   showAnswer: boolean;
@@ -15,21 +15,33 @@ export function useStudyKeyboard({
   onExit,
   disabled = false,
 }: UseStudyKeyboardProps) {
+  // 1. Telemetria de Estado via useRef (O Padrão Latest Ref)
+  // Armazenamos todas as props recebidas em uma referência mutável.
+  const stateRef = useRef({ showAnswer, onShowAnswer, onRate, onExit, disabled });
+
+  // 2. Sincronização Estrita O(1)
+  // Atualizamos a ref a cada render. Como alterar uma ref não gera re-render,
+  // isso garante que o Event Listener tenha sempre o valor correto no milissegundo exato.
+  useEffect(() => {
+    stateRef.current = { showAnswer, onShowAnswer, onRate, onExit, disabled };
+  }, [showAnswer, onShowAnswer, onRate, onExit, disabled]);
+
+  // 3. Inscrição Única (Lifecycle Isolado)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignora atalhos se o sistema estiver processando/carregando
+      // Extração com Fallback vs Optional Chaining direto da Referência
+      const { showAnswer, onShowAnswer, onRate, onExit, disabled } = stateRef.current;
+
+      // Padrão Bouncer (Guard Clause): Aborta imediatamente se estiver bloqueado
       if (disabled) return;
 
-      // Escape para sair da sessão instantaneamente
       if (e.key === "Escape") {
         e.preventDefault();
         if (onExit) onExit();
         return;
       }
 
-      // 🟢 CORREÇÃO (Conformidade com RF05): 
-      // Suporte simultâneo às teclas 'Espaço' e 'Enter' para redução de atrito.
-      // e.code mapeia espaços físicos, e.key mapeia o valor lógico.
+      // Suporte simultâneo para Espaço e Enter
       if (e.key === " " || e.code === "Space" || e.key === "Enter") {
         e.preventDefault();
         if (!showAnswer) {
@@ -38,7 +50,7 @@ export function useStudyKeyboard({
         return;
       }
 
-      // Avaliação Estocástica (1, 2, 3, 4) só funciona se o verso estiver visível
+      // Máquina de Estados Estrita
       if (showAnswer) {
         switch (e.key) {
           case "1":
@@ -53,11 +65,18 @@ export function useStudyKeyboard({
           case "4":
             onRate(4);
             break;
+          // Omitimos o bloco default: never aqui pois e.key é uma string livre, 
+          // não um Enum fechado, então ignoramos qualquer outra tecla silenciosamente.
         }
       }
     };
 
+    // A inscrição ocorre apenas UMA vez no ciclo de vida (array de dependências vazio)
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [showAnswer, onShowAnswer, onRate, onExit, disabled]);
+    
+    return () => {
+      // O expurgo antecipado (Cleanup Estrito) ocorre apenas na desmontagem do componente
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []); // <-- O segredo contra Stale Closures e Thrashing de memória
 }

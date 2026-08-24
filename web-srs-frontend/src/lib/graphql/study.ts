@@ -7,6 +7,7 @@ export const GET_DUE_FLASHCARDS = graphql(`
       frontContent
       backContent
       sourceContext
+      due
     }
   }
 `);

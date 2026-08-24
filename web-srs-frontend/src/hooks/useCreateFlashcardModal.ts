@@ -10,20 +10,45 @@ interface UseCreateFlashcardModalProps {
   onClose: () => void;
 }
 
+// 1. Função Pura de Validação (O Padrão "Zod Nativo")
+// Isolada do React, altamente testável e livre de efeitos colaterais.
+// Funciona como um esquema de validação estrutural "early-fail".
+const validateFlashcardInput = (front: string, back: string, source: string): string | null => {
+  const safeFront = front.trim();
+  const safeBack = back.trim();
+  const safeSource = source.trim();
+
+  // Validação da Frente
+  if (!safeFront) return "A Frente do cartão é obrigatória.";
+  if (safeFront.length < 2) return "A Frente precisa ter no mínimo 2 caracteres.";
+  if (safeFront.length > 2000) return "A Frente excedeu o limite de segurança (2000 caracteres).";
+  
+  // Validação do Verso
+  if (!safeBack) return "O Verso do cartão é obrigatório.";
+  if (safeBack.length < 2) return "O Verso precisa ter no mínimo 2 caracteres.";
+  if (safeBack.length > 3000) return "O Verso excedeu o limite de segurança (3000 caracteres).";
+
+  // Validação do Contexto de Origem (Campo Opcional)
+  if (safeSource && safeSource.length > 255) {
+    return "O Contexto de Origem não pode exceder 255 caracteres.";
+  }
+
+  // Nullish Coalescing amigável: null significa "Aprovado sem erros"
+  return null; 
+};
+
 export function useCreateFlashcardModal({
   deckId,
   isOpen,
   onClose,
 }: UseCreateFlashcardModalProps) {
   const { showToast } = useToast();
+
   const [front, setFront] = useState("");
   const [back, setBack] = useState("");
   const [sourceContext, setSourceContext] = useState("");
   const [isPreviewMode, setIsPreviewMode] = useState(false);
 
-  // Correção ALERTA: Removidos os genéricos manuais redundantes.
-  // Como 'CREATE_FLASHCARD' é um TypedDocumentNode, o Apollo Client v4 infere automaticamente
-  // as saídas e entradas com segurança de tipos, prevenindo o warning de depreciação.
   const [createFlashcard, { loading }] = useMutation(CREATE_FLASHCARD, {
     refetchQueries: [{ query: GET_DECK_DETAILS, variables: { id: deckId } }],
   });
@@ -55,9 +80,14 @@ export function useCreateFlashcardModal({
     if (e) {
       e.preventDefault();
     }
-    if (!front.trim() || !back.trim()) {
-      showToast("Preencha a Frente e o Verso do cartão.", "error");
-      return;
+
+    // 2. O Padrão Bouncer (Early Return) acoplado à validação
+    const validationError = validateFlashcardInput(front, back, sourceContext);
+    
+    if (validationError) {
+      // Bloqueia no Frontend (Early-Fail) e emite feedback visual assíncrono
+      showToast(validationError, "error");
+      return; 
     }
 
     try {
@@ -67,11 +97,12 @@ export function useCreateFlashcardModal({
             deckId,
             frontContent: front.trim(),
             backContent: back.trim(),
-            ...(sourceContext.trim() ? { sourceContext: sourceContext.trim() } : {}),
+            // 3. Higienização Final de Fronteira: Conversão estrita de String vazia para Null
+            sourceContext: sourceContext.trim() ? sourceContext.trim() : null,
           },
         },
       });
-
+      
       showToast("Flashcard criado com sucesso!", "success");
       handleClose();
     } catch (err: unknown) {

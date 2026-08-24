@@ -5,15 +5,11 @@ import {
   DELETE_DECK,
   GET_DECK_DETAILS,
   GET_MY_DECKS,
-  UPDATE_DECK,
 } from "../lib/graphql/deck";
 import { REMOVE_FLASHCARD, UPDATE_FLASHCARD } from "../lib/graphql/flashcard";
 import { useToast } from "./useToast";
-import type {
-  Flashcard // Importado para uso do Utility Type
-} from "../gql/graphql";
+import type { Flashcard } from "../gql/graphql";
 
-// Correção: Tipagem blindada via Pick referenciando o Schema GraphQL (DRY)
 export type EditingCardState = Pick<Flashcard, 'id' | 'frontContent' | 'backContent' | 'sourceContext'>;
 
 export function useDeckDetails(deckId: string | null) {
@@ -27,8 +23,6 @@ export function useDeckDetails(deckId: string | null) {
   const [deletingCardId, setDeletingCardId] = useState<string | null>(null);
   const [isDeletingDeck, setIsDeletingDeck] = useState(false);
 
-  // Correção ALERTA: Removidos os genéricos explícitos. 
-  // GET_DECK_DETAILS é um TypedDocumentNode que injeta os tipos no Apollo automaticamente.
   const { data, loading, error } = useQuery(GET_DECK_DETAILS, {
     variables: { id: deckId || "" },
     skip: !deckId,
@@ -36,44 +30,19 @@ export function useDeckDetails(deckId: string | null) {
   });
 
   const [removeFlashcard] = useMutation(REMOVE_FLASHCARD);
-  // Correção ALERTA: Removidos os genéricos explícitos para UPDATE_FLASHCARD.
   const [updateFlashcard] = useMutation(UPDATE_FLASHCARD);
   const [deleteDeck, { loading: deletingDeck }] = useMutation(DELETE_DECK);
-  const [updateDeck, { loading: updatingArchive }] = useMutation(UPDATE_DECK);
 
-  // CORREÇÃO: Lógica integral restaurada consumindo client, navigate, etc.
-  const handleToggleArchive = async () => {
-    if (!data?.deck) return;
-    try {
-      const newStatus = !data.deck.isArchived;
-      await updateDeck({
-        variables: {
-          data: {
-            id: data.deck.id,
-            isArchived: newStatus,
-          },
-        },
-      });
-      showToast(
-        newStatus
-          ? "Baralho enviado para o arquivo."
-          : "Baralho reativado com sucesso.",
-        "success"
-      );
-    } catch (err: unknown) {
-      if (err instanceof Error) {
-        showToast(`Erro ao alterar status: ${err.message}`, "error");
-      }
-    }
-  };
+  // 🔴 CRÍTICO: Removida a mutação UPDATE_DECK e a função handleToggleArchive.
+  // A ação de alterar o status de arquivamento colide com o fluxo de Anonimização do sistema.
 
-  // Correção CRÍTICA: Assinatura atualizada para recepcionar o 'sourceContext'
   const handleSaveEdit = async (
-    frontContent: string, 
-    backContent: string, 
+    frontContent: string,
+    backContent: string,
     sourceContext?: string | null
   ) => {
     if (!editingCard) return;
+
     try {
       await updateFlashcard({
         variables: {
@@ -81,9 +50,8 @@ export function useDeckDetails(deckId: string | null) {
              id: editingCard.id,
              frontContent,
              backContent,
-             // Se houver valor ou for string vazia passamos nulo (para limpeza intencional no banco)
-             sourceContext: sourceContext || null 
-           }
+             sourceContext: sourceContext || null
+            }
         },
       });
       
@@ -98,11 +66,11 @@ export function useDeckDetails(deckId: string | null) {
 
   const handleConfirmDeleteCard = async () => {
     if (!deletingCardId) return;
+
     try {
       await removeFlashcard({
         variables: { id: deletingCardId },
         update(cache) {
-          // Mantemos a manipulação do Apollo Cache através do ID em memória
           const normalizedId = cache.identify({
             id: deletingCardId,
             __typename: "Flashcard",
@@ -111,6 +79,7 @@ export function useDeckDetails(deckId: string | null) {
           cache.gc();
         },
       });
+
       showToast("Flashcard removido do baralho.", "success");
       setDeletingCardId(null);
     } catch (err: unknown) {
@@ -122,6 +91,7 @@ export function useDeckDetails(deckId: string | null) {
 
   const handleConfirmDeleteDeck = async () => {
     if (!deckId) return;
+
     try {
       await deleteDeck({
         variables: { id: deckId },
@@ -134,6 +104,7 @@ export function useDeckDetails(deckId: string | null) {
           cache.gc();
         },
       });
+
       await client.refetchQueries({ include: [GET_MY_DECKS] });
       showToast("Baralho excluído permanentemente.", "success");
       setIsDeletingDeck(false);
@@ -149,7 +120,6 @@ export function useDeckDetails(deckId: string | null) {
     deck: data?.deck,
     loading,
     error,
-    updatingArchive,
     deletingDeck,
     isCreateOpen,
     setIsCreateOpen,
@@ -161,7 +131,6 @@ export function useDeckDetails(deckId: string | null) {
     setDeletingCardId,
     isDeletingDeck,
     setIsDeletingDeck,
-    handleToggleArchive,
     handleSaveEdit,
     handleConfirmDeleteCard,
     handleConfirmDeleteDeck,

@@ -4,8 +4,6 @@ import { Dashboard } from "../pages/Dashboard";
 import { DeckDetails } from "../pages/DeckDetails";
 import { Login } from "../pages/Login";
 import { StudySession } from "../pages/StudySession";
-// 1. NOVO IMPORT: Trazemos a página do Modo Chaos
-import { ChaosStudyPage } from "../pages/ChaosStudyPage";
 
 import { MainLayout } from "../components/MainLayout";
 import { ProtectedRoute } from "../components/ProtectedRoute";
@@ -14,7 +12,7 @@ import { RootRedirect } from "../components/RootRedirect";
 export function AppRoutes() {
   return (
     <Routes>
-      {/* 1. Tratamento da URL raiz (http://localhost:5173/) */}
+      {/* 1. Tratamento da URL raiz */}
       <Route path="/" element={<RootRedirect />} />
 
       {/* 2. Rota Pública de Autenticação */}
@@ -22,6 +20,7 @@ export function AppRoutes() {
 
       {/* 3. Bloco de Rotas Protegidas por Software */}
       <Route element={<ProtectedRoute />}>
+        
         {/* Sub-bloco com o Header de Navegação Global */}
         <Route element={<MainLayout />}>
           <Route path="/dashboard" element={<Dashboard />} />
@@ -31,8 +30,13 @@ export function AppRoutes() {
 
         {/* Rota de Foco Profundo (Sem Header para imersão total) */}
         <Route path="/study/:deckId" element={<StudySession />} />
-        {/* 2. NOVA ROTA: Modo Chaos (Interleaving - Fora do MainLayout) */}
-        <Route path="/chaos" element={<ChaosStudyPage />} />
+
+        {/* 
+          A Rota do "Modo Chaos" foi removida sumariamente.
+          A funcionalidade está escopada estritamente para a Fase 2 (TCC 2).
+          Princípio Aplicado: YAGNI.
+        */}
+        
       </Route>
 
       {/* 4. Captura de rotas inexistentes (Fallback de Segurança) */}

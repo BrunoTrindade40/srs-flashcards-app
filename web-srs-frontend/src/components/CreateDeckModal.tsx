@@ -1,4 +1,4 @@
-import { gql } from "@apollo/client/core";
+import { gql, type Reference } from "@apollo/client/core"; // 1. Adição da tipagem estrita 'Reference'
 import { useMutation } from "@apollo/client/react";
 import React, { useEffect, useState } from "react";
 import { useToast } from "../hooks/useToast";
@@ -19,14 +19,17 @@ export const CreateDeckModal: React.FC<CreateDeckModalProps> = ({
   const [description, setDescription] = useState("");
   const [sourceLanguage, setSourceLanguage] = useState("pt-BR");
   const [targetLanguage, setTargetLanguage] = useState("");
+
   const { showToast } = useToast();
 
   const [createDeck, { loading }] = useMutation(CREATE_DECK, {
     update(cache, { data }) {
       if (!data?.createDeck) return;
+
       cache.modify({
         fields: {
-          myDecks(existingDeckRefs = []) {
+          // 2. Aplicação do contrato de imutabilidade com 'readonly Reference[]'
+          myDecks(existingDeckRefs: readonly Reference[] = []) {
             const newDeckRef = cache.writeFragment({
               data: data.createDeck,
               fragment: gql`
@@ -42,7 +45,12 @@ export const CreateDeckModal: React.FC<CreateDeckModalProps> = ({
                 }
               `,
             });
-            return [...existingDeckRefs, newDeckRef];
+
+            // Fallback de segurança para garantir que a referência foi criada
+            if (!newDeckRef) return existingDeckRefs;
+
+            // 3. Aplicação do Princípio da Imutabilidade e consistência de UI (adicionando no topo)
+            return [newDeckRef, ...existingDeckRefs];
           },
         },
       });
@@ -63,13 +71,13 @@ export const CreateDeckModal: React.FC<CreateDeckModalProps> = ({
 
   const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
+
     if (!title.trim() || loading) return;
 
     try {
       await createDeck({
         variables: {
           data: {
-            // 🔴 CRÍTICO CORRIGIDO: Removido o envio do 'id'. Na criação, o payload não possui identificador.
             title: title.trim(),
             description: description.trim() || null,
             sourceLanguage: sourceLanguage || null,
@@ -88,6 +96,7 @@ export const CreateDeckModal: React.FC<CreateDeckModalProps> = ({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
+
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
@@ -96,6 +105,7 @@ export const CreateDeckModal: React.FC<CreateDeckModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
+      {/* 4. Estrutura fiel ao Flexbox, mantendo o escopo visual limpo */}
       <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl flex flex-col gap-6">
         <div className="flex items-center justify-between border-b border-slate-800 pb-4">
           <div className="flex items-center gap-2">
@@ -151,7 +161,6 @@ export const CreateDeckModal: React.FC<CreateDeckModalProps> = ({
             />
           </div>
 
-          {/* Seção de Idiomas: Flexbox Responsivo Puro */}
           <div className="flex flex-col sm:flex-row gap-4 border-t border-slate-800/50 pt-3 mt-1">
             <div className="flex flex-col gap-1.5 flex-1">
               <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
@@ -168,7 +177,6 @@ export const CreateDeckModal: React.FC<CreateDeckModalProps> = ({
                 <option value="es-ES">Espanhol</option>
               </select>
             </div>
-
             <div className="flex flex-col gap-1.5 flex-1">
               <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
                 Idioma Alvo

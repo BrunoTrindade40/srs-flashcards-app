@@ -1,23 +1,31 @@
 import { gql, type TypedDocumentNode } from "@apollo/client/core";
 
+// Tipagem estrutural limpa e idêntica ao Schema do Prisma/NestJS
 export interface UserSettings {
   id: string;
+  name?: string | null;
+  currentStreak: number;
   dailyNewCardLimit: number;
   maxDailyReviews: number;
   timezone: string;
+  dailyRolloverTime?: string | null;
 }
 
 export interface GetMeResponse {
   me: UserSettings;
 }
 
+// Query corrigida para buscar os dados de fato consumidos no Dashboard e Settings
 export const GET_ME: TypedDocumentNode<GetMeResponse, Record<string, never>> = gql`
   query GetMe {
     me {
       id
+      name
+      currentStreak
       dailyNewCardLimit
       maxDailyReviews
       timezone
+      dailyRolloverTime
     }
   }
 `;
@@ -26,6 +34,7 @@ export interface UpdateMySettingsInput {
   dailyNewCardLimit?: number;
   maxDailyReviews?: number;
   timezone?: string;
+  dailyRolloverTime?: string;
 }
 
 export interface UpdateMySettingsResponse {
@@ -36,6 +45,7 @@ export interface UpdateMySettingsVariables {
   data: UpdateMySettingsInput;
 }
 
+// Mutação corrigida para contemplar a RN06 (Rollover)
 export const UPDATE_MY_SETTINGS: TypedDocumentNode<
   UpdateMySettingsResponse,
   UpdateMySettingsVariables
@@ -46,6 +56,7 @@ export const UPDATE_MY_SETTINGS: TypedDocumentNode<
       dailyNewCardLimit
       maxDailyReviews
       timezone
+      dailyRolloverTime
     }
   }
 `;

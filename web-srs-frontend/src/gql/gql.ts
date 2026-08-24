@@ -22,10 +22,10 @@ const documents = {
     "\n  mutation CreateFlashcard($data: CreateFlashcardInput!) {\n    createFlashcard(data: $data) {\n      id\n      frontContent\n      backContent\n      sourceContext\n      imageUrl\n      audioUrl\n    }\n  }\n": types.CreateFlashcardDocument,
     "\n  mutation UpdateFlashcard($data: UpdateFlashcardInput!) {\n    updateFlashcard(data: $data) {\n      id\n      frontContent\n      backContent\n      sourceContext\n      imageUrl\n      audioUrl\n    }\n  }\n": types.UpdateFlashcardDocument,
     "\n  mutation RemoveFlashcard($id: ID!) {\n    removeFlashcard(id: $id) {\n      id\n    }\n  }\n": types.RemoveFlashcardDocument,
-    "\n  query GetMe {\n    me {\n      id\n      dailyNewCardLimit\n      maxDailyReviews\n      timezone\n    }\n  }\n": types.GetMeDocument,
-    "\n  mutation UpdateMySettings($data: UpdateUserSettingsInput!) {\n    updateMySettings(data: $data) {\n      id\n      dailyNewCardLimit\n      maxDailyReviews\n      timezone\n    }\n  }\n": types.UpdateMySettingsDocument,
+    "\n  query GetMe {\n    me {\n      id\n      name\n      currentStreak\n      dailyNewCardLimit\n      maxDailyReviews\n      timezone\n      dailyRolloverTime\n    }\n  }\n": types.GetMeDocument,
+    "\n  mutation UpdateMySettings($data: UpdateUserSettingsInput!) {\n    updateMySettings(data: $data) {\n      id\n      dailyNewCardLimit\n      maxDailyReviews\n      timezone\n      dailyRolloverTime\n    }\n  }\n": types.UpdateMySettingsDocument,
     "\n  mutation AnonymizeMe {\n    anonymizeMe\n  }\n": types.AnonymizeMeDocument,
-    "\n  query GetDueFlashcards($deckId: ID!) {\n    dueFlashcards(deckId: $deckId) {\n      id\n      frontContent\n      backContent\n      sourceContext\n    }\n  }\n": types.GetDueFlashcardsDocument,
+    "\n  query GetDueFlashcards($deckId: ID!) {\n    dueFlashcards(deckId: $deckId) {\n      id\n      frontContent\n      backContent\n      sourceContext\n      due\n    }\n  }\n": types.GetDueFlashcardsDocument,
     "\n  mutation SubmitReview($flashcardId: ID!, $rating: Int!, $reviewDurationMs: Int!) {\n    submitReview(\n      flashcardId: $flashcardId, \n      rating: $rating, \n      reviewDurationMs: $reviewDurationMs \n    )\n  }\n": types.SubmitReviewDocument,
 };
 
@@ -82,11 +82,11 @@ export function graphql(source: "\n  mutation RemoveFlashcard($id: ID!) {\n    r
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function graphql(source: "\n  query GetMe {\n    me {\n      id\n      dailyNewCardLimit\n      maxDailyReviews\n      timezone\n    }\n  }\n"): (typeof documents)["\n  query GetMe {\n    me {\n      id\n      dailyNewCardLimit\n      maxDailyReviews\n      timezone\n    }\n  }\n"];
+export function graphql(source: "\n  query GetMe {\n    me {\n      id\n      name\n      currentStreak\n      dailyNewCardLimit\n      maxDailyReviews\n      timezone\n      dailyRolloverTime\n    }\n  }\n"): (typeof documents)["\n  query GetMe {\n    me {\n      id\n      name\n      currentStreak\n      dailyNewCardLimit\n      maxDailyReviews\n      timezone\n      dailyRolloverTime\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function graphql(source: "\n  mutation UpdateMySettings($data: UpdateUserSettingsInput!) {\n    updateMySettings(data: $data) {\n      id\n      dailyNewCardLimit\n      maxDailyReviews\n      timezone\n    }\n  }\n"): (typeof documents)["\n  mutation UpdateMySettings($data: UpdateUserSettingsInput!) {\n    updateMySettings(data: $data) {\n      id\n      dailyNewCardLimit\n      maxDailyReviews\n      timezone\n    }\n  }\n"];
+export function graphql(source: "\n  mutation UpdateMySettings($data: UpdateUserSettingsInput!) {\n    updateMySettings(data: $data) {\n      id\n      dailyNewCardLimit\n      maxDailyReviews\n      timezone\n      dailyRolloverTime\n    }\n  }\n"): (typeof documents)["\n  mutation UpdateMySettings($data: UpdateUserSettingsInput!) {\n    updateMySettings(data: $data) {\n      id\n      dailyNewCardLimit\n      maxDailyReviews\n      timezone\n      dailyRolloverTime\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
@@ -94,7 +94,7 @@ export function graphql(source: "\n  mutation AnonymizeMe {\n    anonymizeMe\n  
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function graphql(source: "\n  query GetDueFlashcards($deckId: ID!) {\n    dueFlashcards(deckId: $deckId) {\n      id\n      frontContent\n      backContent\n      sourceContext\n    }\n  }\n"): (typeof documents)["\n  query GetDueFlashcards($deckId: ID!) {\n    dueFlashcards(deckId: $deckId) {\n      id\n      frontContent\n      backContent\n      sourceContext\n    }\n  }\n"];
+export function graphql(source: "\n  query GetDueFlashcards($deckId: ID!) {\n    dueFlashcards(deckId: $deckId) {\n      id\n      frontContent\n      backContent\n      sourceContext\n      due\n    }\n  }\n"): (typeof documents)["\n  query GetDueFlashcards($deckId: ID!) {\n    dueFlashcards(deckId: $deckId) {\n      id\n      frontContent\n      backContent\n      sourceContext\n      due\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

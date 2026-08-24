@@ -23,6 +23,25 @@ export default tseslint.config(
         "warn",
         { allowConstantExport: true },
       ],
+
+      // ----------------------------------------------------------------------
+      // BLOQUEIO ARQUITETURAL - REGRA UI01 (Estrito Flexbox)
+      // ----------------------------------------------------------------------
+      // Impede o uso de classes relacionadas com CSS Grid em qualquer componente
+      // React. Em caso de infração, o linting falhará, interrompendo o CI/CD.
+      'no-restricted-syntax': [
+        'error',
+        {
+          // CORREÇÃO: Remoção do termo 'gap-' da Regex. O gap é perfeitamente válido no Flexbox.
+          selector: "JSXAttribute[name.name='className'] Literal[value=/(^|\\s)(grid|inline-grid|grid-cols-|grid-rows-|col-span-|row-span-|auto-cols-|auto-rows-)/]",
+          message: "🔴 [Violação UI01]: O uso de CSS Grid é expressamente vetado nesta arquitetura. Utilize estritamente Flexbox (flex, flex-col, etc)."
+        },
+        {
+          selector: "JSXAttribute[name.name='className'] TemplateElement[value.raw=/(^|\\s)(grid|inline-grid|grid-cols-|grid-rows-|col-span-|row-span-|auto-cols-|auto-rows-)/]",
+          message: "🔴 [Violação UI01]: O uso de CSS Grid é expressamente vetado nesta arquitetura. Utilize estritamente Flexbox (flex, flex-col, etc)."
+        }
+      ]
+
     },
   },
 );
