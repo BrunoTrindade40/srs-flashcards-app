@@ -4,9 +4,9 @@ import { Dashboard } from "../pages/Dashboard";
 import { DeckDetails } from "../pages/DeckDetails";
 import { Login } from "../pages/Login";
 import { StudySession } from "../pages/StudySession";
-
 import { MainLayout } from "../components/MainLayout";
 import { ProtectedRoute } from "../components/ProtectedRoute";
+import { RequireDeckParam } from "../components/RequireDeckParam";
 import { RootRedirect } from "../components/RootRedirect";
 
 export function AppRoutes() {
@@ -18,28 +18,26 @@ export function AppRoutes() {
       {/* 2. Rota Pública de Autenticação */}
       <Route path="/login" element={<Login />} />
 
-      {/* 3. Bloco de Rotas Protegidas por Software */}
+      {/* 3. Bloco de Rotas Protegidas por Autenticação */}
       <Route element={<ProtectedRoute />}>
-        
-        {/* Sub-bloco com o Header de Navegação Global */}
+        {/* Sub-bloco com o Header de Navegação Global (Tema Claro) */}
         <Route element={<MainLayout />}>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/create-deck" element={<CreateDeck />} />
-          <Route path="/deck/:deckId" element={<DeckDetails />} />
+
+          {/* Rota com Validação Declarativa de Parâmetro */}
+          <Route element={<RequireDeckParam />}>
+            <Route path="/deck/:deckId" element={<DeckDetails />} />
+          </Route>
         </Route>
 
-        {/* Rota de Foco Profundo (Sem Header para imersão total) */}
-        <Route path="/study/:deckId" element={<StudySession />} />
-
-        {/* 
-          A Rota do "Modo Chaos" foi removida sumariamente.
-          A funcionalidade está escopada estritamente para a Fase 2 (TCC 2).
-          Princípio Aplicado: YAGNI.
-        */}
-        
+        {/* Rota de Foco Profundo (Sem Header) com Validação de Parâmetro */}
+        <Route element={<RequireDeckParam />}>
+          <Route path="/study/:deckId" element={<StudySession />} />
+        </Route>
       </Route>
 
-      {/* 4. Captura de rotas inexistentes (Fallback de Segurança) */}
+      {/* 4. Fallback de Segurança para Rotas Inexistentes */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

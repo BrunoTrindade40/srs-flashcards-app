@@ -8,8 +8,8 @@ export const StudySession: React.FC = () => {
   const { deckId } = useParams<{ deckId: string }>();
   const navigate = useNavigate();
 
-  // 🛃 Higienização de Fronteira (undefined -> null)
-  const safeDeckId = deckId ?? null;
+  // Parâmetro garantido pelo Route Guard; passagem direta para o motor cognitivo
+  const resolvedDeckId = deckId ?? "";
 
   const {
     currentCard,
@@ -22,7 +22,7 @@ export const StudySession: React.FC = () => {
     handleShowAnswer,
     handleRating,
     handleExit,
-  } = useStudyEngine(safeDeckId);
+  } = useStudyEngine(resolvedDeckId);
 
   useStudyKeyboard({
     showAnswer: isFlipped,
@@ -35,7 +35,7 @@ export const StudySession: React.FC = () => {
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen w-full bg-slate-950 gap-4">
-        <div className="text-amber-500 text-4xl animate-pulse">🧠</div>
+        <div className="text-amber-500 text-4xl animate-pulse">⚡</div>
         <div className="text-slate-400 font-medium text-sm animate-pulse tracking-wider uppercase">
           Sincronizando Rede Neural...
         </div>
@@ -48,7 +48,7 @@ export const StudySession: React.FC = () => {
   if (error || isSessionExhausted) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen w-full bg-slate-950 gap-5 p-4 text-center animate-fadeIn">
-        <span className="text-6xl drop-shadow-2xl mb-2">🏆</span>
+        <span className="text-6xl drop-shadow-2xl mb-2">🎯</span>
         <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-100">
           Você está em dia!
         </h2>
@@ -180,7 +180,6 @@ export const StudySession: React.FC = () => {
         )}
       </div>
 
-      {/* Pré-renderização cega do próximo cartão para aquecimento de KaTeX / LaTeX */}
       {nextCard && (
         <div
           aria-hidden="true"

@@ -1,40 +1,43 @@
-import { useApolloClient, useMutation, useQuery } from "@apollo/client/react";
+import { useMutation, useQuery } from "@apollo/client/react";
 import { useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   DELETE_DECK,
   GET_DECK_DETAILS,
-  GET_MY_DECKS,
   UPDATE_DECK,
 } from "../lib/graphql/deck";
 import { REMOVE_FLASHCARD, UPDATE_FLASHCARD } from "../lib/graphql/flashcard";
 import { useToast } from "./useToast";
-
 import type { GetDeckDetailsQuery } from "../gql/graphql";
+import type { Reference } from "@apollo/client/core";
 
 // Duck Typing: Extração da assinatura tipada estrita garantida pelo Codegen.
 type QueryDeck = NonNullable<GetDeckDetailsQuery["deck"]>;
 type QueryFlashcard = NonNullable<QueryDeck["flashcards"]>[number];
 
-export type EditingCardState = Pick<QueryFlashcard, 'id' | 'frontContent' | 'backContent' | 'sourceContext'>;
+// EXPORTAÇÃO ADICIONADA: Disponibilizamos a tipagem estrita para a UI
+export type FlashcardItem = QueryFlashcard;
+
+export type EditingCardState = Pick<
+  QueryFlashcard,
+  "id" | "frontContent" | "backContent" | "sourceContext"
+>;
 
 const CARDS_PER_PAGE = 20;
 
 export function useDeckDetails(deckId: string | null) {
   const navigate = useNavigate();
   const { showToast } = useToast();
-  const client = useApolloClient();
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditDeckOpen, setIsEditDeckOpen] = useState(false);
   const [editingCard, setEditingCard] = useState<EditingCardState | null>(null);
   const [deletingCardId, setDeletingCardId] = useState<string | null>(null);
   const [isDeletingDeck, setIsDeletingDeck] = useState(false);
-  
-  // Estado local para Paginação Client-Side
+
+  // Estado local para Paginação Client-Side (Performance O(1))
   const [visibleCount, setVisibleCount] = useState(CARDS_PER_PAGE);
 
-  // A query retorna ao formato estrito suportado pelo schema atual
   const { data, loading, error } = useQuery(GET_DECK_DETAILS, {
     variables: { id: deckId ?? "" },
     skip: !deckId,
@@ -46,11 +49,10 @@ export function useDeckDetails(deckId: string | null) {
   const allFlashcards = deck?.flashcards ?? [];
   const totalCount = allFlashcards.length;
 
-  // Lógica de Paginação em Memória (O(1) para fatiar o array)
+  // Lógica de Paginação em Memória
   const visibleFlashcards = allFlashcards.slice(0, visibleCount);
   const hasMore = visibleCount < totalCount;
 
-  // Carregamento instantâneo via memória, sem onerar a rede
   const handleLoadMore = useCallback(() => {
     setVisibleCount((prev) => prev + CARDS_PER_PAGE);
   }, []);
@@ -60,7 +62,7 @@ export function useDeckDetails(deckId: string | null) {
   const [deleteDeck, { loading: deletingDeck }] = useMutation(DELETE_DECK);
   const [updateDeck, { loading: updatingDeck }] = useMutation(UPDATE_DECK);
 
-  // Manipulador isolado para a regra de negócio de Arquivamento (SRP e Tolerância Zero a "Any")
+  // Manipulador isolado para a regra de negócio de Arquivamento (SRP)
   const handleToggleArchive = async () => {
     if (!deckId || !data?.deck) return;
     try {
@@ -73,7 +75,9 @@ export function useDeckDetails(deckId: string | null) {
         },
       });
       showToast(
-        data.deck.isArchived ? "Baralho desarquivado com sucesso." : "Baralho arquivado com sucesso.",
+        data.deck.isArchived
+          ? "Baralho desarquivado com sucesso."
+          : "Baralho arquivado com sucesso.",
         "success"
       );
     } catch (err: unknown) {
@@ -83,7 +87,6 @@ export function useDeckDetails(deckId: string | null) {
     }
   };
 
-  // Assinatura atualizada para receber a flag diretamente da Interface (SSOT)
   const handleSaveEdit = async (
     frontContent: string,
     backContent: string,
@@ -98,12 +101,12 @@ export function useDeckDetails(deckId: string | null) {
             id: editingCard.id,
             frontContent,
             backContent,
-            sourceContext, // Tipagem idêntica (string | null), coalescência removida
-            resetProgress
-          }
+            sourceContext,
+            resetProgress,
+          },
         },
       });
-      
+
       showToast("Cartão atualizado com sucesso!", "success");
       setEditingCard(null);
     } catch (err: unknown) {
@@ -142,16 +145,28 @@ export function useDeckDetails(deckId: string | null) {
       await deleteDeck({
         variables: { id: deckId },
         update(cache) {
-          const normalizedId = cache.identify({
+          // 1. Remove a referência do Deck da lista ROOT_QUERY.myDecks de forma imutável O(1)
+          cache.modify({
+            fields: {
+              myDecks(existingDeckRefs: readonly Reference[] = [], { readField }) {
+                return existingDeckRefs.filter(
+                  (ref) => readField("id", ref) !== deckId
+                );
+              },
+            },
+          });
+
+          // 2. Extirpa a entidade Deck normalizada e executa Garbage Collection
+          const normalizedDeckId = cache.identify({
             id: deckId,
             __typename: "Deck",
           });
-          cache.evict({ id: normalizedId });
+          cache.evict({ id: normalizedDeckId });
           cache.gc();
         },
       });
-      // Purga do cache de listas visuais após hard-delete
-      await client.refetchQueries({ include: [GET_MY_DECKS] });
+
+      // CORREÇÃO: Eliminado o refetchQueries. O cache local já está 100% íntegro e sincronizado.
       showToast("Baralho excluído permanentemente.", "success");
       setIsDeletingDeck(false);
       navigate("/dashboard");
@@ -166,9 +181,9 @@ export function useDeckDetails(deckId: string | null) {
     deck: data?.deck,
     loading,
     error,
-    visibleFlashcards, // Exportamos estritamente a fatia a ser renderizada no DOM
-    hasMore,           // Exposição do novo estado
-    handleLoadMore,    // Handler síncrono de paginação
+    visibleFlashcards,
+    hasMore,
+    handleLoadMore,
     deletingDeck,
     updatingDeck,
     isCreateOpen,
@@ -184,6 +199,6 @@ export function useDeckDetails(deckId: string | null) {
     handleSaveEdit,
     handleConfirmDeleteCard,
     handleConfirmDeleteDeck,
-    handleToggleArchive, // Assinatura exposta de forma isolada
+    handleToggleArchive,
   };
 }

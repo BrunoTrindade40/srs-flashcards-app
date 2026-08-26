@@ -3,8 +3,16 @@ import { ApolloClient, HttpLink, InMemoryCache } from "@apollo/client/core";
 import { SetContextLink } from "@apollo/client/link/context";
 import { supabase } from "./supabaseClient";
 
+// CORREÇÃO CRÍTICA: Padrão Fail-Fast para variáveis de rede
+const apiUrl = import.meta.env.VITE_API_URL;
+if (typeof apiUrl !== "string" || !apiUrl.trim()) {
+  throw new Error(
+    "A variável VITE_API_URL é obrigatória e não foi configurada. A inicialização do Apollo Client foi abortada."
+  );
+}
+
 const httpLink = new HttpLink({
-  uri: import.meta.env.VITE_API_URL || "http://localhost:3000/graphql",
+  uri: apiUrl,
 });
 
 // Tipagem 100% nativa. prevContext é inferido automaticamente pelo TS.
@@ -103,11 +111,6 @@ export const client = new ApolloClient({
       },
       Deck: {
         fields: {
-          _count: {
-            merge(existing = {}, incoming) {
-              return { ...existing, ...incoming };
-            },
-          },
           flashcards: {
             merge(_existing, incoming) {
               return incoming;

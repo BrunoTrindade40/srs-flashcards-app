@@ -9,14 +9,13 @@ export const GET_MY_DECKS = graphql(`
       sourceLanguage
       targetLanguage
       isArchived
-      _count {
-        flashcards
+      flashcards {
+        id
       }
     }
   }
 `);
 
-// Adicionamos limit e offset para delegar o trabalho pesado ao banco (RNF04)
 export const GET_DECK_DETAILS = graphql(`
   query GetDeckDetails($id: ID!) {
     deck(id: $id) {
@@ -26,9 +25,6 @@ export const GET_DECK_DETAILS = graphql(`
       sourceLanguage
       targetLanguage
       isArchived
-      _count {
-        flashcards
-      }
       flashcards {
         id
         frontContent
@@ -48,8 +44,8 @@ export const CREATE_DECK = graphql(`
       sourceLanguage
       targetLanguage
       isArchived
-      _count {
-        flashcards
+      flashcards {
+        id
       }
     }
   }

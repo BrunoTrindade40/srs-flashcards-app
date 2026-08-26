@@ -5,6 +5,18 @@ import { GET_DUE_FLASHCARDS, SUBMIT_REVIEW } from '../lib/graphql/study';
 import { useToast } from './useToast';
 import type { Reference } from '@apollo/client/core';
 
+// 1. Função Pura: Hash determinístico para embaralhamento (Interleaving Estável)
+// Garante aleatoriedade visual na sessão sem violar a pureza exigida pelo hook useMemo
+const generateStableHash = (id: string, seed: number) => {
+  let hash = 0;
+  const str = id + seed.toString();
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash << 5) - hash + str.charCodeAt(i);
+    hash |= 0;
+  }
+  return hash;
+};
+
 export const useStudyEngine = (deckId: string | null) => {
   const navigate = useNavigate();
   const { showToast } = useToast();
@@ -12,7 +24,11 @@ export const useStudyEngine = (deckId: string | null) => {
   // 1. Telemetria Pura (React 19): Lazy initialization.
   // Garante que o timestamp seja capturado apenas uma vez na montagem do hook,
   // mantendo o corpo da função estritamente puro.
-  const [sessionTime] = useState(() => Date.now());
+  // 2. Correção Crítica RN06: Sincronização Temporal e Rollover (04:00 AM)
+  // Subtraímos 4 horas (14.400.000 ms) do momento atual. Assim, uma revisão às 03:59 AM
+  // será matematicamente processada como pertencente ao dia anterior.
+  const ROLLOVER_OFFSET_MS = 14400000;
+  const [sessionTime] = useState(() => Date.now() - ROLLOVER_OFFSET_MS);
 
   const { data, loading, error } = useQuery(GET_DUE_FLASHCARDS, {
     // 🟡 ALERTA CORRIGIDO: Fallback seguro substituindo o operador "!".
@@ -25,14 +41,19 @@ export const useStudyEngine = (deckId: string | null) => {
   // 2. Programação Defensiva: Filtra os cartões baseando-se no timestamp exato (FSRS).
   // Isso mitiga o bug de truncamento de data do backend (DATE <= CURRENT_DATE).
   const queue = useMemo(() => {
-    // Coalescência Nula segura como fallback base[cite: 21].
     const rawQueue = data?.dueFlashcards ?? [];
     
-    return rawQueue.filter(card => {
-      // Cartões novos (estado virgem) podem não possuir 'due' ainda.
-      if (!card.due) return true; 
-      // Compara em milissegundos. Se o cartão for para daqui a 5 min, é barrado.
+    // 3. Filtragem Defensiva com Rollover Aplicado
+    const filteredQueue = rawQueue.filter(card => {
+      if (!card.due) return true;
       return new Date(card.due).getTime() <= sessionTime;
+    });
+
+    // 4. Correção Crítica RN01: Interleaving (Randomização Estável)
+    // Ordenamos a fila através do hash numérico. O resultado embaralha os assuntos, 
+    // previne a previsibilidade sequencial e preserva o 'nextCard' para pré-aquecimento visual.
+    return filteredQueue.sort((a, b) => {
+      return generateStableHash(a.id, sessionTime) - generateStableHash(b.id, sessionTime);
     });
   }, [data?.dueFlashcards, sessionTime]);
 
@@ -67,9 +88,13 @@ export const useStudyEngine = (deckId: string | null) => {
       setSubmitting(true);
 
       // Telemetria monotônica segura[cite: 21].
-      const durationMs = startTimeRef.current > 0 
-        ? Math.round(performance.now() - startTimeRef.current) 
-        : 0;
+      const rawDurationMs = startTimeRef.current > 0 
+         ? Math.round(performance.now() - startTimeRef.current) 
+         : 0;
+         
+      // CORREÇÃO CRÍTICA: Aplicação de Grampos Matemáticos na Telemetria
+      // Limita a latência gravada entre 0 e 60.000ms (1 minuto) garantindo a integridade dos dados para Data Science.
+      const safeDurationMs = Math.max(0, Math.min(rawDurationMs, 60000));
         
       const targetCard = currentCard;
       setIsFlipped(false);
@@ -79,7 +104,7 @@ export const useStudyEngine = (deckId: string | null) => {
           variables: {
             flashcardId: targetCard.id,
             rating,
-            reviewDurationMs: durationMs,
+            reviewDurationMs: safeDurationMs,
           },
           update(cache) {
             // CORREÇÃO: Utilização rigorosa da API de manipulação imutável do Apollo v4

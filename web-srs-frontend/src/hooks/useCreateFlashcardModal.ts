@@ -1,8 +1,8 @@
 import { useMutation } from "@apollo/client/react";
 import { useCallback, useEffect, useState } from "react";
-import { GET_DECK_DETAILS } from "../lib/graphql/deck";
 import { CREATE_FLASHCARD } from "../lib/graphql/flashcard";
 import { useToast } from "./useToast";
+import type { Reference } from "@apollo/client/core";
 
 interface UseCreateFlashcardModalProps {
   deckId: string;
@@ -49,10 +49,27 @@ export function useCreateFlashcardModal({
   const [sourceContext, setSourceContext] = useState("");
   const [isPreviewMode, setIsPreviewMode] = useState(false);
 
+  // CORREÇÃO DE OVERFETCHING: Substituição do refetchQueries pela mutação imutável O(1) local.
   const [createFlashcard, { loading }] = useMutation(CREATE_FLASHCARD, {
-    refetchQueries: [{ query: GET_DECK_DETAILS, variables: { id: deckId } }],
-  });
+    update(cache, { data: mutationData }) {
+      if (!mutationData?.createFlashcard) return;
 
+      // Identifica o deck raiz na RAM do Apollo
+      const deckCacheId = cache.identify({ __typename: "Deck", id: deckId });
+      
+      cache.modify({
+        id: deckCacheId,
+        fields: {
+          flashcards(existingRefs: readonly Reference[] = [], { toReference }) {
+            const newCardRef = toReference(mutationData.createFlashcard);
+            if (!newCardRef) return existingRefs;
+            // Spread operator garante a anexação imutável ao array do Deck
+            return [...existingRefs, newCardRef];
+          },
+        },
+      });
+    }
+  });
   const resetForm = useCallback(() => {
     setFront("");
     setBack("");
@@ -77,15 +94,10 @@ export function useCreateFlashcardModal({
   }, [isOpen, handleClose]);
 
   const handleSubmit = async (e?: React.SyntheticEvent<HTMLFormElement>) => {
-    if (e) {
-      e.preventDefault();
-    }
-
-    // 2. O Padrão Bouncer (Early Return) acoplado à validação
-    const validationError = validateFlashcardInput(front, back, sourceContext);
+    if (e) e.preventDefault();
     
+    const validationError = validateFlashcardInput(front, back, sourceContext);
     if (validationError) {
-      // Bloqueia no Frontend (Early-Fail) e emite feedback visual assíncrono
       showToast(validationError, "error");
       return; 
     }
@@ -97,7 +109,6 @@ export function useCreateFlashcardModal({
             deckId,
             frontContent: front.trim(),
             backContent: back.trim(),
-            // 3. Higienização Final de Fronteira: Conversão estrita de String vazia para Null
             sourceContext: sourceContext.trim() ? sourceContext.trim() : null,
           },
         },

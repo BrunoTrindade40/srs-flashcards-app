@@ -1,3 +1,4 @@
+// src/pages/Login.tsx
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
@@ -25,59 +26,72 @@ export function Login() {
     setPassword(""); // Limpeza de segurança na troca de contexto
   };
 
-  const handleSignIn = async () => {
-    try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) throw error;
-      navigate("/dashboard");
-    } catch (err: unknown) {
-      if (err instanceof Error) setErrorMsg(err.message);
-    }
+  // Funções atômicas agora retornam true se exigirem navegação ao final,
+  // delegando o controle de fluxo para o orquestrador central (handleSubmit).
+  const handleSignIn = async (): Promise<boolean> => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    return true; // Exige navegação imediata
   };
 
-  const handleSignUp = async () => {
-    try {
-      const { error } = await supabase.auth.signUp({ email, password });
-      if (error) throw error;
-      setSuccessMsg("Conta criada com sucesso! Verifique seu e-mail para confirmação.");
-    } catch (err: unknown) {
-      if (err instanceof Error) setErrorMsg(err.message);
-    }
+  const handleSignUp = async (): Promise<boolean> => {
+    const { error } = await supabase.auth.signUp({ email, password });
+    if (error) throw error;
+    setSuccessMsg("Conta criada com sucesso! Verifique seu e-mail para confirmação.");
+    return false; // Não exige navegação, apenas feedback visual
   };
 
-  // RF16: Implementação do fluxo de Solicitação de Redefinição
-  const handleForgotPassword = async () => {
+  const handleForgotPassword = async (): Promise<boolean> => {
     const safeEmail = email.trim();
     if (!safeEmail) {
-      setErrorMsg("Por favor, insira seu e-mail para recuperação.");
-      return;
+      // Falha rápida via disparo de erro, unificando o tratamento no catch central
+      throw new Error("Por favor, insira seu e-mail para recuperação.");
     }
-
-    try {
-      const { error } = await supabase.auth.resetPasswordForEmail(safeEmail, {
-        redirectTo: `${window.location.origin}/dashboard`,
-      });
-      if (error) throw error;
-      setSuccessMsg("Instruções de recuperação enviadas para o seu e-mail.");
-    } catch (err: unknown) {
-      if (err instanceof Error) setErrorMsg(`Erro: ${err.message}`);
-    }
+    const { error } = await supabase.auth.resetPasswordForEmail(safeEmail, {
+      redirectTo: `${window.location.origin}/dashboard`,
+    });
+    if (error) throw error;
+    setSuccessMsg("Instruções de recuperação enviadas para o seu e-mail.");
+    return false; // Não exige navegação, apenas feedback visual
   };
 
   // Tipagem estrita de submissão do React 19
   const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
+    
+    // Padrão Bouncer (Early Return)
     if (loading) return;
-
+    
     resetFeedback();
     setLoading(true);
 
-    // Roteador de execução baseado no estado estrito
-    if (mode === "LOGIN") await handleSignIn();
-    if (mode === "SIGNUP") await handleSignUp();
-    if (mode === "FORGOT_PASSWORD") await handleForgotPassword();
+    try {
+      let shouldNavigate = false;
 
-    setLoading(false);
+      // Roteador de execução baseado no estado estrito
+      if (mode === "LOGIN") {
+        shouldNavigate = await handleSignIn();
+      } else if (mode === "SIGNUP") {
+        shouldNavigate = await handleSignUp();
+      } else if (mode === "FORGOT_PASSWORD") {
+        shouldNavigate = await handleForgotPassword();
+      }
+
+      // CORREÇÃO CRÍTICA: Desvio de estado Pós-Navegação
+      // O hook navigate() engatilha a desmontagem. Setters pós-navegação causam Memory Leak.
+      // Substituímos o 'finally' genérico por bifurcação explícita de estado.
+      if (shouldNavigate) {
+        navigate("/dashboard");
+      } else {
+        setLoading(false);
+      }
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setErrorMsg(err.message);
+      }
+      // Sempre libera o botão em caso de falha (Tear-down seguro)
+      setLoading(false);
+    }
   };
 
   return (
@@ -165,6 +179,7 @@ export function Login() {
               Já tem uma conta? Faça login
             </button>
           )}
+
           {mode !== "SIGNUP" && (
             <button
               type="button"
@@ -174,6 +189,7 @@ export function Login() {
               Não tem uma conta? Cadastre-se
             </button>
           )}
+
           {mode === "LOGIN" && (
             <button
               type="button"

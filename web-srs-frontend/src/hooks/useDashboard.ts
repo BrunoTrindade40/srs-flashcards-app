@@ -4,14 +4,13 @@ import { GET_MY_DECKS } from "../lib/graphql/deck";
 import { GET_ME } from "../lib/graphql/settings";
 import type { GetMyDecksQuery } from "../gql/graphql";
 
-// 🔵 SUGESTÃO: Derivação de tipo atômico diretamente do Codegen (Elimina a interface manual DeckSummary)
+// Extração atômica gerada pelo Codegen (Single Source of Truth)
 export type DeckItem = NonNullable<GetMyDecksQuery["myDecks"]>[number];
 
 export function useDashboard() {
   const [isCreateDeckOpen, setIsCreateDeckOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
-  // 1. Inferência estrita e nativa via TypedDocumentNode (Sem Generics manuais ou asserções)
   const {
     data: dataMe,
     loading: loadingMe,
@@ -28,12 +27,10 @@ export function useDashboard() {
     fetchPolicy: "cache-and-network",
   });
 
-  // 2. 🔴 CRÍTICO CORRIGIDO: Remoção do 'as DeckSummary[]'. Confiamos 100% na inferência do Codegen.
   const rawDecks = useMemo(() => {
     return dataDecks?.myDecks ?? [];
   }, [dataDecks?.myDecks]);
 
-  // 3. Filtros puros operando sobre a tipagem exata da query GraphQL
   const activeDecks = useMemo(() => {
     return rawDecks.filter((deck) => !deck.isArchived);
   }, [rawDecks]);
@@ -42,15 +39,15 @@ export function useDashboard() {
     return rawDecks.filter((deck) => deck.isArchived);
   }, [rawDecks]);
 
-  // 4. Redução precisa baseada exclusivamente no contrato de campos de GET_MY_DECKS (_count)
+  // CORREÇÃO: Contagem de coleção normalizada na memória RAM.
+  // Reage automaticamente às mutações locais criadas por refetchQueries ou evict.
   const totalActiveCards = useMemo(() => {
     return activeDecks.reduce((acc, deck) => {
-      const count = deck._count?.flashcards ?? 0;
+      const count = deck.flashcards?.length ?? 0;
       return acc + count;
     }, 0);
   }, [activeDecks]);
 
-  // 5. Duck Typing e segurança de nulidade sem asserções
   const user = dataMe?.me ?? null;
   const streak = user?.currentStreak ?? 0;
   const showStreakBonus = streak >= 3;

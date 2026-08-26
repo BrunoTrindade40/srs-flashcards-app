@@ -1,27 +1,27 @@
-import React, { useEffect } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import React, { useEffect, useCallback } from "react";
+import { Link, useParams } from "react-router-dom";
 import { ConfirmModal } from "../components/ConfirmModal";
 import { CreateFlashcardModal } from "../components/CreateFlashcardModal";
 import { EditDeckModal } from "../components/EditDeckModal";
 import { EditFlashcardModal } from "../components/EditFlashcardModal";
-import { MarkdownRenderer } from "../components/MarkdownRenderer";
+import { DeckHeader } from "../components/DeckHeader";
+import { FlashcardList } from "../components/FlashcardList";
 import { useDeckDetails } from "../hooks/useDeckDetails";
 import { useToast } from "../hooks/useToast";
 
 export const DeckDetails: React.FC = () => {
   const { deckId } = useParams<{ deckId: string }>();
-  const navigate = useNavigate();
   const { showToast } = useToast();
 
-  const safeDeckId = deckId ?? null;
+  const resolvedDeckId = deckId ?? "";
 
   const {
     deck,
     loading,
     error,
-    hasMore,           // Exposição do novo estado
-    visibleFlashcards, // Exposição da fatia visível de flashcards
-    handleLoadMore,    // Handler síncrono de paginação
+    hasMore,
+    visibleFlashcards,
+    handleLoadMore,
     deletingDeck,
     updatingDeck,
     isCreateOpen,
@@ -38,13 +38,19 @@ export const DeckDetails: React.FC = () => {
     handleConfirmDeleteCard,
     handleConfirmDeleteDeck,
     handleToggleArchive,
-  } = useDeckDetails(safeDeckId);
+  } = useDeckDetails(resolvedDeckId);
 
   useEffect(() => {
     if (error) {
       showToast(`Erro ao carregar detalhes do deck: ${error.message}`, "error");
     }
   }, [error, showToast]);
+
+  const handleCloseCreateModal = useCallback(() => setIsCreateOpen(false), [setIsCreateOpen]);
+  const handleCloseEditCardModal = useCallback(() => setEditingCard(null), [setEditingCard]);
+  const handleCloseEditDeckModal = useCallback(() => setIsEditDeckOpen(false), [setIsEditDeckOpen]);
+  const handleCloseDeleteCardModal = useCallback(() => setDeletingCardId(null), [setDeletingCardId]);
+  const handleCloseDeleteDeckModal = useCallback(() => setIsDeletingDeck(false), [setIsDeletingDeck]);
 
   if (loading && !deck) {
     return (
@@ -56,7 +62,7 @@ export const DeckDetails: React.FC = () => {
     );
   }
 
-  if (!safeDeckId || error || !deck) {
+  if (error || !deck) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4 p-6 text-center w-full">
         <h2 className="text-xl font-bold text-rose-500">
@@ -65,9 +71,6 @@ export const DeckDetails: React.FC = () => {
       </div>
     );
   }
-
-  // Fallbacks locais aplicados fora do JSX
-  const hasCards = visibleFlashcards.length > 0;
 
   return (
     <div className="flex flex-col w-full max-w-5xl mx-auto gap-6 p-6 animate-fadeIn">
@@ -80,177 +83,85 @@ export const DeckDetails: React.FC = () => {
         </Link>
       </div>
 
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-800 pb-6 gap-4">
-        <div className="flex flex-col gap-2 w-full md:w-auto">
-          <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="text-3xl font-extrabold text-slate-100">
-              {deck.title}
-            </h1>
-            
-            {/* Renderização condicional estrita exigindo valor binário explícito (segurança de nulidade) */}
-            {deck.isArchived && (
-              <span className="bg-slate-800 text-slate-400 px-2.5 py-0.5 rounded-full text-[10px] uppercase tracking-wider font-bold border border-slate-700">
-                Arquivado
-              </span>
-            )}
+      {/* CORREÇÃO CRÍTICA: Desmontagem Condicional da Estrutura */}
+      {/* Somente renderiza a interface complexa quando existe a garantia lógica de 'deck' populado na memória (Resolvido Pelo Early Return acima) */}
+      {/* CORREÇÃO: Desmontagem Condicional explícita baseada na existência dos dados */}
+      {deck && (
+        <DeckHeader
+          deckId={deck.id}
+          title={deck.title}
+          description={deck.description ?? null}
+          isArchived={deck.isArchived}
+          flashcardsCount={deck.flashcards?.length ?? 0}
+          updatingDeck={updatingDeck}
+          onToggleArchive={handleToggleArchive}
+          onEditDeck={() => setIsEditDeckOpen(true)}
+          onDeleteDeck={() => setIsDeletingDeck(true)}
+          onCreateCard={() => setIsCreateOpen(true)}
+        />
+      )}
 
-            <div className="flex flex-wrap gap-2 md:ml-2 mt-2 md:mt-0">
-              {/* Botão de Transição de Estado Acoplado Estritamente a Ação de Negócio */}
-              <button
-                onClick={handleToggleArchive}
-                disabled={updatingDeck}
-                className="px-3 py-1 text-xs font-semibold bg-slate-800 text-slate-300 hover:text-white rounded border border-slate-700 transition-colors cursor-pointer shadow-sm disabled:opacity-50"
-              >
-                {deck.isArchived ? "Desarquivar" : "Arquivar"}
-              </button>
+      {/* CORREÇÃO: Tolerância Zero a "any". A prop aceita o tipo limpo inferido. */}
+      {visibleFlashcards && (
+        <FlashcardList
+          flashcards={visibleFlashcards}
+          hasMore={hasMore}
+          onLoadMore={handleLoadMore}
+          onEditCard={setEditingCard}
+          onDeleteCard={setDeletingCardId}
+        />
+      )}
 
-              <button
-                onClick={() => setIsEditDeckOpen(true)}
-                className="px-3 py-1 text-xs font-semibold bg-slate-800 text-slate-300 hover:text-white rounded border border-slate-700 transition-colors cursor-pointer shadow-sm"
-              >
-                  Editar
-              </button>
-              
-              <button
-                onClick={() => setIsDeletingDeck(true)}
-                className="px-3 py-1 text-xs font-semibold bg-rose-950/30 text-rose-400 hover:bg-rose-900/50 rounded border border-rose-900/50 transition-colors cursor-pointer shadow-sm"
-              >
-                  Excluir
-              </button>
-            </div>
-          </div>
-          <p className="text-slate-400 text-sm">
-            {deck.description || "Sem descrição."}
-          </p>
-        </div>
+      {isCreateOpen && (
+        <CreateFlashcardModal
+          deckId={deck.id}
+          isOpen={isCreateOpen}
+          onClose={handleCloseCreateModal}
+        />
+      )}
 
-        <div className="flex gap-3 w-full md:w-auto">
-          <button
-            onClick={() => navigate(`/study/${deck.id}`)}
-            disabled={!deck.flashcards || deck.flashcards.length === 0}
-            className="flex-1 md:flex-none px-5 py-2.5 font-bold rounded-lg transition-colors shadow-md bg-amber-500 text-slate-950 hover:bg-amber-400 cursor-pointer disabled:opacity-50"
-          >
-            Iniciar Estudo
-          </button>
-          <button
-            onClick={() => setIsCreateOpen(true)}
-            className="flex-1 md:flex-none px-5 py-2.5 bg-slate-800 text-slate-100 font-bold rounded-lg hover:bg-slate-700 border border-slate-700 transition-colors cursor-pointer shadow-sm"
-          >
-            + Criar Card
-          </button>
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-4">
-        <h2 className="text-lg font-bold text-slate-300">
-          Cartões no Baralho ({deck.flashcards?.length ?? 0})
-        </h2>
-
-        {!hasCards ? (
-          <div className="p-8 bg-slate-900 border border-slate-800 rounded-xl text-center text-slate-500 flex items-center justify-center">
-            <span>Nenhum cartão cadastrado neste baralho ainda.</span>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-4">
-            {/* Como executamos o Codegen com a query válida, 'card' possui inferência estrita de 'QueryFlashcard'. */}
-            {visibleFlashcards.map((card) => (
-               <div
-                 key={card.id}
-                 className="flex flex-col md:flex-row justify-between items-start md:items-center bg-slate-900 border border-slate-800 p-5 rounded-xl gap-4 hover:border-slate-700 transition-all"
-               >
-                 <div className="flex flex-col md:flex-row flex-1 gap-6 w-full overflow-hidden">
-                   <div className="flex flex-col flex-1 gap-1 min-w-0">
-                     <span className="text-[10px] font-bold text-amber-500 uppercase tracking-wider">Frente</span>
-                     <MarkdownRenderer content={card.frontContent ?? ""} />
-                   </div>
-                   <div className="flex flex-col flex-1 gap-1 min-w-0 border-t md:border-t-0 md:border-l border-slate-800 pt-3 md:pt-0 md:pl-6">
-                     <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-wider">Verso</span>
-                     <MarkdownRenderer content={card.backContent ?? ""} />
-                   </div>
-                 </div>
-
-                 <div className="flex gap-2 self-end md:self-center border-t md:border-t-0 border-slate-800/80 pt-3 md:pt-0 w-full md:w-auto justify-end">
-                   <button
-                     onClick={() => setEditingCard({
-                         id: card.id,
-                         frontContent: card.frontContent,
-                         backContent: card.backContent,
-                         sourceContext: card.sourceContext,
-                       })}
-                     className="px-3 py-1.5 text-xs font-semibold bg-slate-800 text-slate-300 hover:text-white rounded border border-slate-700 transition-colors cursor-pointer"
-                   >Editar</button>
-                   <button
-                     onClick={() => setDeletingCardId(card.id)}
-                     className="px-3 py-1.5 text-xs font-semibold bg-rose-950/40 text-rose-300 hover:bg-rose-900/60 rounded border border-rose-900/50 transition-colors cursor-pointer"
-                   >Excluir</button>
-                 </div>
-               </div>
-            ))}
-            {/* Contenção Visual de Paginação Estrita via Flexbox */}
-            {hasMore && (
-              <div className="flex justify-center pt-4 w-full">
-                <button
-                  onClick={handleLoadMore}
-                  className="px-6 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl transition-colors cursor-pointer border border-slate-700 shadow-sm flex items-center justify-center gap-2"
-                >
-                  Carregar Mais Cartões
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      <CreateFlashcardModal
-        deckId={deck.id}
-        isOpen={isCreateOpen}
-        onClose={() => setIsCreateOpen(false)}
-      />
-
-      {editingCard && (
+      {editingCard !== null && (
         <EditFlashcardModal
           isOpen={true}
           initialFrontContent={editingCard.frontContent}
           initialBackContent={editingCard.backContent}
           initialSourceContext={editingCard.sourceContext}
-          onClose={() => setEditingCard(null)}
+          onClose={handleCloseEditCardModal}
           onSave={handleSaveEdit}
         />
       )}
 
-      {/* 
-        CORREÇÃO CRÍTICA: Renderização Condicional do Modal.
-        Ao invés de mantê-lo invisível (retornando null internamente), o pai 
-        desmonta o componente da árvore. Quando 'isEditDeckOpen' vira true, 
-        uma nova instância é criada, forçando o 'useState' a ler a prop 'deck' atualizada.
-      */}
       {isEditDeckOpen && (
         <EditDeckModal
           deck={deck}
           isOpen={isEditDeckOpen}
-          onClose={() => setIsEditDeckOpen(false)}
+          onClose={handleCloseEditDeckModal}
         />
       )}
 
-      <ConfirmModal
-        isOpen={!!deletingCardId}
-        title="Excluir Flashcard"
-        message="Tem certeza que deseja remover este cartão do baralho?"
-        onClose={() => setDeletingCardId(null)}
-        onConfirm={handleConfirmDeleteCard}
-        isDanger={true}
-      />
+      {deletingCardId !== null && (
+        <ConfirmModal
+          isOpen={true}
+          title="Excluir Flashcard"
+          message="Tem certeza que deseja remover este cartão do baralho?"
+          onClose={handleCloseDeleteCardModal}
+          onConfirm={handleConfirmDeleteCard}
+          isDanger={true}
+        />
+      )}
 
-      <ConfirmModal
-        isOpen={isDeletingDeck}
-        loading={deletingDeck}
-        title="Excluir Baralho Inteiro"
-        message={`Esta ação apagará permanentemente o baralho "${deck.title}" e TODOS os seus ${deck.flashcards?.length || 0} cartões. O algoritmo FSRS perderá o histórico desses estudos. Deseja prosseguir?`}
-        confirmText="Sim, Apagar Tudo"
-        isDanger={true}
-        onClose={() => setIsDeletingDeck(false)}
-        onConfirm={handleConfirmDeleteDeck}
-      />
+      {isDeletingDeck && (
+        <ConfirmModal
+          isOpen={true}
+          loading={deletingDeck}
+          title="Excluir Baralho Inteiro"
+          message={`Esta ação apagará permanentemente o baralho "${deck.title}". O algoritmo FSRS perderá o histórico. Prosseguir?`}
+          confirmText="Sim, Apagar Tudo"
+          isDanger={true}
+          onClose={handleCloseDeleteDeckModal}
+          onConfirm={handleConfirmDeleteDeck}
+        />
+      )}
     </div>
   );
 };
