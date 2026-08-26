@@ -1,7 +1,5 @@
-refactor(frontend): adocao de POJO imutavel para modelagem FSRS e mapeamento declarativo de UI
+refactor(frontend): harmonizacao visual do layout principal e dashboard para modo claro (UI02)
 
-- refactor(frontend): substituicao do enum FsrsState por objeto constante (as const) e derivacao estatica de tipos em src/domain/fsrs.ts, eliminando violacao de 'erasableSyntaxOnly' sob compilacao estrita do Vite.
-- feat(frontend): implementacao do Type Guard isValidFsrsState para saneamento de fronteira de rede (Network Boundary) em tempo O(1), contornando ausencia de validadores de runtime no ecossistema de dependencias.
-- refactor(frontend): reestruturacao do componente FsrsStateBadge utilizando o padrao Dictionary (Record<FsrsState, ...>), eliminando dead initializations (lets) e vazamento de declaracao lexical no case block.
-- perf(frontend): garantia de checagem exaustiva de tipos em tempo de compilacao sem necessidade de switch/case mutavel ou clausula never.
-- style(frontend): manutencao do padrao 100% Flexbox para renderizacao atomica e estavel do componente de badge de estado cognitivo.
+- refactor(frontend): alteracao do background global em MainLayout.tsx de bg-slate-950 para bg-slate-50, garantindo fluidez de contraste com o Header branco.
+- style(frontend): readequacao do Dashboard.tsx para paleta semantica clara (bg-white, text-slate-800, border-slate-200), eliminando ruidos visuais e estabilizando a carga cognitiva.
+- perf(frontend): preservacao da renderizacao estrutural exclusiva via Flexbox em toda a malha do painel, em estrita obediencia a base de conhecimento e ao MVP.

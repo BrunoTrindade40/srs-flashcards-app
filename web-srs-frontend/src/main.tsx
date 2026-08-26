@@ -1,17 +1,25 @@
-import { ApolloProvider } from "@apollo/client/react"; // Importação atualizada para a v4
+import { ApolloProvider } from "@apollo/client/react";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import "./index.css";
 import { client } from "./lib/apollo";
 
-const rootElement = document.getElementById("root")!;
-const root = createRoot(rootElement);
+const container = document.getElementById("root");
+
+// 1. Padrão Bouncer e Early Return Defensivo: Tolerância Zero a '!'
+if (!container) {
+  throw new Error(
+    "Elemento raiz 'root' não encontrado no DOM. A inicialização do React foi abortada."
+  );
+}
+
+const root = createRoot(container);
 
 root.render(
   <StrictMode>
     <ApolloProvider client={client}>
       <App />
     </ApolloProvider>
-  </StrictMode>,
+  </StrictMode>
 );

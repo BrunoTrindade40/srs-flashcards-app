@@ -13,7 +13,6 @@ import type { TypedDocumentNode as DocumentNode } from '@graphql-typed-document-
  * Therefore it is highly recommended to use the babel or swc plugin for production.
  */
 const documents = {
-    "\n                fragment NewDeck on Deck {\n                  id\n                  title\n                  description\n                  sourceLanguage\n                  targetLanguage\n                  _count {\n                    flashcards\n                  }\n                }\n              ": types.NewDeckFragmentDoc,
     "\n  query GetMyDecks {\n    myDecks {\n      id\n      title\n      description\n      sourceLanguage\n      targetLanguage\n      isArchived\n      _count {\n        flashcards\n      }\n    }\n  }\n": types.GetMyDecksDocument,
     "\n  query GetDeckDetails($id: ID!) {\n    deck(id: $id) {\n      id\n      title\n      description\n      sourceLanguage\n      targetLanguage\n      isArchived\n      _count {\n        flashcards\n      }\n      flashcards {\n        id\n        frontContent\n        backContent\n        sourceContext\n      }\n    }\n  }\n": types.GetDeckDetailsDocument,
     "\n  mutation CreateDeck($data: CreateDeckInput!) {\n    createDeck(data: $data) {\n      id\n      title\n      description\n      sourceLanguage\n      targetLanguage\n      isArchived\n      _count {\n        flashcards\n      }\n    }\n  }\n": types.CreateDeckDocument,
@@ -43,10 +42,6 @@ const documents = {
  */
 export function graphql(source: string): unknown;
 
-/**
- * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
- */
-export function graphql(source: "\n                fragment NewDeck on Deck {\n                  id\n                  title\n                  description\n                  sourceLanguage\n                  targetLanguage\n                  _count {\n                    flashcards\n                  }\n                }\n              "): (typeof documents)["\n                fragment NewDeck on Deck {\n                  id\n                  title\n                  description\n                  sourceLanguage\n                  targetLanguage\n                  _count {\n                    flashcards\n                  }\n                }\n              "];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

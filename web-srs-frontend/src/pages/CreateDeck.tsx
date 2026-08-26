@@ -1,47 +1,52 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+// Módulos restritos à regra de segregação do Apollo Client
+import type { Reference } from "@apollo/client/core";
 import { useMutation } from "@apollo/client/react";
-import { CREATE_DECK, GET_MY_DECKS } from "../lib/graphql/deck";
+
+import { CREATE_DECK } from "../lib/graphql/deck";
 
 export const CreateDeck: React.FC = () => {
   const navigate = useNavigate();
 
-  // Controle de Formulário Controlado
   const [title, setTitle] = useState<string>("");
   const [description, setDescription] = useState<string>("");
   const [formError, setFormError] = useState<string | null>(null);
 
-  // Correção ALERTA e CRÍTICO: Remoção das tipagens genéricas importadas incorretamente.
-  // O Apollo Client v4 infere `data` e `variables` diretamente da constante `CREATE_DECK`.
   const [createDeck, { loading }] = useMutation(CREATE_DECK, {
-    // O 'update' permite-nos injetar o novo deck no cache do Apollo,
-    // poupando uma requisição HTTP quando voltarmos ao Dashboard.
-    update(cache, { data }) {
-      if (!data?.createDeck) return;
+    update(cache, { data: mutationData }) {
+      // Padrão Bouncer no modificador do cache
+      if (!mutationData?.createDeck) return;
 
-      // Correção ALERTA: readQuery e writeQuery também inferem o tipo nativamente 
-      // a partir de GET_MY_DECKS (TypedDocumentNode).
-      const existingDecks = cache.readQuery({
-        query: GET_MY_DECKS,
-      });
+      // SUGESTÃO APLICADA: Substituição da reescrita de query inteira pela inserção isolada
+      cache.modify({
+        fields: {
+          myDecks(existingDeckRefs: readonly Reference[] = [], { toReference }) {
+            // Cria um ponteiro em memória para o item recém chegado na Mutation
+            const newDeckRef = toReference(mutationData.createDeck);
+            
+            // Aborta se não gerar uma referência válida
+            if (!newDeckRef) return existingDeckRefs;
 
-      if (existingDecks && existingDecks.myDecks) {
-        cache.writeQuery({
-          query: GET_MY_DECKS,
-          data: {
-            myDecks: [data.createDeck, ...existingDecks.myDecks],
+            // Injeta o novo agrupamento no topo da fila visual com complexidade O(1)
+            // utilizando spread operator, garantindo Imutabilidade Estrita.
+            return [newDeckRef, ...existingDeckRefs];
           },
-        });
-      }
+        },
+      });
     },
   });
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // Tipagem estrita exigida para eventos no React
+  const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
     setFormError(null);
 
-    // Validação de Frontend Básica
-    if (!title.trim()) {
+    const safeTitle = title.trim();
+    const safeDescription = description.trim();
+
+    // Padrão Bouncer de validação (Early Return)
+    if (!safeTitle) {
       setFormError("O título do Deck é obrigatório.");
       return;
     }
@@ -50,19 +55,19 @@ export const CreateDeck: React.FC = () => {
       await createDeck({
         variables: {
           data: {
-            title: title.trim(),
-            description: description.trim() || undefined,
+            title: safeTitle,
+            // Higienização estrita garantindo null ao invés de undefined
+            description: safeDescription ? safeDescription : null,
           },
         },
       });
-
-      // Redireciona para o Dashboard após o sucesso
       navigate("/dashboard");
-    } catch (err) {
-      console.error("Falha ao criar o deck:", err);
-      setFormError(
-        "Ocorreu um erro ao comunicar com o servidor. Tenta novamente.",
-      );
+    } catch (err: unknown) {
+      // Inspeção com Type Guard, garantindo tolerância zero a 'any'
+      if (err instanceof Error) {
+        console.error("Falha ao criar o deck:", err.message);
+      }
+      setFormError("Ocorreu um erro ao comunicar com o servidor. Tente novamente.");
     }
   };
 
@@ -72,11 +77,12 @@ export const CreateDeck: React.FC = () => {
         <div className="mb-6">
           <h2 className="text-2xl font-bold text-gray-800">Criar Novo Deck</h2>
           <p className="text-gray-500 text-sm mt-1">
-            Organiza o teu conhecimento por áreas de estudo.
+            Organize o seu conhecimento por áreas de estudo.
           </p>
         </div>
 
-        {formError && (
+        {/* Verificação explícita do estado de erro (evita renderização suja de '0') */}
+        {formError !== null && (
           <div className="mb-4 p-3 bg-red-50 text-red-700 text-sm rounded-lg border border-red-100">
             {formError}
           </div>
@@ -84,10 +90,7 @@ export const CreateDeck: React.FC = () => {
 
         <form onSubmit={handleSubmit} className="space-y-5">
           <div className="flex flex-col gap-1">
-            <label
-              htmlFor="title"
-              className="text-sm font-medium text-gray-700"
-            >
+            <label htmlFor="title" className="text-sm font-medium text-gray-700">
               Título do Deck <span className="text-red-500">*</span>
             </label>
             <input
@@ -103,10 +106,7 @@ export const CreateDeck: React.FC = () => {
           </div>
 
           <div className="flex flex-col gap-1">
-            <label
-              htmlFor="description"
-              className="text-sm font-medium text-gray-700"
-            >
+            <label htmlFor="description" className="text-sm font-medium text-gray-700">
               Descrição (Opcional)
             </label>
             <textarea

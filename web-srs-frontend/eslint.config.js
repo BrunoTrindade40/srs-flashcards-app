@@ -5,7 +5,7 @@ import globals from "globals";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["dist"] },
+  { ignores: ["dist", "src/gql/**/*"] },
   {
     files: ["**/*.{ts,tsx}"],
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
@@ -23,6 +23,8 @@ export default tseslint.config(
         "warn",
         { allowConstantExport: true },
       ],
+      // 2. Garantia da Base de Conhecimento: Tolerância Zero a Any aplicada ao código autoral.
+      "@typescript-eslint/no-explicit-any": "error",
 
       // ----------------------------------------------------------------------
       // BLOQUEIO ARQUITETURAL - REGRA UI01 (Estrito Flexbox)

@@ -5,6 +5,13 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { ANONYMIZED_PAYLOAD, STUDY_MODE } from '../common/constants/domain.constants';
 import { RolloverService } from '../common/services/rollover.service';
 
+// 🟡 ALERTA CORRIGIDO: Interface para aplicar Duck Typing e eliminar o 'any'
+interface StreakDataPayload {
+  isFirstStudyOfDay: boolean;
+  current: number;
+  longest: number;
+}
+
 // -----------------------------------------------------------------------------
 // FUNÇÕES PURAS (Stateless) - Isolamento de Domínio e Otimização de Memória
 // -----------------------------------------------------------------------------
@@ -59,6 +66,12 @@ const computeNextFsrsState = (
 
 @Injectable()
 export class StudyService {
+  
+  // 🔴 CRÍTICO CORRIGIDO: Fonte Única da Verdade para RN07 (Leech Protection)
+  private readonly LEECH_THRESHOLD = 8;
+  private readonly SUSPENDED_DUE_DATE = new Date('2099-12-31T23:59:59.999Z');
+  private readonly SUSPENDED_STATE = 4; // Estado de escape fora do padrão FSRS (0-3)
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly rolloverService: RolloverService,
@@ -88,7 +101,7 @@ export class StudyService {
   }
 
   /**
-   * RF05: Avaliação de Retenção (FSRS) + Transação Atômica + Gamificação
+   * RF05: Avaliação de Retenção (FSRS) + Transação Atômica + Gamificação + Fadiga (RN08)
    */
   async submitReview(userId: string, flashcardId: string, rating: number, reviewDurationMs: number): Promise<boolean> {
     if (![1, 2, 3, 4].includes(rating)) {
@@ -98,28 +111,48 @@ export class StudyService {
     const sanitizedDurationMs = Math.max(0, Math.min(Math.round(reviewDurationMs), 60000));
     await this.validateFlashcardAccess(flashcardId, userId);
 
+    // 1. Coleta inicial de registros e projeção estrita de usuário
     const [fsrsDataRecord, userRecord] = await Promise.all([
       this.prisma.cardFSRSData.findUnique({ where: { flashcardId_userId: { flashcardId, userId } } }),
       this.prisma.user.findUnique({
         where: { id: userId },
-        select: { fsrsWeights: true, timezone: true, currentStreak: true, longestStreak: true },
+        // 🟡 ALERTA CORRIGIDO: Inclusão de maxDailyReviews na projeção
+        select: { fsrsWeights: true, timezone: true, currentStreak: true, longestStreak: true, maxDailyReviews: true },
       }),
     ]);
 
     const userTz = userRecord?.timezone ?? 'America/Sao_Paulo';
     const { start: todayStart } = this.rolloverService.getStudyDayBounds(userTz);
 
-    // 1. Extração Isolada da Lógica de Gamificação
-    const streakData = await this.resolveStreak(userId, userRecord, todayStart);
-    const gainedXp = RATING_XP_MAP[rating] ?? 0;
+    // 2. 🔵 SUGESTÃO APLICADA: Delegação de I/O em paralelo para otimização de latência
+    const [streakData, todayReviewCount] = await Promise.all([
+      this.resolveStreak(userId, userRecord, todayStart),
+      this.prisma.reviewLog.count({
+        where: { userId, createdAt: { gte: todayStart } },
+      }),
+    ]);
 
-    // 2. Extração Isolada da Lógica Matemática do FSRS
+    // 3. 🟡 ALERTA CORRIGIDO: Cálculo matemático da Fadiga Cognitiva (RN08)
+    const maxDailyReviews = userRecord?.maxDailyReviews ?? 100;
+    const isFatiguedReview = todayReviewCount >= maxDailyReviews;
+
+    const gainedXp = RATING_XP_MAP[rating] ?? 0;
+    
+    // Cálculo Matemático Puro
     const reviewResult = computeNextFsrsState(rating, fsrsDataRecord, userRecord?.fsrsWeights);
     const nextState = reviewResult.card;
 
-    // 3. Orquestração Pura da Transação no Banco de Dados
+    // 4. Orquestração da Transação
     await this.executeReviewTransaction(
-      userId, flashcardId, rating, sanitizedDurationMs, nextState, fsrsDataRecord, gainedXp, streakData
+      userId, 
+      flashcardId, 
+      rating, 
+      sanitizedDurationMs, 
+      nextState, 
+      fsrsDataRecord, 
+      gainedXp, 
+      streakData,
+      isFatiguedReview // Injeção do novo parâmetro validado
     );
 
     return true;
@@ -246,39 +279,82 @@ export class StudyService {
   }
 
   private async executeReviewTransaction(
-    userId: string, flashcardId: string, rating: number, durationMs: number, 
-    nextState: FSRSCard, prevData: CardFSRSData | null, gainedXp: number, streakData: any
-  ) {
+    userId: string, 
+    flashcardId: string, 
+    rating: number, 
+    durationMs: number, 
+    nextState: FSRSCard, 
+    prevData: CardFSRSData | null, 
+    gainedXp: number, 
+    streakData: StreakDataPayload, // Tipagem Estrutural aplicada
+    isFatiguedReview: boolean // Recebimento estrito com tipagem forte
+  ): Promise<void> {
+    
+    // Análise de Cartões Parasitas
+    const isLeech = nextState.lapses >= this.LEECH_THRESHOLD;
+
+    // Suspensão Lógica ("Far Future"): Respeita a restrição de não-nulidade do Schema
+    const effectiveDue = isLeech ? this.SUSPENDED_DUE_DATE : nextState.due;
+    const effectiveState = isLeech ? this.SUSPENDED_STATE : nextState.state;
+
     await this.prisma.$transaction([
       this.prisma.cardFSRSData.upsert({
         where: { flashcardId_userId: { flashcardId, userId } },
         update: {
-          stability: nextState.stability, difficulty: nextState.difficulty, elapsedDays: nextState.elapsed_days,
-          scheduledDays: nextState.scheduled_days, reps: nextState.reps, lapses: nextState.lapses,
-          state: nextState.state, lastReview: nextState.last_review, due: nextState.due,
+          stability: nextState.stability,
+          difficulty: nextState.difficulty,
+          elapsedDays: nextState.elapsed_days,
+          scheduledDays: nextState.scheduled_days,
+          reps: nextState.reps,
+          lapses: nextState.lapses,
+          state: effectiveState,
+          lastReview: nextState.last_review,
+          due: effectiveDue,
         },
         create: {
-          flashcardId, userId, stability: nextState.stability, difficulty: nextState.difficulty,
-          elapsedDays: nextState.elapsed_days, scheduledDays: nextState.scheduled_days,
-          reps: nextState.reps, lapses: nextState.lapses, state: nextState.state,
-          lastReview: nextState.last_review, due: nextState.due,
+          flashcardId,
+          userId,
+          stability: nextState.stability,
+          difficulty: nextState.difficulty,
+          elapsedDays: nextState.elapsed_days,
+          scheduledDays: nextState.scheduled_days,
+          reps: nextState.reps,
+          lapses: nextState.lapses,
+          state: effectiveState,
+          lastReview: nextState.last_review,
+          due: effectiveDue,
         },
       }),
       this.prisma.reviewLog.create({
         data: {
-          flashcardId, userId, rating, reviewDurationMs: durationMs,
-          studyMode: STUDY_MODE.STANDARD, state: prevData?.state ?? 0,
-          stabilityBefore: prevData?.stability ?? 0, stabilityAfter: nextState.stability,
-          difficultyBefore: prevData?.difficulty ?? 0, difficultyAfter: nextState.difficulty,
-          elapsedDays: nextState.elapsed_days, scheduledDays: nextState.scheduled_days,
-          due: prevData?.due ?? new Date(), version: 1, reps: nextState.reps, lapses: nextState.lapses,
+          flashcardId,
+          userId,
+          rating,
+          reviewDurationMs: durationMs,
+          studyMode: 'STANDARD', 
+          state: prevData?.state ?? 0,
+          stabilityBefore: prevData?.stability ?? 0,
+          stabilityAfter: nextState.stability,
+          difficultyBefore: prevData?.difficulty ?? 0,
+          difficultyAfter: nextState.difficulty,
+          elapsedDays: nextState.elapsed_days,
+          scheduledDays: nextState.scheduled_days,
+          due: prevData?.due ?? new Date(),
+          version: 1,
+          reps: nextState.reps,
+          lapses: nextState.lapses,
+          // 🔴 APLICAÇÃO CRÍTICA DO STATUS DE EXAUSTÃO
+          isFatiguedReview,
         },
       }),
       this.prisma.user.update({
         where: { id: userId },
         data: {
           totalXp: { increment: gainedXp },
-          ...(streakData.isFirstStudyOfDay && { currentStreak: streakData.current, longestStreak: streakData.longest }),
+          ...(streakData.isFirstStudyOfDay && { 
+            currentStreak: streakData.current, 
+            longestStreak: streakData.longest 
+          }),
         },
       }),
     ]);

@@ -100,6 +100,7 @@ type Mutation {
   anonymizeMe: Boolean!
   createDeck(data: CreateDeckInput!): Deck!
   updateDeck(data: UpdateDeckInput!): Deck!
+  toggleDeckArchive(id: ID!): Deck!
   removeDeck(id: ID!): Boolean!
   enrollInDeck(deckId: ID!): Boolean!
   unenrollFromDeck(deckId: ID!): Boolean!
@@ -154,4 +155,5 @@ input UpdateFlashcardInput {
   isEditedAfterAi: Boolean = false
   aiModelSource: String
   id: String!
+  resetProgress: Boolean
 }

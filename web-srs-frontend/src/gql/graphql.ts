@@ -98,6 +98,7 @@ export type Mutation = {
   removeDeck: Scalars['Boolean']['output'];
   removeFlashcard: Flashcard;
   submitReview: Scalars['Boolean']['output'];
+  toggleDeckArchive: Deck;
   unenrollFromDeck: Scalars['Boolean']['output'];
   updateDeck: Deck;
   updateFlashcard: Flashcard;
@@ -134,6 +135,11 @@ export type MutationSubmitReviewArgs = {
   flashcardId: Scalars['ID']['input'];
   rating: Scalars['Int']['input'];
   reviewDurationMs?: Scalars['Int']['input'];
+};
+
+
+export type MutationToggleDeckArchiveArgs = {
+  id: Scalars['ID']['input'];
 };
 
 
@@ -205,6 +211,7 @@ export type UpdateFlashcardInput = {
   id: Scalars['String']['input'];
   imageUrl?: InputMaybe<Scalars['String']['input']>;
   isEditedAfterAi?: InputMaybe<Scalars['Boolean']['input']>;
+  resetProgress?: InputMaybe<Scalars['Boolean']['input']>;
   sourceContext?: InputMaybe<Scalars['String']['input']>;
 };
 
@@ -233,8 +240,6 @@ export type User = {
   totalXp: Scalars['Int']['output'];
   updatedAt: Scalars['DateTime']['output'];
 };
-
-export type NewDeckFragment = { __typename?: 'Deck', id: string, title: string, description?: string | null, sourceLanguage?: string | null, targetLanguage?: string | null, _count?: { __typename?: 'DeckCount', flashcards: number } | null };
 
 export type GetMyDecksQueryVariables = Exact<{ [key: string]: never; }>;
 
@@ -323,7 +328,7 @@ export type SubmitReviewMutationVariables = Exact<{
 
 export type SubmitReviewMutation = { __typename?: 'Mutation', submitReview: boolean };
 
-export const NewDeckFragmentDoc = {"kind":"Document","definitions":[{"kind":"FragmentDefinition","name":{"kind":"Name","value":"NewDeck"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Deck"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"title"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"sourceLanguage"}},{"kind":"Field","name":{"kind":"Name","value":"targetLanguage"}},{"kind":"Field","name":{"kind":"Name","value":"_count"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"flashcards"}}]}}]}}]} as unknown as DocumentNode<NewDeckFragment, unknown>;
+
 export const GetMyDecksDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetMyDecks"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"myDecks"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"title"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"sourceLanguage"}},{"kind":"Field","name":{"kind":"Name","value":"targetLanguage"}},{"kind":"Field","name":{"kind":"Name","value":"isArchived"}},{"kind":"Field","name":{"kind":"Name","value":"_count"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"flashcards"}}]}}]}}]}}]} as unknown as DocumentNode<GetMyDecksQuery, GetMyDecksQueryVariables>;
 export const GetDeckDetailsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetDeckDetails"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"deck"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"title"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"sourceLanguage"}},{"kind":"Field","name":{"kind":"Name","value":"targetLanguage"}},{"kind":"Field","name":{"kind":"Name","value":"isArchived"}},{"kind":"Field","name":{"kind":"Name","value":"_count"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"flashcards"}}]}},{"kind":"Field","name":{"kind":"Name","value":"flashcards"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"frontContent"}},{"kind":"Field","name":{"kind":"Name","value":"backContent"}},{"kind":"Field","name":{"kind":"Name","value":"sourceContext"}}]}}]}}]}}]} as unknown as DocumentNode<GetDeckDetailsQuery, GetDeckDetailsQueryVariables>;
 export const CreateDeckDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"CreateDeck"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"data"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"CreateDeckInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"createDeck"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"data"},"value":{"kind":"Variable","name":{"kind":"Name","value":"data"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"title"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"sourceLanguage"}},{"kind":"Field","name":{"kind":"Name","value":"targetLanguage"}},{"kind":"Field","name":{"kind":"Name","value":"isArchived"}},{"kind":"Field","name":{"kind":"Name","value":"_count"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"flashcards"}}]}}]}}]}}]} as unknown as DocumentNode<CreateDeckMutation, CreateDeckMutationVariables>;

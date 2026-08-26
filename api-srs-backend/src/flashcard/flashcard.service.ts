@@ -62,7 +62,7 @@ export class FlashcardService {
     });
   }
 
-  async updateFlashcard(userId: string, data: UpdateFlashcardInput) {
+  async updateFlashcard(userId: string, data: UpdateFlashcardInput): Promise<PrismaFlashcard> {
     const existingCard = await this.prisma.flashcard.findUnique({
       where: { id: data.id },
       include: { deck: true },
@@ -73,15 +73,32 @@ export class FlashcardService {
     }
 
     if (existingCard.frontContent === ANONYMIZED_PAYLOAD) {
-      throw new ForbiddenException('Não é possível modificar um flashcard anonimizado.');
+      throw new ForbiddenException('Não é possível modificar um flashcard submetido à anonimização.');
     }
 
-    // 🔵 SUGESTÃO APLICADA (DRY/OCP): Desestruturação
-    const { id, ...updateData } = data;
+    // 1. O Padrão OCP: Extração segura da flag efêmera para não poluir o payload relacional
+    const { id, resetProgress, ...updateData } = data;
 
-    return this.prisma.flashcard.update({
-      where: { id },
-      data: updateData, // Todos os campos do DTO serão salvos de forma atômica
+    // 2. Transação Atômica: Modifica o texto e, sob demanda, reinicia o aprendizado (RN02)
+    return this.prisma.$transaction(async (tx) => {
+      const updatedCard = await tx.flashcard.update({
+        where: { id },
+        data: updateData,
+      });
+
+      // 3. RN02: Deleção física do CardFSRSData em vez de UPDATE com "0".
+      // Isso atende à consulta mandatória "fsrsData: { none: { userId } }" da Fila de Estudos,
+      // reinserindo o cartão legitimamente na etapa de aquisição inicial.
+      if (resetProgress) {
+        await tx.cardFSRSData.deleteMany({
+          where: { 
+            flashcardId: id, 
+            userId: userId 
+          },
+        });
+      }
+
+      return updatedCard;
     });
   }
 

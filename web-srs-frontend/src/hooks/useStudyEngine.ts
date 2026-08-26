@@ -1,8 +1,9 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
-import { useQuery, useMutation } from '@apollo/client/react';
+import { useQuery, useMutation } from '@apollo/client/react'; // Importação estrita da UI do Apollo
 import { useNavigate } from 'react-router-dom';
 import { GET_DUE_FLASHCARDS, SUBMIT_REVIEW } from '../lib/graphql/study';
 import { useToast } from './useToast';
+import type { Reference } from '@apollo/client/core';
 
 export const useStudyEngine = (deckId: string | null) => {
   const navigate = useNavigate();
@@ -14,7 +15,9 @@ export const useStudyEngine = (deckId: string | null) => {
   const [sessionTime] = useState(() => Date.now());
 
   const { data, loading, error } = useQuery(GET_DUE_FLASHCARDS, {
-    variables: { deckId: deckId! },
+    // 🟡 ALERTA CORRIGIDO: Fallback seguro substituindo o operador "!".
+    // A string vazia satisfaz o contrato do TypeScript, enquanto o 'skip' protege a rede[cite: 21].
+    variables: { deckId: deckId ?? "" },
     skip: !deckId,
     fetchPolicy: 'cache-and-network',
   });
@@ -22,6 +25,7 @@ export const useStudyEngine = (deckId: string | null) => {
   // 2. Programação Defensiva: Filtra os cartões baseando-se no timestamp exato (FSRS).
   // Isso mitiga o bug de truncamento de data do backend (DATE <= CURRENT_DATE).
   const queue = useMemo(() => {
+    // Coalescência Nula segura como fallback base[cite: 21].
     const rawQueue = data?.dueFlashcards ?? [];
     
     return rawQueue.filter(card => {
@@ -38,8 +42,8 @@ export const useStudyEngine = (deckId: string | null) => {
 
   const [isFlipped, setIsFlipped] = useState<boolean>(false);
   const [submitting, setSubmitting] = useState<boolean>(false);
-  
   const startTimeRef = useRef<number>(0);
+
   const [submitReviewMutation] = useMutation(SUBMIT_REVIEW);
 
   useEffect(() => {
@@ -56,10 +60,13 @@ export const useStudyEngine = (deckId: string | null) => {
 
   const handleRating = useCallback(
     async (rating: number) => {
+      // Padrão Bouncer e Type Guardeing O(1): Valida dependências e garante 
+      // que 'deckId' é estritamente uma string neste escopo isolado[cite: 21].
       if (!currentCard || submitting || !deckId) return;
       
       setSubmitting(true);
 
+      // Telemetria monotônica segura[cite: 21].
       const durationMs = startTimeRef.current > 0 
         ? Math.round(performance.now() - startTimeRef.current) 
         : 0;
@@ -75,34 +82,30 @@ export const useStudyEngine = (deckId: string | null) => {
             reviewDurationMs: durationMs,
           },
           update(cache) {
-            const existing = cache.readQuery({
-              query: GET_DUE_FLASHCARDS,
-              variables: { deckId }, 
+            // CORREÇÃO: Utilização rigorosa da API de manipulação imutável do Apollo v4
+            cache.modify({
+              fields: {
+                dueFlashcards(existingRefs: readonly Reference[] = [], { readField, toReference }) {
+                  // 1. Método Puro: Filtra a fila removendo o cartão recém-respondido através da conferência estrita de ID
+                  const filteredQueue = existingRefs.filter(
+                    (ref) => readField("id", ref) !== targetCard.id
+                  );
+
+                  // 2. Comportamento FSRS: Se o usuário errou (rating 1), recoloca no final da fila de repetição
+                  if (rating === 1) {
+                    const cardRef = toReference(targetCard);
+                    // Aplicação estrita de Spread Operator garantindo 100% de imutabilidade
+                    return cardRef ? [...filteredQueue, cardRef] : filteredQueue;
+                  }
+
+                  return filteredQueue;
+                },
+              },
             });
-
-            if (existing && existing.dueFlashcards) {
-              const newQueue = [...existing.dueFlashcards];
-              
-              // 3. Segurança Estrutural: Busca por ID em vez de supor a ordem (evita Race Conditions)
-              const targetIndex = newQueue.findIndex(c => c.id === targetCard.id);
-              if (targetIndex > -1) {
-                newQueue.splice(targetIndex, 1);
-              }
-
-              // Se Errou (1), FSRS joga de volta ao final da fila para repetição imediata
-              if (rating === 1) {
-                newQueue.push(targetCard);
-              }
-
-              cache.writeQuery({
-                query: GET_DUE_FLASHCARDS,
-                variables: { deckId }, 
-                data: { dueFlashcards: newQueue },
-              });
-            }
           },
         });
       } catch (err: unknown) {
+        // Narrowing rígido para evitar o vazamento de 'any' na exceção[cite: 21].
         if (err instanceof Error) {
           console.error('Falha de sincronização na avaliação cognitiva:', err.message);
         }

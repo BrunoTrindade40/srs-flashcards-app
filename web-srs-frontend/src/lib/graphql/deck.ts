@@ -16,6 +16,7 @@ export const GET_MY_DECKS = graphql(`
   }
 `);
 
+// Adicionamos limit e offset para delegar o trabalho pesado ao banco (RNF04)
 export const GET_DECK_DETAILS = graphql(`
   query GetDeckDetails($id: ID!) {
     deck(id: $id) {

@@ -3,12 +3,21 @@ import React, { useEffect, useState } from "react";
 import { useAuth } from "../hooks/useAuth";
 import { useToast } from "../hooks/useToast";
 import { supabase } from "../lib/supabaseClient";
+
+// 1. Remoção da importação inexistente 'type UserSettings'
 import {
   ANONYMIZE_ME,
   GET_ME,
   UPDATE_MY_SETTINGS,
-  type UserSettings,
 } from "../lib/graphql/settings";
+
+// 2. Importação do tipo atômico gerado automaticamente pelo Codegen
+import type { GetMeQuery } from "../gql/graphql";
+
+// 3. Extração Estrutural (Duck Typing Nativo):
+// Pegamos o tipo de retorno da Query e isolamos o objeto 'me'.
+// O uso do NonNullable previne que o componente receba um tipo union com null.
+type UserSettings = NonNullable<GetMeQuery["me"]>;
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -63,6 +72,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
           </div>
         ) : (
           <div className="flex flex-col gap-6">
+            <CredentialsForm onClose={onClose} />
             <SettingsForm initialData={data.me} onClose={onClose} />
             <DangerZone onClose={onClose} />
           </div>
@@ -73,8 +83,105 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
 };
 
 // ----------------------------------------------------------------------
+// Subcomponente: Atualização de Credenciais (RF16)
+// ----------------------------------------------------------------------
+const CredentialsForm: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+  const { showToast } = useToast();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (loading) return;
+
+    const safeEmail = email.trim();
+    const safePassword = password.trim();
+
+    // Padrão Bouncer
+    if (!safeEmail && !safePassword) {
+      showToast("Preencha o e-mail ou a nova senha para atualizar.", "error");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const updates: { email?: string; password?: string } = {};
+      if (safeEmail) updates.email = safeEmail;
+      if (safePassword) updates.password = safePassword;
+
+      // Executa a mutação diretamente no provedor de Identidade (SSOT)
+      const { error } = await supabase.auth.updateUser(updates);
+      if (error) throw error;
+
+      showToast("Credenciais atualizadas com sucesso!", "success");
+      setEmail("");
+      setPassword("");
+      onClose();
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        showToast(`Erro ao atualizar: ${err.message}`, "error");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-4 pb-6 border-b border-slate-800">
+      <h3 className="text-xs font-bold text-amber-500 uppercase tracking-wider">
+        Credenciais de Acesso
+      </h3>
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <div className="flex flex-col sm:flex-row gap-4">
+          <div className="flex flex-col gap-2 flex-1">
+            <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+              Novo E-mail
+            </label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              disabled={loading}
+              placeholder="Alterar e-mail..."
+              className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 text-sm focus:outline-none focus:border-amber-500 font-sans transition-colors"
+            />
+          </div>
+          <div className="flex flex-col gap-2 flex-1">
+            <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+              Nova Senha
+            </label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={loading}
+              placeholder="Alterar senha..."
+              minLength={6}
+              className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 text-sm focus:outline-none focus:border-amber-500 font-sans transition-colors"
+            />
+          </div>
+        </div>
+        <div className="flex items-center justify-end">
+          <button
+            type="submit"
+            disabled={loading || (!email.trim() && !password.trim())}
+            className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-xl text-xs transition-all cursor-pointer disabled:opacity-50 border border-slate-700 shadow-sm"
+          >
+            {loading ? "Atualizando..." : "Atualizar Credenciais"}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+};
+
+// ----------------------------------------------------------------------
 // Subcomponente: Formulário de Configurações (Uncontrolled Components)
 // ----------------------------------------------------------------------
+// 4. Consumo limpo: O 'initialData' agora está atrelado ao banco de dados nativamente.
+// Se o Backend alterar 'maxDailyReviews' para um tipo Float amanhã, este componente 
+// apontará o erro instantaneamente, sem interfaces manuais "mentindo" no meio do caminho.
 const SettingsForm: React.FC<{ initialData: UserSettings; onClose: () => void }> = ({
   initialData,
   onClose,
@@ -93,12 +200,14 @@ const SettingsForm: React.FC<{ initialData: UserSettings; onClose: () => void }>
     if (mutationLoading) return;
 
     const formData = new FormData(e.currentTarget);
-    const dailyNewCardLimit = parseInt(formData.get("dailyNewCardLimit") as string, 10);
-    const maxDailyReviews = parseInt(formData.get("maxDailyReviews") as string, 10);
-    const dailyRolloverTime = formData.get("dailyRolloverTime") as string;
     
-    // Recupera o fuso de forma explícita, controlada pela interface
-    const timezone = formData.get("timezone") as string;
+    // 🟡 ALERTA CORRIGIDO: Eliminação da coerção via "as".
+    // Transformação explícita com construtor nativo String() acoplado à Coalescência Nula
+    // Garante que o TypeScript entenda perfeitamente o contrato gerado em Runtime.
+    const dailyNewCardLimit = parseInt(String(formData.get("dailyNewCardLimit") ?? "0"), 10);
+    const maxDailyReviews = parseInt(String(formData.get("maxDailyReviews") ?? "0"), 10);
+    const dailyRolloverTime = String(formData.get("dailyRolloverTime") ?? "");
+    const timezone = String(formData.get("timezone") ?? "");
 
     if (isNaN(dailyNewCardLimit) || isNaN(maxDailyReviews) || !dailyRolloverTime.trim() || !timezone) {
       showToast("Valores inválidos detectados no formulário.", "error");
@@ -116,7 +225,6 @@ const SettingsForm: React.FC<{ initialData: UserSettings; onClose: () => void }>
           },
         },
       });
-
       showToast("Configurações atualizadas!", "success");
       onClose();
     } catch (err: unknown) {

@@ -1,22 +1,7 @@
-import { gql, type TypedDocumentNode } from "@apollo/client/core";
+// Padrão Estrito: Utilização exclusiva da função gerada pelo GraphQL Codegen Client Preset
+import { graphql } from "../../gql";
 
-// Tipagem estrutural limpa e idêntica ao Schema do Prisma/NestJS
-export interface UserSettings {
-  id: string;
-  name?: string | null;
-  currentStreak: number;
-  dailyNewCardLimit: number;
-  maxDailyReviews: number;
-  timezone: string;
-  dailyRolloverTime?: string | null;
-}
-
-export interface GetMeResponse {
-  me: UserSettings;
-}
-
-// Query corrigida para buscar os dados de fato consumidos no Dashboard e Settings
-export const GET_ME: TypedDocumentNode<GetMeResponse, Record<string, never>> = gql`
+export const GET_ME = graphql(`
   query GetMe {
     me {
       id
@@ -28,28 +13,9 @@ export const GET_ME: TypedDocumentNode<GetMeResponse, Record<string, never>> = g
       dailyRolloverTime
     }
   }
-`;
+`);
 
-export interface UpdateMySettingsInput {
-  dailyNewCardLimit?: number;
-  maxDailyReviews?: number;
-  timezone?: string;
-  dailyRolloverTime?: string;
-}
-
-export interface UpdateMySettingsResponse {
-  updateMySettings: UserSettings;
-}
-
-export interface UpdateMySettingsVariables {
-  data: UpdateMySettingsInput;
-}
-
-// Mutação corrigida para contemplar a RN06 (Rollover)
-export const UPDATE_MY_SETTINGS: TypedDocumentNode<
-  UpdateMySettingsResponse,
-  UpdateMySettingsVariables
-> = gql`
+export const UPDATE_MY_SETTINGS = graphql(`
   mutation UpdateMySettings($data: UpdateUserSettingsInput!) {
     updateMySettings(data: $data) {
       id
@@ -59,17 +25,10 @@ export const UPDATE_MY_SETTINGS: TypedDocumentNode<
       dailyRolloverTime
     }
   }
-`;
+`);
 
-export interface AnonymizeMeResponse {
-  anonymizeMe: boolean;
-}
-
-export const ANONYMIZE_ME: TypedDocumentNode<
-  AnonymizeMeResponse,
-  Record<string, never>
-> = gql`
+export const ANONYMIZE_ME = graphql(`
   mutation AnonymizeMe {
     anonymizeMe
   }
-`;
+`);

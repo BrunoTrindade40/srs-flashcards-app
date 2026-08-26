@@ -19,7 +19,11 @@ export const DeckDetails: React.FC = () => {
     deck,
     loading,
     error,
+    hasMore,           // Exposição do novo estado
+    visibleFlashcards, // Exposição da fatia visível de flashcards
+    handleLoadMore,    // Handler síncrono de paginação
     deletingDeck,
+    updatingDeck,
     isCreateOpen,
     setIsCreateOpen,
     isEditDeckOpen,
@@ -33,6 +37,7 @@ export const DeckDetails: React.FC = () => {
     handleSaveEdit,
     handleConfirmDeleteCard,
     handleConfirmDeleteDeck,
+    handleToggleArchive,
   } = useDeckDetails(safeDeckId);
 
   useEffect(() => {
@@ -41,7 +46,7 @@ export const DeckDetails: React.FC = () => {
     }
   }, [error, showToast]);
 
-  if (loading) {
+  if (loading && !deck) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh] w-full">
         <div className="text-amber-500 font-bold animate-pulse text-lg">
@@ -57,15 +62,12 @@ export const DeckDetails: React.FC = () => {
         <h2 className="text-xl font-bold text-rose-500">
           Erro ao carregar baralho.
         </h2>
-        <button
-          onClick={() => navigate("/dashboard")}
-          className="px-5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-lg border border-slate-700 transition-colors cursor-pointer"
-        >
-          Voltar ao Dashboard
-        </button>
       </div>
     );
   }
+
+  // Fallbacks locais aplicados fora do JSX
+  const hasCards = visibleFlashcards.length > 0;
 
   return (
     <div className="flex flex-col w-full max-w-5xl mx-auto gap-6 p-6 animate-fadeIn">
@@ -85,23 +87,35 @@ export const DeckDetails: React.FC = () => {
               {deck.title}
             </h1>
             
-            {/* 🟡 ALERTA: Removido o badge 'Arquivado' que não deve mais existir na Fase 1 */}
+            {/* Renderização condicional estrita exigindo valor binário explícito (segurança de nulidade) */}
+            {deck.isArchived && (
+              <span className="bg-slate-800 text-slate-400 px-2.5 py-0.5 rounded-full text-[10px] uppercase tracking-wider font-bold border border-slate-700">
+                Arquivado
+              </span>
+            )}
 
             <div className="flex flex-wrap gap-2 md:ml-2 mt-2 md:mt-0">
+              {/* Botão de Transição de Estado Acoplado Estritamente a Ação de Negócio */}
+              <button
+                onClick={handleToggleArchive}
+                disabled={updatingDeck}
+                className="px-3 py-1 text-xs font-semibold bg-slate-800 text-slate-300 hover:text-white rounded border border-slate-700 transition-colors cursor-pointer shadow-sm disabled:opacity-50"
+              >
+                {deck.isArchived ? "Desarquivar" : "Arquivar"}
+              </button>
+
               <button
                 onClick={() => setIsEditDeckOpen(true)}
                 className="px-3 py-1 text-xs font-semibold bg-slate-800 text-slate-300 hover:text-white rounded border border-slate-700 transition-colors cursor-pointer shadow-sm"
               >
-                ✏️ Editar
+                  Editar
               </button>
               
-              {/* 🔴 CRÍTICO: Botão de Arquivamento/Reativamento totalmente removido */}
-
               <button
                 onClick={() => setIsDeletingDeck(true)}
                 className="px-3 py-1 text-xs font-semibold bg-rose-950/30 text-rose-400 hover:bg-rose-900/50 rounded border border-rose-900/50 transition-colors cursor-pointer shadow-sm"
               >
-                🗑️ Excluir
+                  Excluir
               </button>
             </div>
           </div>
@@ -116,7 +130,7 @@ export const DeckDetails: React.FC = () => {
             disabled={!deck.flashcards || deck.flashcards.length === 0}
             className="flex-1 md:flex-none px-5 py-2.5 font-bold rounded-lg transition-colors shadow-md bg-amber-500 text-slate-950 hover:bg-amber-400 cursor-pointer disabled:opacity-50"
           >
-            Iniciar Estudo 🧠
+            Iniciar Estudo
           </button>
           <button
             onClick={() => setIsCreateOpen(true)}
@@ -127,23 +141,23 @@ export const DeckDetails: React.FC = () => {
         </div>
       </div>
 
-      {/* O restante do mapeamento de flashcards permanece idêntico... */}
       <div className="flex flex-col gap-4">
         <h2 className="text-lg font-bold text-slate-300">
-          Cartões no Baralho ({deck.flashcards?.length || 0})
+          Cartões no Baralho ({deck.flashcards?.length ?? 0})
         </h2>
-        {!deck.flashcards || deck.flashcards.length === 0 ? (
+
+        {!hasCards ? (
           <div className="p-8 bg-slate-900 border border-slate-800 rounded-xl text-center text-slate-500 flex items-center justify-center">
             <span>Nenhum cartão cadastrado neste baralho ainda.</span>
           </div>
         ) : (
           <div className="flex flex-col gap-4">
-            {deck.flashcards.map((card) => (
+            {/* Como executamos o Codegen com a query válida, 'card' possui inferência estrita de 'QueryFlashcard'. */}
+            {visibleFlashcards.map((card) => (
                <div
                  key={card.id}
                  className="flex flex-col md:flex-row justify-between items-start md:items-center bg-slate-900 border border-slate-800 p-5 rounded-xl gap-4 hover:border-slate-700 transition-all"
                >
-                 {/* ... Conteúdo inalterado das renderizações dos cartões ... */}
                  <div className="flex flex-col md:flex-row flex-1 gap-6 w-full overflow-hidden">
                    <div className="flex flex-col flex-1 gap-1 min-w-0">
                      <span className="text-[10px] font-bold text-amber-500 uppercase tracking-wider">Frente</span>
@@ -154,6 +168,7 @@ export const DeckDetails: React.FC = () => {
                      <MarkdownRenderer content={card.backContent ?? ""} />
                    </div>
                  </div>
+
                  <div className="flex gap-2 self-end md:self-center border-t md:border-t-0 border-slate-800/80 pt-3 md:pt-0 w-full md:w-auto justify-end">
                    <button
                      onClick={() => setEditingCard({
@@ -171,11 +186,21 @@ export const DeckDetails: React.FC = () => {
                  </div>
                </div>
             ))}
+            {/* Contenção Visual de Paginação Estrita via Flexbox */}
+            {hasMore && (
+              <div className="flex justify-center pt-4 w-full">
+                <button
+                  onClick={handleLoadMore}
+                  className="px-6 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl transition-colors cursor-pointer border border-slate-700 shadow-sm flex items-center justify-center gap-2"
+                >
+                  Carregar Mais Cartões
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
 
-      {/* Renderiza o condicional e limpa dos Modais */}
       <CreateFlashcardModal
         deckId={deck.id}
         isOpen={isCreateOpen}
@@ -193,11 +218,19 @@ export const DeckDetails: React.FC = () => {
         />
       )}
 
-      <EditDeckModal
-        deck={deck}
-        isOpen={isEditDeckOpen}
-        onClose={() => setIsEditDeckOpen(false)}
-      />
+      {/* 
+        CORREÇÃO CRÍTICA: Renderização Condicional do Modal.
+        Ao invés de mantê-lo invisível (retornando null internamente), o pai 
+        desmonta o componente da árvore. Quando 'isEditDeckOpen' vira true, 
+        uma nova instância é criada, forçando o 'useState' a ler a prop 'deck' atualizada.
+      */}
+      {isEditDeckOpen && (
+        <EditDeckModal
+          deck={deck}
+          isOpen={isEditDeckOpen}
+          onClose={() => setIsEditDeckOpen(false)}
+        />
+      )}
 
       <ConfirmModal
         isOpen={!!deletingCardId}

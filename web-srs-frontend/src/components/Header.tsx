@@ -6,44 +6,42 @@ import { SettingsModal } from "./SettingsModal";
 
 /**
  * SRP: Gerencia o cabeçalho global do sistema, perfil e logout.
- * Reduzido propositalmente: a navegação de retorno foi movida para as páginas específicas.
+ * UI02: Ancoragem Estática imutável em tema claro (Branco/Off-white).
  */
 export const Header: React.FC = () => {
-  // Consumindo 'logout' e 'user' estritamente como definidos no seu AuthContext.ts
   const { user, logout } = useAuth();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-
   const navigate = useNavigate();
   const client = useApolloClient();
 
-  // Handler robusto para o Logout
   const handleLogout = async () => {
     try {
-      // 1. Evita a injeção do MouseEvent (falha silenciosa do Supabase)
+      // 1. Invalidação da sessão no provedor
       await logout();
-
-      // 2. Purga a memória RAM do Apollo (Isolamento de Tenant / Segurança)
+      // 2. Purga síncrona da memória RAM do Apollo (Tenant Isolation)
       await client.clearStore();
-
-      // 3. Força o redirecionamento para fora da área logada
+      // 3. Força o redirecionamento
       navigate("/");
-    } catch (error) {
-      console.error("Erro ao realizar logout:", error);
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        console.error("Erro ao realizar logout:", error.message);
+      }
     }
   };
 
   return (
-    <header className="w-full bg-slate-900 border-b border-slate-800 px-4 py-3 shadow-md sticky top-0 z-40">
+    <header className="w-full bg-white border-b border-slate-200 px-4 py-3 shadow-sm sticky top-0 z-40">
       <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
+        
         {/* Identidade do Sistema */}
         <Link
           to="/dashboard"
           className="flex items-center gap-2 group transition-all"
         >
           <span className="text-2xl">🧠</span>
-          <span className="font-extrabold text-slate-100 text-lg group-hover:text-amber-400 transition-colors">
+          <span className="font-extrabold text-slate-900 text-lg group-hover:text-amber-600 transition-colors">
             FlashCards{" "}
-            <span className="text-amber-500 text-xs font-mono font-normal">
+            <span className="text-amber-600 text-xs font-mono font-normal">
               FSRS
             </span>
           </span>
@@ -56,15 +54,15 @@ export const Header: React.FC = () => {
             <button
               disabled
               title="Funcionalidade mapeada para a Fase 2 (TCC 2)"
-              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-slate-950/40 text-slate-500 border border-slate-800/80 rounded-lg text-xs font-bold cursor-not-allowed opacity-75"
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 text-slate-400 border border-slate-200 rounded-lg text-xs font-bold cursor-not-allowed opacity-75"
             >
-              <span>⚡ Modo Caos (Em Breve)</span>
+              <span>🌪️ Modo Caos (Em Breve)</span>
             </button>
 
             {/* Ajustes do Perfil */}
             <button
               onClick={() => setIsSettingsOpen(true)}
-              className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg border border-slate-700 transition-colors cursor-pointer text-xs font-semibold flex items-center gap-1.5"
+              className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 rounded-lg border border-slate-200 transition-colors cursor-pointer text-xs font-semibold flex items-center gap-1.5"
               title="Configurações e Limites Cognitivos"
             >
               <span>⚙️</span>
@@ -74,7 +72,7 @@ export const Header: React.FC = () => {
             {/* Logout Estrito */}
             <button
               onClick={handleLogout}
-              className="px-3 py-1.5 bg-red-950/30 hover:bg-red-900/50 text-red-400 hover:text-red-300 rounded-lg border border-red-900/40 transition-colors cursor-pointer text-xs font-bold"
+              className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 hover:text-red-700 rounded-lg border border-red-200 transition-colors cursor-pointer text-xs font-bold"
             >
               Sair
             </button>

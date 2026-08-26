@@ -9,15 +9,10 @@ import { UpdateDeckInput } from './dto/update-deck.input';
 export class DeckService {
   constructor(private readonly prisma: PrismaService) { }
 
-  /**
-   * CORREÇÃO CRÍTICA: Desacoplamento de Autoria e Matrícula.
-   * A busca agora retorna os baralhos onde o usuário atua como ESTUDANTE (Enrollment ativo).
-   */
   async findMyDecks(userId: string) {
     return this.prisma.deck.findMany({
       where: {
         isArchived: false,
-        // Delegando a validação de pertencimento para a tabela associativa
         enrollments: {
           some: {
             userId: userId,
@@ -36,19 +31,15 @@ export class DeckService {
     });
   }
 
-  /**
-   * 🛡️ ZERO TRUST E AUTORIZAÇÃO RELACIONAL
-   * Resolve quem pode ler o baralho com uma única query (O Criador, o Estudante ou Público/Fase 2)
-   */
   async findById(id: string, userId: string) {
     const deck = await this.prisma.deck.findFirst({
       where: { 
-        id, 
-        isArchived: false,
+         id,
+         isArchived: false,
         OR: [
-          { creatorId: userId },                                   // Autorização 1: É o criador do baralho
-          { enrollments: { some: { userId, status: 'ACTIVE' } } }, // Autorização 2: É um estudante matriculado
-          { isPublic: true }                                       // Autorização 3: É um baralho vitrine (Marketplace Fase 2)
+          { creatorId: userId },                                   
+          { enrollments: { some: { userId, status: 'ACTIVE' } } }, 
+          { isPublic: true }                                       
         ]
       },
       include: {
@@ -65,16 +56,14 @@ export class DeckService {
     if (!deck) {
       throw new NotFoundException('Baralho não encontrado, privado ou acesso negado.');
     }
-
     return deck;
   }
 
- async create(data: CreateDeckInput, userId: string) {
+  async create(data: CreateDeckInput, userId: string) {
     return this.prisma.deck.create({
       data: {
         ...data,
         creatorId: userId,
-        // Mantém a injeção atômica da matrícula ao criar (Auto-enrollment)
         enrollments: {
           create: {
             userId,
@@ -92,41 +81,19 @@ export class DeckService {
     });
   }
 
+  /**
+   * Refatorado: Remove a lógica destrutiva de anonimização.
+   * Apenas executa atualizações léxicas e de metadados simples (SRP).
+   */
   async update(data: UpdateDeckInput, userId: string) {
     const deck = await this.findById(data.id, userId);
-    
+         
     if (deck.creatorId !== userId) {
       throw new ForbiddenException('Acesso Negado: Apenas o criador pode alterar o baralho.');
     }
 
     const { id, ...updateData } = data;
     const payload: Prisma.DeckUpdateInput = { ...updateData };
-
-    // 🔴 CORREÇÃO CRÍTICA: Propagação do Arquivamento
-    if (updateData.isArchived === true) {
-      // 1. Apaga a fila FSRS (agenda) de todos os cartões que pertencem a este baralho
-      await this.prisma.cardFSRSData.deleteMany({
-        where: { flashcard: { deckId: id } },
-      });
-
-      // 2. Anonimiza os cartões físicos
-      await this.prisma.flashcard.updateMany({
-        where: { deckId: id },
-        data: {
-          frontContent: ANONYMIZED_PAYLOAD,
-          backContent: ANONYMIZED_PAYLOAD,
-          sourceContext: null,
-          imageUrl: null,
-          audioUrl: null,
-          isPublished: false, // 🔵 SUGESTÃO APLICADA: Força a ocultação visual
-        },
-      });
-
-      payload.title = ANONYMIZED_PAYLOAD;
-      payload.description = null;
-      payload.sourceLanguage = null;
-      payload.targetLanguage = null;
-    }
 
     return this.prisma.deck.update({
       where: { id },
@@ -137,12 +104,37 @@ export class DeckService {
     });
   }
 
+  /**
+   * NOVO: Método dedicado exclusivamente para a inversão do estado lógico de Arquivamento.
+   * Não afeta o conteúdo dos Flashcards ou a telemetria do FSRS.
+   */
+  async toggleArchive(deckId: string, userId: string) {
+    // Zero Trust: Ignora o 'isArchived' false no findFirst para encontrar mesmo os arquivados
+    const deck = await this.prisma.deck.findFirst({
+        where: { id: deckId, creatorId: userId }
+    });
+
+    if (!deck) {
+      throw new ForbiddenException('Baralho não encontrado ou você não possui direitos de autor para arquivá-lo.');
+    }
+
+    return this.prisma.deck.update({
+      where: { id: deckId },
+      data: { isArchived: !deck.isArchived },
+      include: {
+        _count: { select: { flashcards: { where: { frontContent: { not: ANONYMIZED_PAYLOAD } } } } },
+      },
+    });
+  }
+
   async remove(id: string, userId: string): Promise<boolean> {
-    const deck = await this.findById(id, userId);
-    
-    // 🛡️ ZERO TRUST
-    if (deck.creatorId !== userId) {
-      throw new ForbiddenException('Acesso Negado: Apenas o criador pode remover o baralho.');
+    // Usamos findFirst direto para contornar o bloqueio de "isArchived: false" no findById
+    const deck = await this.prisma.deck.findFirst({
+        where: { id, creatorId: userId }
+    });
+         
+    if (!deck) {
+      throw new ForbiddenException('Acesso Negado: Baralho inexistente ou permissão insuficiente.');
     }
 
     await this.prisma.deck.delete({ where: { id } });
@@ -155,10 +147,6 @@ export class DeckService {
     });
   }
 
-  /**
-   * 🛡️ ZERO TRUST: Matrícula de Estudante (Consumo Desacoplado)
-   * Permite que um usuário comece a estudar um baralho (Caminho para a Fase 2)
-   */
   async enrollInDeck(deckId: string, userId: string): Promise<boolean> {
     const deck = await this.prisma.deck.findUnique({
       where: { id: deckId },
@@ -169,13 +157,10 @@ export class DeckService {
       throw new NotFoundException('Baralho não encontrado ou indisponível.');
     }
 
-    // Regra de Negócio: Não pode se matricular em deck privado de outra pessoa
     if (!deck.isPublic && deck.creatorId !== userId) {
       throw new ForbiddenException('Este baralho é privado e pertence a outro autor.');
     }
 
-    // Abordagem Atômica: Upsert garante que se a matrícula já existir (ex: PAUSED),
-    // ela será reativada para ACTIVE, evitando duplicidade de registros.
     await this.prisma.enrollment.upsert({
       where: {
         userId_deckId: { userId, deckId },
@@ -193,10 +178,6 @@ export class DeckService {
     return true;
   }
 
-  /**
-   * 🔵 SUGESTÃO: Desmatrícula Segura
-   * Evita a poluição da fila diária caso o aluno desista do deck.
-   */
   async unenrollFromDeck(deckId: string, userId: string): Promise<boolean> {
     const enrollment = await this.prisma.enrollment.findUnique({
       where: { userId_deckId: { userId, deckId } }

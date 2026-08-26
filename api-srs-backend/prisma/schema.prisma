@@ -43,8 +43,8 @@ model User {
   reviewLogs    ReviewLog[]
   studySessions StudySession[]
   transactions  Transaction[]  @relation("BuyerTransactions")
-  enrollments   Enrollment[] 
-  biometricLogs BiometricLog[] 
+  enrollments   Enrollment[]
+  biometricLogs BiometricLog[]
   fsrsData      CardFSRSData[]
 
   @@map("users")
@@ -101,20 +101,20 @@ model Enrollment {
 }
 
 model Flashcard {
-  id              String  @id @default(uuid()) @db.Uuid // UUID
-  sourceContext   String? @db.Text // Referencial original/contexto
+  id            String  @id @default(uuid()) @db.Uuid // UUID
+  sourceContext String? @db.Text // Referencial original/contexto
 
   // CORREÇÃO: Adicionados campos para RF11 (Multimídia)
-  imageUrl        String? @db.Text
-  audioUrl        String? @db.Text
+  imageUrl String? @db.Text
+  audioUrl String? @db.Text
 
-  deckId          String   @db.Uuid
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  deckId    String   @db.Uuid
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // 🟢 NOMENCLATURA PADRONIZADA: Mapeamento direto para Markdown/LaTeX
-  frontContent    String @db.Text
-  backContent     String @db.Text
+  frontContent String @db.Text
+  backContent  String @db.Text
 
   // 🔴 CORREÇÃO CRÍTICA: Substituição da Magic String por Booleano Binário
   isPublished     Boolean @default(true) // True = Ativo/Visível, False = Draft/Rejeitado
@@ -122,11 +122,11 @@ model Flashcard {
   aiModelSource   String? // Null se manual; Nome do modelo LLM se gerado por IA (UC16)
 
   // Relacionamentos
-  fsrsData        CardFSRSData[]
-  reviewLogs      ReviewLog[]
-  tags            FlashcardTag[]
-  deck            Deck           @relation(fields: [deckId], references: [id], onDelete: Cascade)
-  media           Media[] // 🟢 Mídias opcionais (Anexos de áudio/imagem - Fase 2)
+  fsrsData   CardFSRSData[]
+  reviewLogs ReviewLog[]
+  tags       FlashcardTag[]
+  deck       Deck           @relation(fields: [deckId], references: [id], onDelete: Cascade)
+  media      Media[] // 🟢 Mídias opcionais (Anexos de áudio/imagem - Fase 2)
 
   // 🟡 ALERTA CORRIGIDO: Índice de B-Tree para otimizar queries de listagem e geração de fila de estudos
   @@index([deckId])
@@ -184,7 +184,8 @@ model CardFSRSData {
 }
 
 model ReviewLog {
-  id          String  @id @default(uuid())
+  // 🔴 CRÍTICO CORRIGIDO: Adição explícita da diretiva @db.Uuid para o PostgreSQL
+  id          String  @id @default(uuid()) @db.Uuid
   // Relacionamentos
   flashcardId String  @db.Uuid
   userId      String  @db.Uuid
@@ -211,9 +212,9 @@ model ReviewLog {
   due           DateTime
   createdAt     DateTime @default(now())
 
-  version   Int       @default(1) // 🟢 Concorrência PWA Offline (UC13)
+  version   Int    @default(1) // 🟢 Concorrência PWA Offline (UC13)
   // 🔴 CORREÇÃO CRÍTICA: Convertido de Enum nativo para String estrita
-  studyMode String    @default("STANDARD") // STANDARD, CHAOS // 🟢 STANDARD, CHAOS (UC10)
+  studyMode String @default("STANDARD") // STANDARD, CHAOS // 🟢 STANDARD, CHAOS (UC10)
 
   lapses Int @default(0)
   reps   Int @default(0)
@@ -228,13 +229,13 @@ model ReviewLog {
 }
 
 model StudySession {
-  id         String     @id @default(uuid()) @db.Uuid
-  userId     String     @db.Uuid
-  startedAt  DateTime   @default(now()) // 🟢 CORREÇÃO: Alterado de createdAt para startedAt
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @db.Uuid
+  startedAt  DateTime  @default(now()) // 🟢 CORREÇÃO: Alterado de createdAt para startedAt
   finishedAt DateTime?
   // 🔴 CORREÇÃO CRÍTICA: Convertidos de Enum nativo para String estrita
-  deviceType String     @default("WEB") // PWA, IOT, WEB
-  studyMode  String     @default("STANDARD") // STANDARD, CHAOS
+  deviceType String    @default("WEB") // PWA, IOT, WEB
+  studyMode  String    @default("STANDARD") // STANDARD, CHAOS
 
   // Cache de performance da sessão
   cardsReviewed Int @default(0)
