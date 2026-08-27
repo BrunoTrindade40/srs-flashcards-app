@@ -1,7 +1,6 @@
 import React, { useEffect } from "react";
 
 interface ConfirmModalProps {
-  isOpen: boolean;
   title: string;
   message: string;
   confirmText?: string;
@@ -12,7 +11,6 @@ interface ConfirmModalProps {
 }
 
 export const ConfirmModal: React.FC<ConfirmModalProps> = ({
-  isOpen,
   title,
   message,
   confirmText = "Confirmar",
@@ -23,15 +21,15 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
 }) => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && isOpen && !loading) {
+      // Como a função onClose foi estabilizada no pai (via useCallback no custom hook),
+      // este useEffect executa a subscrição com total eficiência O(1).
+      if (e.key === "Escape" && !loading) {
         onClose();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, loading, onClose]);
-
-  if (!isOpen) return null;
+  }, [loading, onClose]);
 
   const baseButtonClass =
     "px-4 py-2.5 text-sm font-bold rounded-lg shadow-md transition-colors cursor-pointer flex items-center justify-center";

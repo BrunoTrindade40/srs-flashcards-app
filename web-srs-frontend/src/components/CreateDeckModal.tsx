@@ -1,17 +1,18 @@
+// src/components/CreateDeckModal.tsx
 import { type Reference } from "@apollo/client/core";
 import { useMutation } from "@apollo/client/react";
 import React, { useEffect, useState } from "react";
 import { useToast } from "../hooks/useToast";
 import { CREATE_DECK } from "../lib/graphql/deck";
+// CORREÇÃO CRÍTICA: Extração de inteligência de domínio garantindo arquitetura limpa (DRY)
+import { validateDeckInput } from "../domain/validators";
 
 interface CreateDeckModalProps {
-  isOpen: boolean;
   onClose: () => void;
   onSuccess?: () => void;
 }
 
 export const CreateDeckModal: React.FC<CreateDeckModalProps> = ({
-  isOpen,
   onClose,
 }) => {
   const [title, setTitle] = useState("");
@@ -22,19 +23,12 @@ export const CreateDeckModal: React.FC<CreateDeckModalProps> = ({
 
   const [createDeck, { loading }] = useMutation(CREATE_DECK, {
     update(cache, { data: mutationData }) {
-      // 1. Padrão Bouncer: Aborta caso não haja resposta de rede
       if (!mutationData?.createDeck) return;
-
       cache.modify({
         fields: {
-          // 2. Extraímos a ferramenta pura 'toReference' do contexto
           myDecks(existingDeckRefs: readonly Reference[] = [], { toReference }) {
-            // 3. Geramos o ponteiro diretamente a partir dos dados já normalizados pelo Apollo
             const newDeckRef = toReference(mutationData.createDeck);
-
             if (!newDeckRef) return existingDeckRefs;
-
-            // 4. Imutabilidade preservada via Spread nativo
             return [newDeckRef, ...existingDeckRefs];
           },
         },
@@ -42,38 +36,37 @@ export const CreateDeckModal: React.FC<CreateDeckModalProps> = ({
     },
   });
 
-  // 5. Tipagem Sintética Estrita para interceptação de eventos no React 19
   const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
-
-    // Early return defensivo previne double-click acidental
     if (loading) return;
+
+    // 1. Padrão Bouncer: Utilizando a função unificada do domínio
+    const validationError = validateDeckInput(title, description);
+    
+    if (validationError) {
+      showToast(validationError, "error");
+      return;
+    }
 
     try {
       const response = await createDeck({
         variables: {
           data: {
             title: title.trim(),
-            // 6. Higienização: Fallback seguro assegurando Null sobre Undefined 
             description: description.trim() ? description.trim() : null,
-            sourceLanguage: sourceLanguage ? sourceLanguage : null,
-            targetLanguage: targetLanguage ? targetLanguage : null,
+            sourceLanguage: sourceLanguage || null,
+            targetLanguage: targetLanguage || null,
           },
         },
       });
 
       if (response.data?.createDeck) {
         showToast("Deck criado com sucesso!", "success");
-        setTitle("");
-        setDescription("");
-        setSourceLanguage("pt-BR");
-        setTargetLanguage("");
         onClose();
       }
     } catch (error: unknown) {
-      // 7. Avaliação por Type Guard para isolamento seguro do erro
       if (error instanceof Error) {
-        showToast(error.message, "error");
+        showToast(`Falha ao criar deck: ${error.message}`, "error");
       }
     }
   };
@@ -85,8 +78,6 @@ export const CreateDeckModal: React.FC<CreateDeckModalProps> = ({
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
-
-  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
@@ -103,9 +94,10 @@ export const CreateDeckModal: React.FC<CreateDeckModalProps> = ({
             className="text-slate-500 hover:text-slate-300 text-sm p-1 transition-colors cursor-pointer"
             aria-label="Fechar Modal"
           >
-            ✕
+            ✖
           </button>
         </div>
+
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
             <label
@@ -125,6 +117,7 @@ export const CreateDeckModal: React.FC<CreateDeckModalProps> = ({
               className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 text-sm placeholder-slate-600 focus:outline-none focus:border-amber-500 transition-colors"
             />
           </div>
+
           <div className="flex flex-col gap-1.5">
             <label
               htmlFor="deck-desc"
@@ -142,6 +135,7 @@ export const CreateDeckModal: React.FC<CreateDeckModalProps> = ({
               className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 text-sm placeholder-slate-600 resize-none focus:outline-none focus:border-amber-500 transition-colors"
             />
           </div>
+
           <div className="flex flex-col sm:flex-row gap-4 border-t border-slate-800/50 pt-3 mt-1">
             <div className="flex flex-col gap-1.5 flex-1">
               <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
@@ -176,6 +170,7 @@ export const CreateDeckModal: React.FC<CreateDeckModalProps> = ({
               </select>
             </div>
           </div>
+
           <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800 mt-2">
             <button
               type="button"

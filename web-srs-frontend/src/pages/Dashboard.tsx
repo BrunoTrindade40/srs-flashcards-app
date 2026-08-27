@@ -21,13 +21,16 @@ export const Dashboard: React.FC = () => {
     setIsSettingsOpen,
   } = useDashboard();
 
+  const openCreateDeck = useCallback(() => setIsCreateDeckOpen(true), [setIsCreateDeckOpen]);
   const closeCreateDeck = useCallback(() => setIsCreateDeckOpen(false), [setIsCreateDeckOpen]);
+  const openSettings = useCallback(() => setIsSettingsOpen(true), [setIsSettingsOpen]);
   const closeSettings = useCallback(() => setIsSettingsOpen(false), [setIsSettingsOpen]);
 
+  // Padrão Bouncer intercepta a falta de dados (Nulidade) logo no início
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] w-full gap-4">
-        <div className="text-amber-500 text-4xl animate-pulse">⚙️</div>
+        <div className="text-amber-500 text-4xl animate-pulse">⏳</div>
         <div className="text-slate-600 font-medium text-sm animate-pulse tracking-wider uppercase">
           Carregando seu painel cognitivo...
         </div>
@@ -49,6 +52,7 @@ export const Dashboard: React.FC = () => {
     );
   }
 
+  // Uma vez que o fluxo atinge este ponto, os arrays são sabidamente não-nulos e garantidos.
   return (
     <div className="flex flex-col w-full max-w-6xl mx-auto gap-8 p-6 animate-fadeIn">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-200 pb-6">
@@ -61,16 +65,15 @@ export const Dashboard: React.FC = () => {
             Acompanhe o seu progresso e mantenha sua rotina de retenção ativa.
           </p>
         </div>
-
         <div className="flex flex-wrap gap-3 w-full md:w-auto">
           <button
-            onClick={() => setIsSettingsOpen(true)}
+            onClick={openSettings}
             className="flex-1 md:flex-none px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-xs rounded-xl border border-slate-300 transition-all cursor-pointer flex items-center justify-center gap-2 shadow-sm"
           >
             ⚙️ Configurações
           </button>
           <button
-            onClick={() => setIsCreateDeckOpen(true)}
+            onClick={openCreateDeck}
             className="flex-1 md:flex-none px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl transition-all shadow-md shadow-amber-500/10 cursor-pointer flex items-center justify-center gap-2"
           >
             <span>+ Criar Baralho</span>
@@ -78,33 +81,22 @@ export const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* CORREÇÃO CRÍTICA: Componentes renderizados nativamente pelo fluxo de early return, evitando estados nulos ou instáveis */}
-      {/* CORREÇÃO: Desmontagem Condicional da Estrutura */}
-      {typeof totalActiveCards === "number" && (
-        <DashboardStats
-          streak={streak}
-          showStreakBonus={showStreakBonus}
-          activeDecksCount={activeDecks.length}
-          totalActiveCards={totalActiveCards}
-        />
-      )}
+      {/* RENDERIZAÇÃO LIMPA E ESTRITA: Zero falsas guardas lógicas */}
+      <DashboardStats
+        streak={streak}
+        showStreakBonus={showStreakBonus}
+        activeDecksCount={activeDecks.length}
+        totalActiveCards={totalActiveCards}
+      />
 
-      {/* CORREÇÃO: Desmontagem Condicional da Estrutura */}
-      {activeDecks && archivedDecks && (
-        <DashboardDeckList
-          activeDecks={activeDecks}
-          archivedDecks={archivedDecks}
-          onCreateDeck={() => setIsCreateDeckOpen(true)}
-        />
-      )}
+      <DashboardDeckList
+        activeDecks={activeDecks}
+        archivedDecks={archivedDecks}
+        onCreateDeck={openCreateDeck}
+      />
 
-      {isCreateDeckOpen && (
-        <CreateDeckModal isOpen={isCreateDeckOpen} onClose={closeCreateDeck} />
-      )}
-
-      {isSettingsOpen && (
-        <SettingsModal isOpen={isSettingsOpen} onClose={closeSettings} />
-      )}
+      {isCreateDeckOpen && <CreateDeckModal onClose={closeCreateDeck} />}
+      {isSettingsOpen && <SettingsModal onClose={closeSettings} />}
     </div>
   );
 };

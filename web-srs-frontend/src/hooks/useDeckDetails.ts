@@ -8,20 +8,19 @@ import {
 } from "../lib/graphql/deck";
 import { REMOVE_FLASHCARD, UPDATE_FLASHCARD } from "../lib/graphql/flashcard";
 import { useToast } from "./useToast";
-import type { GetDeckDetailsQuery } from "../gql/graphql";
 import type { Reference } from "@apollo/client/core";
+import type { GetDeckDetailsQuery } from "../gql/graphql";
 
-// Duck Typing: Extração da assinatura tipada estrita garantida pelo Codegen.
 type QueryDeck = NonNullable<GetDeckDetailsQuery["deck"]>;
-type QueryFlashcard = NonNullable<QueryDeck["flashcards"]>[number];
+export type FlashcardItem = NonNullable<QueryDeck["flashcards"]>[number];
 
-// EXPORTAÇÃO ADICIONADA: Disponibilizamos a tipagem estrita para a UI
-export type FlashcardItem = QueryFlashcard;
-
-export type EditingCardState = Pick<
-  QueryFlashcard,
-  "id" | "frontContent" | "backContent" | "sourceContext"
->;
+// Trazemos a interface para o controlador do estado
+export interface EditingCardState {
+  id: string;
+  frontContent: string;
+  backContent: string;
+  sourceContext?: string | null;
+}
 
 const CARDS_PER_PAGE = 20;
 
@@ -31,6 +30,7 @@ export function useDeckDetails(deckId: string | null) {
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditDeckOpen, setIsEditDeckOpen] = useState(false);
+  // 5. O estado reconhece naturalmente a interface tipada
   const [editingCard, setEditingCard] = useState<EditingCardState | null>(null);
   const [deletingCardId, setDeletingCardId] = useState<string | null>(null);
   const [isDeletingDeck, setIsDeletingDeck] = useState(false);
@@ -45,6 +45,7 @@ export function useDeckDetails(deckId: string | null) {
   });
 
   // Extração e Fallbacks de Segurança (Tolerância Zero a Null reference)
+  // Extração estabilizada e higienizada (Single Source of Truth)
   const deck = data?.deck ?? null;
   const allFlashcards = deck?.flashcards ?? [];
   const totalCount = allFlashcards.length;
@@ -63,19 +64,23 @@ export function useDeckDetails(deckId: string | null) {
   const [updateDeck, { loading: updatingDeck }] = useMutation(UPDATE_DECK);
 
   // Manipulador isolado para a regra de negócio de Arquivamento (SRP)
-  const handleToggleArchive = async () => {
-    if (!deckId || !data?.deck) return;
+  // SUGESTÃO APLICADA: Estabilização de referência para as mutações assíncronas do Custom Hook
+  // CORREÇÃO: Utilização estrita da variável 'deck' em vez de computar 'data?.deck'
+  // Isso atende 100% aos requisitos de análise estática do React Compiler.
+  const handleToggleArchive = useCallback(async () => {
+    if (!deckId || !deck) return; // Substituído !data?.deck por !deck
+    
     try {
       await updateDeck({
         variables: {
           data: {
             id: deckId,
-            isArchived: !data.deck.isArchived,
+            isArchived: !deck.isArchived, // Substituído data.deck por deck
           },
         },
       });
       showToast(
-        data.deck.isArchived
+        deck.isArchived // Substituído data.deck por deck
           ? "Baralho desarquivado com sucesso."
           : "Baralho arquivado com sucesso.",
         "success"
@@ -85,9 +90,9 @@ export function useDeckDetails(deckId: string | null) {
         showToast(`Erro ao alterar arquivamento: ${err.message}`, "error");
       }
     }
-  };
+  }, [deckId, deck, updateDeck, showToast]);
 
-  const handleSaveEdit = async (
+  const handleSaveEdit = useCallback(async (
     frontContent: string,
     backContent: string,
     sourceContext?: string | null,
@@ -106,7 +111,6 @@ export function useDeckDetails(deckId: string | null) {
           },
         },
       });
-
       showToast("Cartão atualizado com sucesso!", "success");
       setEditingCard(null);
     } catch (err: unknown) {
@@ -114,9 +118,9 @@ export function useDeckDetails(deckId: string | null) {
         showToast(`Erro ao atualizar cartão: ${err.message}`, "error");
       }
     }
-  };
+  }, [editingCard, updateFlashcard, showToast]);
 
-  const handleConfirmDeleteCard = async () => {
+  const handleConfirmDeleteCard = useCallback(async () => {
     if (!deletingCardId) return;
     try {
       await removeFlashcard({
@@ -137,15 +141,14 @@ export function useDeckDetails(deckId: string | null) {
         showToast(`Erro ao deletar cartão: ${err.message}`, "error");
       }
     }
-  };
+  }, [deletingCardId, removeFlashcard, showToast]);
 
-  const handleConfirmDeleteDeck = async () => {
+  const handleConfirmDeleteDeck = useCallback(async () => {
     if (!deckId) return;
     try {
       await deleteDeck({
         variables: { id: deckId },
         update(cache) {
-          // 1. Remove a referência do Deck da lista ROOT_QUERY.myDecks de forma imutável O(1)
           cache.modify({
             fields: {
               myDecks(existingDeckRefs: readonly Reference[] = [], { readField }) {
@@ -155,8 +158,6 @@ export function useDeckDetails(deckId: string | null) {
               },
             },
           });
-
-          // 2. Extirpa a entidade Deck normalizada e executa Garbage Collection
           const normalizedDeckId = cache.identify({
             id: deckId,
             __typename: "Deck",
@@ -165,8 +166,6 @@ export function useDeckDetails(deckId: string | null) {
           cache.gc();
         },
       });
-
-      // CORREÇÃO: Eliminado o refetchQueries. O cache local já está 100% íntegro e sincronizado.
       showToast("Baralho excluído permanentemente.", "success");
       setIsDeletingDeck(false);
       navigate("/dashboard");
@@ -175,7 +174,7 @@ export function useDeckDetails(deckId: string | null) {
         showToast(`Erro ao excluir baralho: ${err.message}`, "error");
       }
     }
-  };
+  }, [deckId, deleteDeck, showToast, navigate]);
 
   return {
     deck: data?.deck,

@@ -4,13 +4,11 @@ import { MarkdownRenderer } from "./MarkdownRenderer";
 
 interface CreateFlashcardModalProps {
   deckId: string;
-  isOpen: boolean;
   onClose: () => void;
 }
 
 export const CreateFlashcardModal: React.FC<CreateFlashcardModalProps> = ({
   deckId,
-  isOpen,
   onClose,
 }) => {
   // 🟢 Toda a complexidade de mutação e atalhos é injetada via Hook
@@ -26,9 +24,7 @@ export const CreateFlashcardModal: React.FC<CreateFlashcardModalProps> = ({
     loading,
     handleSubmit,
     handleClose,
-  } = useCreateFlashcardModal({ deckId, isOpen, onClose });
-
-  if (!isOpen) return null;
+  } = useCreateFlashcardModal({ deckId, onClose });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-fadeIn">

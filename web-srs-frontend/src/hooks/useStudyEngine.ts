@@ -1,12 +1,10 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
-import { useQuery, useMutation } from '@apollo/client/react'; // Importação estrita da UI do Apollo
+import { useQuery, useMutation } from '@apollo/client/react';
 import { useNavigate } from 'react-router-dom';
 import { GET_DUE_FLASHCARDS, SUBMIT_REVIEW } from '../lib/graphql/study';
 import { useToast } from './useToast';
 import type { Reference } from '@apollo/client/core';
 
-// 1. Função Pura: Hash determinístico para embaralhamento (Interleaving Estável)
-// Garante aleatoriedade visual na sessão sem violar a pureza exigida pelo hook useMemo
 const generateStableHash = (id: string, seed: number) => {
   let hash = 0;
   const str = id + seed.toString();
@@ -21,41 +19,29 @@ export const useStudyEngine = (deckId: string | null) => {
   const navigate = useNavigate();
   const { showToast } = useToast();
 
-  // 1. Telemetria Pura (React 19): Lazy initialization.
-  // Garante que o timestamp seja capturado apenas uma vez na montagem do hook,
-  // mantendo o corpo da função estritamente puro.
-  // 2. Correção Crítica RN06: Sincronização Temporal e Rollover (04:00 AM)
-  // Subtraímos 4 horas (14.400.000 ms) do momento atual. Assim, uma revisão às 03:59 AM
-  // será matematicamente processada como pertencente ao dia anterior.
   const ROLLOVER_OFFSET_MS = 14400000;
   const [sessionTime] = useState(() => Date.now() - ROLLOVER_OFFSET_MS);
 
   const { data, loading, error } = useQuery(GET_DUE_FLASHCARDS, {
-    // 🟡 ALERTA CORRIGIDO: Fallback seguro substituindo o operador "!".
-    // A string vazia satisfaz o contrato do TypeScript, enquanto o 'skip' protege a rede[cite: 21].
     variables: { deckId: deckId ?? "" },
     skip: !deckId,
     fetchPolicy: 'cache-and-network',
   });
 
-  // 2. Programação Defensiva: Filtra os cartões baseando-se no timestamp exato (FSRS).
-  // Isso mitiga o bug de truncamento de data do backend (DATE <= CURRENT_DATE).
   const queue = useMemo(() => {
-    const rawQueue = data?.dueFlashcards ?? [];
-    
-    // 3. Filtragem Defensiva com Rollover Aplicado
-    const filteredQueue = rawQueue.filter(card => {
+    // EXTRAÇÃO SEGURA: A expressão e o fallback ocorrem no interior do hook.
+    // O array vazio [] gerado aqui não vazará como dependência externa.
+    const dueFlashcardsList = data?.dueFlashcards ?? [];
+
+    const filteredQueue = dueFlashcardsList.filter(card => {
       if (!card.due) return true;
       return new Date(card.due).getTime() <= sessionTime;
     });
 
-    // 4. Correção Crítica RN01: Interleaving (Randomização Estável)
-    // Ordenamos a fila através do hash numérico. O resultado embaralha os assuntos, 
-    // previne a previsibilidade sequencial e preserva o 'nextCard' para pré-aquecimento visual.
     return filteredQueue.sort((a, b) => {
       return generateStableHash(a.id, sessionTime) - generateStableHash(b.id, sessionTime);
     });
-  }, [data?.dueFlashcards, sessionTime]);
+  }, [data, sessionTime]); // O array escuta o objeto 'data' (estabilizado na memória pelo Apollo)
 
   const currentCard = queue[0] ?? null;
   const nextCard = queue[1] ?? null;
@@ -64,7 +50,6 @@ export const useStudyEngine = (deckId: string | null) => {
   const [isFlipped, setIsFlipped] = useState<boolean>(false);
   const [submitting, setSubmitting] = useState<boolean>(false);
   const startTimeRef = useRef<number>(0);
-
   const [submitReviewMutation] = useMutation(SUBMIT_REVIEW);
 
   useEffect(() => {
@@ -81,21 +66,15 @@ export const useStudyEngine = (deckId: string | null) => {
 
   const handleRating = useCallback(
     async (rating: number) => {
-      // Padrão Bouncer e Type Guardeing O(1): Valida dependências e garante 
-      // que 'deckId' é estritamente uma string neste escopo isolado[cite: 21].
       if (!currentCard || submitting || !deckId) return;
       
       setSubmitting(true);
 
-      // Telemetria monotônica segura[cite: 21].
-      const rawDurationMs = startTimeRef.current > 0 
-         ? Math.round(performance.now() - startTimeRef.current) 
-         : 0;
-         
-      // CORREÇÃO CRÍTICA: Aplicação de Grampos Matemáticos na Telemetria
-      // Limita a latência gravada entre 0 e 60.000ms (1 minuto) garantindo a integridade dos dados para Data Science.
+      const rawDurationMs = startTimeRef.current > 0
+          ? Math.round(performance.now() - startTimeRef.current)
+          : 0;
+      
       const safeDurationMs = Math.max(0, Math.min(rawDurationMs, 60000));
-        
       const targetCard = currentCard;
       setIsFlipped(false);
 
@@ -107,22 +86,16 @@ export const useStudyEngine = (deckId: string | null) => {
             reviewDurationMs: safeDurationMs,
           },
           update(cache) {
-            // CORREÇÃO: Utilização rigorosa da API de manipulação imutável do Apollo v4
             cache.modify({
               fields: {
                 dueFlashcards(existingRefs: readonly Reference[] = [], { readField, toReference }) {
-                  // 1. Método Puro: Filtra a fila removendo o cartão recém-respondido através da conferência estrita de ID
                   const filteredQueue = existingRefs.filter(
                     (ref) => readField("id", ref) !== targetCard.id
                   );
-
-                  // 2. Comportamento FSRS: Se o usuário errou (rating 1), recoloca no final da fila de repetição
                   if (rating === 1) {
                     const cardRef = toReference(targetCard);
-                    // Aplicação estrita de Spread Operator garantindo 100% de imutabilidade
                     return cardRef ? [...filteredQueue, cardRef] : filteredQueue;
                   }
-
                   return filteredQueue;
                 },
               },
@@ -130,7 +103,6 @@ export const useStudyEngine = (deckId: string | null) => {
           },
         });
       } catch (err: unknown) {
-        // Narrowing rígido para evitar o vazamento de 'any' na exceção[cite: 21].
         if (err instanceof Error) {
           console.error('Falha de sincronização na avaliação cognitiva:', err.message);
         }

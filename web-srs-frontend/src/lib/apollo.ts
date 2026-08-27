@@ -1,9 +1,15 @@
 // Segregação rigorosa: Módulos de core estritamente separados dos hooks do React
-import { ApolloClient, HttpLink, InMemoryCache } from "@apollo/client/core";
+import { 
+  ApolloClient, 
+  HttpLink, 
+  InMemoryCache, 
+  type Reference, 
+  type FieldFunctionOptions 
+} from "@apollo/client/core";
 import { SetContextLink } from "@apollo/client/link/context";
 import { supabase } from "./supabaseClient";
 
-// CORREÇÃO CRÍTICA: Padrão Fail-Fast para variáveis de rede
+// Padrão Fail-Fast para variáveis de rede
 const apiUrl = import.meta.env.VITE_API_URL;
 if (typeof apiUrl !== "string" || !apiUrl.trim()) {
   throw new Error(
@@ -37,7 +43,7 @@ const authLink = new SetContextLink(async (_operation, prevContext) => {
         typeof prevContext.headers === "object" &&
         prevContext.headers !== null
     ) {
-        // Itera sobre as chaves originais, garantindo que apenas valores 'string' 
+        // Itera sobre as chaves originais, garantindo que apenas valores 'string'
         // sejam mapeados para o nosso Record<string, string>.
         Object.entries(prevContext.headers).forEach(([key, value]) => {
             if (typeof value === "string") {
@@ -76,10 +82,34 @@ const authLink = new SetContextLink(async (_operation, prevContext) => {
             }
         });
     }
-        
+         
     return { headers: fallbackHeaders };
   }
 });
+
+/**
+ * Função Pura de Deduplicação de Cache O(N)
+ * Anexa novos nós de paginação de forma segura sem sobrescrever o histórico
+ * ou permitir referências duplicadas (Utiliza Set para performance em buscas O(1)).
+ */
+const mergeDeduplicating = (
+  existing: readonly Reference[] = [],
+  incoming: readonly Reference[] = [],
+  { readField }: FieldFunctionOptions
+): Reference[] => {
+  const merged = [...existing];
+  // Utilização de Set nativo para mapear os IDs de forma otimizada
+  const existingIds = new Set(existing.map((ref) => readField("id", ref)));
+
+  incoming.forEach((ref) => {
+    // Apenas adiciona o novo nó se seu identificador único não existir no Set
+    if (!existingIds.has(readField("id", ref))) {
+      merged.push(ref);
+    }
+  });
+
+  return merged;
+};
 
 export const client = new ApolloClient({
   link: authLink.concat(httpLink),
@@ -88,33 +118,28 @@ export const client = new ApolloClient({
       Query: {
         fields: {
           myDecks: {
-            merge(_existing, incoming) {
-              return incoming;
-            },
+            keyArgs: false, // Desabilita fragmentação de cache por argumentos ($limit, $offset)
+            merge: mergeDeduplicating,
           },
           deckFlashcards: {
-            merge(_existing, incoming) {
-              return incoming;
-            },
+            keyArgs: false,
+            merge: mergeDeduplicating,
           },
           dueFlashcards: {
-            merge(_existing, incoming) {
-              return incoming;
-            },
+            keyArgs: false,
+            merge: mergeDeduplicating,
           },
           chaosStudyQueue: {
-            merge(_existing, incoming) {
-              return incoming;
-            },
+            keyArgs: false,
+            merge: mergeDeduplicating,
           },
         },
       },
       Deck: {
         fields: {
           flashcards: {
-            merge(_existing, incoming) {
-              return incoming;
-            },
+            keyArgs: false,
+            merge: mergeDeduplicating,
           },
         },
       },

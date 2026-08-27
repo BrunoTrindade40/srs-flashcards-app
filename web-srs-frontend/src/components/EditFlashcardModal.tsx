@@ -1,7 +1,7 @@
 import React, { useState } from "react";
+import { validateFlashcardInput } from "../domain/validators";
 
 interface EditFlashcardModalProps {
-  isOpen: boolean;
   initialFrontContent: string;
   initialBackContent: string;
   initialSourceContext?: string | null;
@@ -16,7 +16,6 @@ interface EditFlashcardModalProps {
 }
 
 export const EditFlashcardModal: React.FC<EditFlashcardModalProps> = ({
-  isOpen,
   initialFrontContent,
   initialBackContent,
   initialSourceContext = "",
@@ -30,14 +29,19 @@ export const EditFlashcardModal: React.FC<EditFlashcardModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState<1 | 2>(1);
 
-  // Padrão Bouncer logo após a declaração de Hooks
-  if (!isOpen) return null;
-
   // Tipagem estrita de FormEvents exigida pelo React 19
   const handleFirstSubmit = (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!frontContent.trim() || !backContent.trim() || loading) return;
-    setStep(2); // Máquina de Estado O(1): Avança para o Modal Obrigatório da RN02
+    if (loading) return; // Padrão Bouncer Estrito
+
+    // 1. Validação Universal Pura injetada no fluxo de Edição (Early-Fail)
+    const validationError = validateFlashcardInput(frontContent, backContent, sourceContext);
+    if (validationError) {
+      // Interceptar e emitir via interface local ou hook de Toast
+      return;
+    }
+
+    setStep(2); // 2. O modal só avança para o passo destrutivo se os dados forem íntegros
   };
 
   const handleFinalSubmit = async (resetProgress: boolean) => {

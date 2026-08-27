@@ -1,10 +1,16 @@
 import React from "react";
 import { MarkdownRenderer } from "./MarkdownRenderer";
-// IMPORTAÇÃO CORRIGIDA: Consumindo o tipo atômico gerado pelo Codegen (Fim do "any")
-import type { EditingCardState, FlashcardItem } from "../hooks/useDeckDetails";
+import type { GetDeckDetailsQuery } from "../gql/graphql";
+// Consumimos a interface diretamente do Hook que gerencia o estado
+import type { EditingCardState } from "../hooks/useDeckDetails"; 
+
+type QueryDeck = NonNullable<GetDeckDetailsQuery["deck"]>;
+
+// ALERTA CORRIGIDO: Removido o 'export'. O tipo agora é privado a este arquivo.
+type FlashcardListItem = NonNullable<QueryDeck["flashcards"]>[number];
 
 interface FlashcardListProps {
-  flashcards: FlashcardItem[];
+  flashcards: FlashcardListItem[];
   hasMore: boolean;
   onLoadMore: () => void;
   onEditCard: (card: EditingCardState) => void;
@@ -18,6 +24,7 @@ export const FlashcardList: React.FC<FlashcardListProps> = ({
   onEditCard,
   onDeleteCard,
 }) => {
+  // Extração determinística
   const hasCards = flashcards.length > 0;
 
   return (
@@ -39,16 +46,12 @@ export const FlashcardList: React.FC<FlashcardListProps> = ({
             >
               <div className="flex flex-col md:flex-row flex-1 gap-6 w-full overflow-hidden">
                 <div className="flex flex-col flex-1 gap-1 min-w-0">
-                  <span className="text-[10px] font-bold text-amber-500 uppercase tracking-wider">
-                    Frente
-                  </span>
-                  <MarkdownRenderer content={card.frontContent ?? ""} />
+                  <span className="text-[10px] font-bold text-amber-500 uppercase tracking-wider">Frente</span>
+                  <MarkdownRenderer content={card.frontContent} />
                 </div>
                 <div className="flex flex-col flex-1 gap-1 min-w-0 border-t md:border-t-0 md:border-l border-slate-800 pt-3 md:pt-0 md:pl-6">
-                  <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-wider">
-                    Verso
-                  </span>
-                  <MarkdownRenderer content={card.backContent ?? ""} />
+                  <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-wider">Verso</span>
+                  <MarkdownRenderer content={card.backContent} />
                 </div>
               </div>
 
@@ -75,7 +78,7 @@ export const FlashcardList: React.FC<FlashcardListProps> = ({
               </div>
             </div>
           ))}
-
+          
           {hasMore && (
             <div className="flex justify-center pt-4 w-full">
               <button

@@ -1,9 +1,4 @@
-refactor(frontend): orquestracao de componentes, pureza de cache e regras cognitivas do motor
+fix(frontend): estabilizacao de identidade de memoria no useMemo e expurgo de stale closures
 
-- refactor(frontend): fragmentacao de "God Components" (Dashboard e DeckDetails) em Dumb Components isolados (DashboardStats, FlashcardList, etc.), convertendo as paginas em orquestradores estritos (SRP).
-- fix(frontend): aplicacao rigorosa de Tear-down Estrito, garantindo a desmontagem condicional de subcomponentes e modais para extirpar "Stale State" da arvore do DOM.
-- perf(frontend): otimizacao do Apollo Client abolindo "Overfetching" apos delecoes e resolvendo "Stale Cache" ao derivar contadores da colecao em RAM (eliminacao da dependencia de campos "_count" estaticos).
-- fix(frontend): estabilizacao da renderizacao via "useCallback" nas propriedades de modais para prevenir "Thrashing" de event listeners, e supressao de vazamento de memoria (Memory Leak) no fluxo de Login ao blindar setters pos-navegacao.
-- feat(frontend): calibracao do motor de estudo (useStudyEngine) as regras cientificas do TCC, aplicando offset de 4h para o Rollover de sessao (RN06), Interleaving deterministico na fila (RN01) e grampo de 60s na telemetria.
-- fix(frontend): criacao do guardiao declarativo "RequireDeckParam", atuando como barreira de protecao de rotas para evitar instanciacao de hooks complexos sob URLs malformadas.
-- type(frontend): erradicacao de coercoes "any" nas colecoes visuais em favor da tipagem estrutural do GraphQL Codegen e adocao de padrao "Fail-Fast" para as variaveis de ambiente de rede.
+- Corrigida a quebra de igualdade referencial (`Referential Equality`) nos hooks useDashboard e useStudyEngine envelopando o operador de fallback (`?? []`) em instâncias nativas de memoização, de acordo com as restrições arquiteturais do linter e do compilador do React.
+- Delegou-se a observação da árvore de dependências estritamente aos objetos raízes gerados pelo Apollo Client (`dataDecks` e `data`), prevenindo "thrashing" reativo e mitigando a recriação inútil de arrays na memória RAM do navegador durante os ciclos assíncronos.

@@ -4,50 +4,85 @@ import { useAuth } from "../hooks/useAuth";
 import { useToast } from "../hooks/useToast";
 import { supabase } from "../lib/supabaseClient";
 
-// 1. Remoção da importação inexistente 'type UserSettings'
+// Remoção da importação inexistente 'type UserSettings'
 import {
   ANONYMIZE_ME,
   GET_ME,
   UPDATE_MY_SETTINGS,
 } from "../lib/graphql/settings";
 
-// 2. Importação do tipo atômico gerado automaticamente pelo Codegen
+// Importação do tipo atômico gerado automaticamente pelo Codegen
 import type { GetMeQuery } from "../gql/graphql";
 
-// 3. Extração Estrutural (Duck Typing Nativo):
+// 🔵 SUGESTÃO APLICADA: Funções Puras de Validação no topo do arquivo (ou importadas de um domínio)
+const validateCredentialsInput = (email: string, password: string): string | null => {
+  const safeEmail = email.trim();
+  const safePassword = password.trim();
+  
+  if (!safeEmail && !safePassword) {
+    return "Preencha o e-mail ou a nova senha para atualizar.";
+  }
+  if (safePassword && safePassword.length < 6) {
+    return "A nova senha deve ter no mínimo 6 caracteres.";
+  }
+  if (safeEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(safeEmail)) {
+    return "Forneça um endereço de e-mail válido.";
+  }
+  
+  return null;
+};
+
+const validateSettingsInput = (
+  dailyNewCardLimit: number,
+  maxDailyReviews: number,
+  dailyRolloverTime: string,
+  timezone: string
+): string | null => {
+  if (isNaN(dailyNewCardLimit) || dailyNewCardLimit < 0 || dailyNewCardLimit > 500) {
+    return "O limite de novos cartões deve estar entre 0 e 500.";
+  }
+  if (isNaN(maxDailyReviews) || maxDailyReviews < 10 || maxDailyReviews > 2000) {
+    return "O limite máximo de revisões deve estar entre 10 e 2000.";
+  }
+  if (!dailyRolloverTime.trim()) {
+    return "O horário de virada diária é obrigatório.";
+  }
+  if (!timezone.trim()) {
+    return "O fuso horário é obrigatório.";
+  }
+  return null;
+};
+
+// Extração Estrutural (Duck Typing Nativo):
 // Pegamos o tipo de retorno da Query e isolamos o objeto 'me'.
 // O uso do NonNullable previne que o componente receba um tipo union com null.
 type UserSettings = NonNullable<GetMeQuery["me"]>;
 
 interface SettingsModalProps {
-  isOpen: boolean;
   onClose: () => void;
 }
 
 // O Componente Pai atua EXCLUSIVAMENTE como Orquestrador de UI (SRP)
-export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
+export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
   const { showToast } = useToast();
+  // A constraint skip garante que a query não dispare caso o modal desmonte rápido
   const { data, loading: queryLoading, error: queryError } = useQuery(GET_ME, {
-    skip: !isOpen,
     fetchPolicy: "cache-and-network",
   });
 
   useEffect(() => {
-    if (isOpen && queryError) {
+    if (queryError) {
       showToast(`Erro ao carregar configurações: ${queryError.message}`, "error");
     }
-  }, [queryError, isOpen, showToast]);
+  }, [queryError, showToast]);
 
   useEffect(() => {
-    if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, onClose]);
-
-  if (!isOpen) return null;
+  }, [onClose]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fadeIn">
@@ -95,28 +130,23 @@ const CredentialsForm: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     e.preventDefault();
     if (loading) return;
 
-    const safeEmail = email.trim();
-    const safePassword = password.trim();
-
-    // Padrão Bouncer
-    if (!safeEmail && !safePassword) {
-      showToast("Preencha o e-mail ou a nova senha para atualizar.", "error");
+    // Padrão Bouncer invocado com Função Pura
+    const validationError = validateCredentialsInput(email, password);
+    if (validationError) {
+      showToast(validationError, "error");
       return;
     }
 
     setLoading(true);
     try {
       const updates: { email?: string; password?: string } = {};
-      if (safeEmail) updates.email = safeEmail;
-      if (safePassword) updates.password = safePassword;
+      if (email.trim()) updates.email = email.trim();
+      if (password.trim()) updates.password = password.trim();
 
-      // Executa a mutação diretamente no provedor de Identidade (SSOT)
       const { error } = await supabase.auth.updateUser(updates);
       if (error) throw error;
 
       showToast("Credenciais atualizadas com sucesso!", "success");
-      setEmail("");
-      setPassword("");
       onClose();
     } catch (err: unknown) {
       if (err instanceof Error) {
@@ -201,16 +231,22 @@ const SettingsForm: React.FC<{ initialData: UserSettings; onClose: () => void }>
 
     const formData = new FormData(e.currentTarget);
     
-    // 🟡 ALERTA CORRIGIDO: Eliminação da coerção via "as".
-    // Transformação explícita com construtor nativo String() acoplado à Coalescência Nula
-    // Garante que o TypeScript entenda perfeitamente o contrato gerado em Runtime.
+    // Extração 100% Type-Safe com construtores nativos
     const dailyNewCardLimit = parseInt(String(formData.get("dailyNewCardLimit") ?? "0"), 10);
     const maxDailyReviews = parseInt(String(formData.get("maxDailyReviews") ?? "0"), 10);
     const dailyRolloverTime = String(formData.get("dailyRolloverTime") ?? "");
     const timezone = String(formData.get("timezone") ?? "");
 
-    if (isNaN(dailyNewCardLimit) || isNaN(maxDailyReviews) || !dailyRolloverTime.trim() || !timezone) {
-      showToast("Valores inválidos detectados no formulário.", "error");
+    // Padrão Bouncer invocado com Função Pura
+    const validationError = validateSettingsInput(
+      dailyNewCardLimit,
+      maxDailyReviews,
+      dailyRolloverTime,
+      timezone
+    );
+
+    if (validationError) {
+      showToast(validationError, "error");
       return;
     }
 

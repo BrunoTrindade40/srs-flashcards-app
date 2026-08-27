@@ -12,7 +12,6 @@ import { useToast } from "../hooks/useToast";
 export const DeckDetails: React.FC = () => {
   const { deckId } = useParams<{ deckId: string }>();
   const { showToast } = useToast();
-
   const resolvedDeckId = deckId ?? "";
 
   const {
@@ -52,6 +51,10 @@ export const DeckDetails: React.FC = () => {
   const handleCloseDeleteCardModal = useCallback(() => setDeletingCardId(null), [setDeletingCardId]);
   const handleCloseDeleteDeckModal = useCallback(() => setIsDeletingDeck(false), [setIsDeletingDeck]);
 
+  const handleOpenCreateModal = useCallback(() => setIsCreateOpen(true), [setIsCreateOpen]);
+  const handleOpenEditDeckModal = useCallback(() => setIsEditDeckOpen(true), [setIsEditDeckOpen]);
+  const handleOpenDeleteDeckModal = useCallback(() => setIsDeletingDeck(true), [setIsDeletingDeck]);
+
   if (loading && !deck) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh] w-full">
@@ -62,6 +65,7 @@ export const DeckDetails: React.FC = () => {
     );
   }
 
+  // Padrão Bouncer: Se chegarmos após esta linha, é garantido estaticamente que 'deck' não é nulo.
   if (error || !deck) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4 p-6 text-center w-full">
@@ -79,50 +83,40 @@ export const DeckDetails: React.FC = () => {
           to="/dashboard"
           className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-amber-400 transition-colors bg-slate-900/80 hover:bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-800"
         >
-          <span>← Voltar ao Dashboard</span>
+          <span>⬅ Voltar ao Dashboard</span>
         </Link>
       </div>
 
-      {/* CORREÇÃO CRÍTICA: Desmontagem Condicional da Estrutura */}
-      {/* Somente renderiza a interface complexa quando existe a garantia lógica de 'deck' populado na memória (Resolvido Pelo Early Return acima) */}
-      {/* CORREÇÃO: Desmontagem Condicional explícita baseada na existência dos dados */}
-      {deck && (
-        <DeckHeader
-          deckId={deck.id}
-          title={deck.title}
-          description={deck.description ?? null}
-          isArchived={deck.isArchived}
-          flashcardsCount={deck.flashcards?.length ?? 0}
-          updatingDeck={updatingDeck}
-          onToggleArchive={handleToggleArchive}
-          onEditDeck={() => setIsEditDeckOpen(true)}
-          onDeleteDeck={() => setIsDeletingDeck(true)}
-          onCreateCard={() => setIsCreateOpen(true)}
-        />
-      )}
+      {/* 🔵 SUGESTÃO APLICADA: Trava '{deck && ...}' removida. O Early Return acima já assegura que o 'deck' existe. */}
+      <DeckHeader
+        deckId={deck.id}
+        title={deck.title}
+        description={deck.description ?? null}
+        isArchived={deck.isArchived}
+        flashcardsCount={deck.flashcards?.length ?? 0}
+        updatingDeck={updatingDeck}
+        onToggleArchive={handleToggleArchive}
+        onEditDeck={handleOpenEditDeckModal}
+        onDeleteDeck={handleOpenDeleteDeckModal}
+        onCreateCard={handleOpenCreateModal}
+      />
 
-      {/* CORREÇÃO: Tolerância Zero a "any". A prop aceita o tipo limpo inferido. */}
-      {visibleFlashcards && (
-        <FlashcardList
-          flashcards={visibleFlashcards}
-          hasMore={hasMore}
-          onLoadMore={handleLoadMore}
-          onEditCard={setEditingCard}
-          onDeleteCard={setDeletingCardId}
-        />
-      )}
+      {/* 🔵 SUGESTÃO APLICADA: Trava '{visibleFlashcards && ...}' removida. 'visibleFlashcards' é array, logo, sempre truthy. */}
+      <FlashcardList
+        flashcards={visibleFlashcards}
+        hasMore={hasMore}
+        onLoadMore={handleLoadMore}
+        onEditCard={setEditingCard}
+        onDeleteCard={setDeletingCardId}
+      />
 
+      {/* Montagem Condicional Estrita dos Modais */}
       {isCreateOpen && (
-        <CreateFlashcardModal
-          deckId={deck.id}
-          isOpen={isCreateOpen}
-          onClose={handleCloseCreateModal}
-        />
+        <CreateFlashcardModal deckId={deck.id} onClose={handleCloseCreateModal} />
       )}
 
       {editingCard !== null && (
         <EditFlashcardModal
-          isOpen={true}
           initialFrontContent={editingCard.frontContent}
           initialBackContent={editingCard.backContent}
           initialSourceContext={editingCard.sourceContext}
@@ -132,16 +126,11 @@ export const DeckDetails: React.FC = () => {
       )}
 
       {isEditDeckOpen && (
-        <EditDeckModal
-          deck={deck}
-          isOpen={isEditDeckOpen}
-          onClose={handleCloseEditDeckModal}
-        />
+        <EditDeckModal deck={deck} onClose={handleCloseEditDeckModal} />
       )}
 
       {deletingCardId !== null && (
         <ConfirmModal
-          isOpen={true}
           title="Excluir Flashcard"
           message="Tem certeza que deseja remover este cartão do baralho?"
           onClose={handleCloseDeleteCardModal}
@@ -152,7 +141,6 @@ export const DeckDetails: React.FC = () => {
 
       {isDeletingDeck && (
         <ConfirmModal
-          isOpen={true}
           loading={deletingDeck}
           title="Excluir Baralho Inteiro"
           message={`Esta ação apagará permanentemente o baralho "${deck.title}". O algoritmo FSRS perderá o histórico. Prosseguir?`}

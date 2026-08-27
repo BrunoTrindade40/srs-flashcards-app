@@ -11,14 +11,12 @@ import type { GetDeckDetailsQuery } from "../gql/graphql";
 type DeckDetails = NonNullable<GetDeckDetailsQuery["deck"]>;
 
 interface EditDeckModalProps {
-  isOpen: boolean;
   onClose: () => void;
   // A tipagem agora reflete 100% o que trafega na rede, não o modelo global.
   deck: DeckDetails;
 }
 
 export const EditDeckModal: React.FC<EditDeckModalProps> = ({
-  isOpen,
   onClose,
   deck,
 }) => {
@@ -71,8 +69,6 @@ export const EditDeckModal: React.FC<EditDeckModalProps> = ({
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
-
-  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
