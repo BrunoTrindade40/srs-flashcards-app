@@ -1,4 +1,6 @@
 fix(frontend): estabilizacao de identidade de memoria no useMemo e expurgo de stale closures
 
-- Corrigida a quebra de igualdade referencial (`Referential Equality`) nos hooks useDashboard e useStudyEngine envelopando o operador de fallback (`?? []`) em instâncias nativas de memoização, de acordo com as restrições arquiteturais do linter e do compilador do React.
-- Delegou-se a observação da árvore de dependências estritamente aos objetos raízes gerados pelo Apollo Client (`dataDecks` e `data`), prevenindo "thrashing" reativo e mitigando a recriação inútil de arrays na memória RAM do navegador durante os ciclos assíncronos.
+- Corrigida a quebra de igualdade referencial (Referential Equality) nos hooks globais (AuthProvider, ToastProvider) envelopando o payload em instâncias nativas de memoização, de acordo com as restrições arquiteturais do compilador do React[cite: 39].
+- Delegou-se a observação da árvore de dependências estritamente aos valores primitivos (ex: isArchived), prevenindo "thrashing" reativo e mitigando a recriação inútil de ponteiros na memória RAM do navegador durante os ciclos assíncronos[cite: 39].
+- Eliminado o gargalo de Overfetching na listagem de decks ao implementar a diretriz _count em conjunto com a interceptação de cache via TypePolicy do Apollo Client.
+- Adicionado script "generate:watch" no package.json para sincronização contínua (Continuous DX) do AST via GraphQL Codegen.

@@ -2,8 +2,9 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
 import { AuthForm } from "../components/AuthForm";
-// Atualizamos o caminho da importação
 import type { AuthMode } from "../domain/auth";
+// 1. Importação obrigatória da Fonte Única da Verdade (SSOT)
+import { validateCredentialsInput } from "../domain/validators";
 
 export function Login() {
   const navigate = useNavigate();
@@ -39,13 +40,12 @@ export function Login() {
   };
 
   const handleForgotPassword = async (): Promise<boolean> => {
-    const safeEmail = email.trim();
-    if (!safeEmail) {
-      throw new Error("Por favor, insira seu e-mail para recuperação.");
-    }
-    const { error } = await supabase.auth.resetPasswordForEmail(safeEmail, {
+    // 2. Limpeza de Silo de Conhecimento local. A garantia da string segura
+    // agora provém exclusivamente da função de validação de domínio superior.
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
       redirectTo: `${window.location.origin}/dashboard`,
     });
+    
     if (error) throw error;
     setSuccessMsg("Instruções de recuperação enviadas para o seu e-mail.");
     return false; 
@@ -53,13 +53,31 @@ export function Login() {
 
   const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (loading) return;
     
-    resetFeedback();
-    setLoading(true);
+    // 3. Padrão Bouncer: Previne submissões duplicadas na UI
+    if (loading) return; 
 
+    resetFeedback();
+
+    // 4. Delegação Estrita de Domínio (Early-Fail)
+    // Se o modo for "FORGOT_PASSWORD", omitimos a senha da verificação
+    // para focar estritamente na validação do Regex do E-mail.
+    const validationError = validateCredentialsInput(
+      email, 
+      mode === "FORGOT_PASSWORD" ? "" : password
+    );
+
+    // Bloqueia a execução síncrona sem disparar requisições inúteis ao Supabase
+    if (validationError) {
+      setErrorMsg(validationError);
+      return;
+    }
+
+    setLoading(true);
+    
     try {
       let shouldNavigate = false;
+
       if (mode === "LOGIN") {
         shouldNavigate = await handleSignIn();
       } else if (mode === "SIGNUP") {

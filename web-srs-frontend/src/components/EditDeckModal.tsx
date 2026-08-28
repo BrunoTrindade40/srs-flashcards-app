@@ -2,17 +2,14 @@ import { useMutation } from "@apollo/client/react";
 import React, { useEffect, useState } from "react";
 import { useToast } from "../hooks/useToast";
 import { UPDATE_DECK } from "../lib/graphql/deck";
-
-// Importamos a tipagem exata gerada pelo Codegen com base na Query
 import type { GetDeckDetailsQuery } from "../gql/graphql";
+// 1. Importação da regra pura, prevenindo disparidade lógica
+import { validateDeckInput } from "../domain/validators";
 
-// Duck Typing Nativo: Extração estrutural estrita da resposta da Query.
-// O NonNullable é crucial para remover a possibilidade do Apollo retornar 'null'.
 type DeckDetails = NonNullable<GetDeckDetailsQuery["deck"]>;
 
 interface EditDeckModalProps {
   onClose: () => void;
-  // A tipagem agora reflete 100% o que trafega na rede, não o modelo global.
   deck: DeckDetails;
 }
 
@@ -21,21 +18,24 @@ export const EditDeckModal: React.FC<EditDeckModalProps> = ({
   deck,
 }) => {
   const [title, setTitle] = useState(deck.title);
-  // Correção de Segurança de Nulidade: Substituição de || por ??
   const [description, setDescription] = useState(deck.description ?? "");
-  const [sourceLanguage, setSourceLanguage] = useState(
-    deck.sourceLanguage ?? "pt-BR",
-  );
-  const [targetLanguage, setTargetLanguage] = useState(
-    deck.targetLanguage ?? "",
-  );
-  
+  const [sourceLanguage, setSourceLanguage] = useState(deck.sourceLanguage ?? "pt-BR");
+  const [targetLanguage, setTargetLanguage] = useState(deck.targetLanguage ?? "");
+
   const { showToast } = useToast();
   const [updateDeck, { loading }] = useMutation(UPDATE_DECK);
 
   const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!title.trim() || loading) return;
+    if (loading) return;
+
+    // 2. Acionamento Estrito da Validação (SSOT)
+    // Impede atualizações perigosas que corromperiam o banco de dados
+    const validationError = validateDeckInput(title, description);
+    if (validationError) {
+      showToast(validationError, "error");
+      return;
+    }
 
     try {
       const response = await updateDeck({
@@ -75,7 +75,7 @@ export const EditDeckModal: React.FC<EditDeckModalProps> = ({
       <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl flex flex-col gap-6">
         <div className="flex items-center justify-between border-b border-slate-800 pb-4">
           <div className="flex items-center gap-2">
-            <span className="text-xl">✏️</span>
+            <span className="text-xl">🛠️</span>
             <h2 className="text-lg font-bold text-slate-100">Editar Deck</h2>
           </div>
           <button
@@ -83,9 +83,10 @@ export const EditDeckModal: React.FC<EditDeckModalProps> = ({
             className="text-slate-500 hover:text-slate-300 text-sm p-1 transition-colors cursor-pointer"
             aria-label="Fechar modal"
           >
-            ✕
+            ✖
           </button>
         </div>
+
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
@@ -100,6 +101,7 @@ export const EditDeckModal: React.FC<EditDeckModalProps> = ({
               className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 text-sm focus:outline-none focus:border-amber-500 transition-colors"
             />
           </div>
+
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
               Descrição (Opcional)
@@ -112,6 +114,7 @@ export const EditDeckModal: React.FC<EditDeckModalProps> = ({
               className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 text-sm resize-none focus:outline-none focus:border-amber-500 transition-colors"
             />
           </div>
+
           <div className="flex flex-col sm:flex-row gap-4 border-t border-slate-800/50 pt-3 mt-1">
             <div className="flex flex-col gap-1.5 flex-1">
               <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
@@ -128,6 +131,7 @@ export const EditDeckModal: React.FC<EditDeckModalProps> = ({
                 <option value="es-ES">Espanhol</option>
               </select>
             </div>
+
             <div className="flex flex-col gap-1.5 flex-1">
               <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
                 Idioma Alvo
@@ -146,6 +150,7 @@ export const EditDeckModal: React.FC<EditDeckModalProps> = ({
               </select>
             </div>
           </div>
+
           <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800 mt-2">
             <button
               type="button"

@@ -3,59 +3,20 @@ import React, { useEffect, useState } from "react";
 import { useAuth } from "../hooks/useAuth";
 import { useToast } from "../hooks/useToast";
 import { supabase } from "../lib/supabaseClient";
-
-// Remoção da importação inexistente 'type UserSettings'
 import {
   ANONYMIZE_ME,
   GET_ME,
   UPDATE_MY_SETTINGS,
 } from "../lib/graphql/settings";
-
-// Importação do tipo atômico gerado automaticamente pelo Codegen
 import type { GetMeQuery } from "../gql/graphql";
 
-// 🔵 SUGESTÃO APLICADA: Funções Puras de Validação no topo do arquivo (ou importadas de um domínio)
-const validateCredentialsInput = (email: string, password: string): string | null => {
-  const safeEmail = email.trim();
-  const safePassword = password.trim();
-  
-  if (!safeEmail && !safePassword) {
-    return "Preencha o e-mail ou a nova senha para atualizar.";
-  }
-  if (safePassword && safePassword.length < 6) {
-    return "A nova senha deve ter no mínimo 6 caracteres.";
-  }
-  if (safeEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(safeEmail)) {
-    return "Forneça um endereço de e-mail válido.";
-  }
-  
-  return null;
-};
+// APLICADO: Importação das funções puras isoladas no diretório de domínio (SSOT)
+import { 
+  validateCredentialsInput, 
+  validateSettingsInput 
+} from "../domain/validators";
 
-const validateSettingsInput = (
-  dailyNewCardLimit: number,
-  maxDailyReviews: number,
-  dailyRolloverTime: string,
-  timezone: string
-): string | null => {
-  if (isNaN(dailyNewCardLimit) || dailyNewCardLimit < 0 || dailyNewCardLimit > 500) {
-    return "O limite de novos cartões deve estar entre 0 e 500.";
-  }
-  if (isNaN(maxDailyReviews) || maxDailyReviews < 10 || maxDailyReviews > 2000) {
-    return "O limite máximo de revisões deve estar entre 10 e 2000.";
-  }
-  if (!dailyRolloverTime.trim()) {
-    return "O horário de virada diária é obrigatório.";
-  }
-  if (!timezone.trim()) {
-    return "O fuso horário é obrigatório.";
-  }
-  return null;
-};
-
-// Extração Estrutural (Duck Typing Nativo):
-// Pegamos o tipo de retorno da Query e isolamos o objeto 'me'.
-// O uso do NonNullable previne que o componente receba um tipo union com null.
+// Extração Estrutural (Duck Typing Nativo)
 type UserSettings = NonNullable<GetMeQuery["me"]>;
 
 interface SettingsModalProps {
@@ -65,7 +26,7 @@ interface SettingsModalProps {
 // O Componente Pai atua EXCLUSIVAMENTE como Orquestrador de UI (SRP)
 export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
   const { showToast } = useToast();
-  // A constraint skip garante que a query não dispare caso o modal desmonte rápido
+
   const { data, loading: queryLoading, error: queryError } = useQuery(GET_ME, {
     fetchPolicy: "cache-and-network",
   });
@@ -86,7 +47,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fadeIn">
-      {/* Manutenção rigorosa de Flexbox para Layout da Modal */}
+      {/* ... marcação flexbox do Modal preservada ... */}
       <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl flex flex-col gap-6 max-h-[90vh] overflow-y-auto custom-scrollbar">
         <div className="flex items-center justify-between border-b border-slate-800 pb-4 shrink-0">
           <div className="flex items-center gap-2">

@@ -15,6 +15,9 @@ export const DashboardDeckList: React.FC<DashboardDeckListProps> = ({
 }) => {
   const navigate = useNavigate();
 
+  const hasActiveDecks = activeDecks.length > 0;
+  const hasArchivedDecks = archivedDecks.length > 0;
+
   return (
     <div className="flex flex-col gap-8">
       <div className="flex flex-col gap-4">
@@ -22,9 +25,10 @@ export const DashboardDeckList: React.FC<DashboardDeckListProps> = ({
           <h2 className="text-xl font-bold text-slate-800">Seus Baralhos</h2>
         </div>
 
-        {activeDecks.length === 0 ? (
+        {/* Avaliação Binária Pura via Ternário */}
+        {!hasActiveDecks ? (
           <div className="flex flex-col items-center justify-center p-12 bg-white/50 border border-slate-200 rounded-2xl text-center gap-4">
-            <span className="text-4xl">🌱</span>
+            <span className="text-4xl">📚</span>
             <div className="flex flex-col gap-1 max-w-sm">
               <h3 className="text-base font-bold text-slate-700">
                 Nenhum baralho ativo encontrado
@@ -44,7 +48,9 @@ export const DashboardDeckList: React.FC<DashboardDeckListProps> = ({
         ) : (
           <div className="flex flex-col gap-3">
             {activeDecks.map((deck) => {
-              const cardCount = deck.flashcards?.length ?? 0;
+              // CORREÇÃO: Extração limpa baseada no novo TypePolicy
+              const cardCount = deck._count?.flashcards ?? 0;
+              
               return (
                 <div
                   key={deck.id}
@@ -86,7 +92,7 @@ export const DashboardDeckList: React.FC<DashboardDeckListProps> = ({
         )}
       </div>
 
-      {archivedDecks.length > 0 && (
+      {hasArchivedDecks && (
         <div className="flex flex-col gap-3 pt-4 border-t border-slate-200">
           <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider">
             Baralhos Arquivados ({archivedDecks.length})

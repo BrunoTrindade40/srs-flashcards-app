@@ -1,0 +1,6 @@
+# .eslintignore (Ou eslint.config.js dependendo da versão majoritária usada no Vite)
+dist
+build
+node_modules
+# CORREÇÃO: Isolamento estrito do linter para artefatos gerados (SSOT)
+src/gql/*

@@ -1,15 +1,14 @@
 // Segregação rigorosa: Módulos de core estritamente separados dos hooks do React
-import { 
-  ApolloClient, 
-  HttpLink, 
-  InMemoryCache, 
-  type Reference, 
-  type FieldFunctionOptions 
+import {
+  ApolloClient,
+  HttpLink,
+  InMemoryCache,
+  type Reference,
+  type FieldFunctionOptions
 } from "@apollo/client/core";
 import { SetContextLink } from "@apollo/client/link/context";
 import { supabase } from "./supabaseClient";
 
-// Padrão Fail-Fast para variáveis de rede
 const apiUrl = import.meta.env.VITE_API_URL;
 if (typeof apiUrl !== "string" || !apiUrl.trim()) {
   throw new Error(
@@ -17,11 +16,9 @@ if (typeof apiUrl !== "string" || !apiUrl.trim()) {
   );
 }
 
-const httpLink = new HttpLink({
-  uri: apiUrl,
-});
+const httpLink = new HttpLink({ uri: apiUrl });
 
-// Tipagem 100% nativa. prevContext é inferido automaticamente pelo TS.
+// Tipagem 100% nativa. prevContext inferido automaticamente pelo TS.
 const authLink = new SetContextLink(async (_operation, prevContext) => {
   try {
     const { data, error } = await supabase.auth.getSession();
@@ -69,6 +66,7 @@ const authLink = new SetContextLink(async (_operation, prevContext) => {
     
     // Recuperação segura do header original em caso de falha severa, mantendo a tipagem estrita
     const fallbackHeaders: Record<string, string> = {};
+
     if (
         prevContext &&
         typeof prevContext === "object" &&
@@ -82,7 +80,7 @@ const authLink = new SetContextLink(async (_operation, prevContext) => {
             }
         });
     }
-         
+          
     return { headers: fallbackHeaders };
   }
 });
@@ -98,16 +96,12 @@ const mergeDeduplicating = (
   { readField }: FieldFunctionOptions
 ): Reference[] => {
   const merged = [...existing];
-  // Utilização de Set nativo para mapear os IDs de forma otimizada
   const existingIds = new Set(existing.map((ref) => readField("id", ref)));
-
   incoming.forEach((ref) => {
-    // Apenas adiciona o novo nó se seu identificador único não existir no Set
     if (!existingIds.has(readField("id", ref))) {
       merged.push(ref);
     }
   });
-
   return merged;
 };
 
@@ -118,15 +112,15 @@ export const client = new ApolloClient({
       Query: {
         fields: {
           myDecks: {
-            keyArgs: false, // Desabilita fragmentação de cache por argumentos ($limit, $offset)
+            keyArgs: false,
             merge: mergeDeduplicating,
           },
           deckFlashcards: {
-            keyArgs: false,
+            keyArgs: ["deckId"],
             merge: mergeDeduplicating,
           },
           dueFlashcards: {
-            keyArgs: false,
+            keyArgs: ["deckId"],
             merge: mergeDeduplicating,
           },
           chaosStudyQueue: {
@@ -140,6 +134,25 @@ export const client = new ApolloClient({
           flashcards: {
             keyArgs: false,
             merge: mergeDeduplicating,
+          },
+          _count: {
+            // CORREÇÃO: Derivação Estrita e Local (SSOT Rule)
+            // Substitui a dependência passiva pelo cálculo dinâmico se a coleção estiver cacheada.
+            read(existing, { readField }) {
+              const flashcardsRefs = readField("flashcards");
+              
+              // Se o array de cartões estiver em memória (ex: após abrir o DeckDetails), 
+              // forçamos o React a derivar a contagem deste array (array.length)
+              if (Array.isArray(flashcardsRefs)) {
+                return {
+                  ...(existing && typeof existing === "object" ? existing : {}),
+                  flashcards: flashcardsRefs.length,
+                };
+              }
+              
+              // Fallback para a contagem estática do banco se o array não foi carregado
+              return existing;
+            },
           },
         },
       },

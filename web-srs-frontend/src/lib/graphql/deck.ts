@@ -9,8 +9,8 @@ export const GET_MY_DECKS = graphql(`
       sourceLanguage
       targetLanguage
       isArchived
-      flashcards {
-        id
+      _count {
+        flashcards
       }
     }
   }
@@ -44,8 +44,8 @@ export const CREATE_DECK = graphql(`
       sourceLanguage
       targetLanguage
       isArchived
-      flashcards {
-        id
+      _count {
+        flashcards
       }
     }
   }

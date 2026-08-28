@@ -1,35 +1,26 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-// Módulos restritos à regra de segregação do Apollo Client
 import type { Reference } from "@apollo/client/core";
 import { useMutation } from "@apollo/client/react";
-
 import { CREATE_DECK } from "../lib/graphql/deck";
+// 1. Importação obrigatória da Única Fonte da Verdade do domínio
+import { validateDeckInput } from "../domain/validators";
 
 export const CreateDeck: React.FC = () => {
   const navigate = useNavigate();
-
   const [title, setTitle] = useState<string>("");
   const [description, setDescription] = useState<string>("");
   const [formError, setFormError] = useState<string | null>(null);
 
   const [createDeck, { loading }] = useMutation(CREATE_DECK, {
     update(cache, { data: mutationData }) {
-      // Padrão Bouncer no modificador do cache
       if (!mutationData?.createDeck) return;
-
-      // SUGESTÃO APLICADA: Substituição da reescrita de query inteira pela inserção isolada
+      
       cache.modify({
         fields: {
           myDecks(existingDeckRefs: readonly Reference[] = [], { toReference }) {
-            // Cria um ponteiro em memória para o item recém chegado na Mutation
             const newDeckRef = toReference(mutationData.createDeck);
-            
-            // Aborta se não gerar uma referência válida
             if (!newDeckRef) return existingDeckRefs;
-
-            // Injeta o novo agrupamento no topo da fila visual com complexidade O(1)
-            // utilizando spread operator, garantindo Imutabilidade Estrita.
             return [newDeckRef, ...existingDeckRefs];
           },
         },
@@ -37,17 +28,16 @@ export const CreateDeck: React.FC = () => {
     },
   });
 
-  // Tipagem estrita exigida para eventos no React
   const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
     setFormError(null);
 
-    const safeTitle = title.trim();
-    const safeDescription = description.trim();
-
-    // Padrão Bouncer de validação (Early Return)
-    if (!safeTitle) {
-      setFormError("O título do Deck é obrigatório.");
+    // 2. Padrão Bouncer: Delegação total da regra matemática para a camada de domínio
+    const validationError = validateDeckInput(title, description);
+    
+    // Aborta a execução imediatamente sem sujar a stack assíncrona
+    if (validationError) {
+      setFormError(validationError);
       return;
     }
 
@@ -55,15 +45,13 @@ export const CreateDeck: React.FC = () => {
       await createDeck({
         variables: {
           data: {
-            title: safeTitle,
-            // Higienização estrita garantindo null ao invés de undefined
-            description: safeDescription ? safeDescription : null,
+            title: title.trim(),
+            description: description.trim() ? description.trim() : null,
           },
         },
       });
       navigate("/dashboard");
     } catch (err: unknown) {
-      // Inspeção com Type Guard, garantindo tolerância zero a 'any'
       if (err instanceof Error) {
         console.error("Falha ao criar o deck:", err.message);
       }
@@ -80,14 +68,13 @@ export const CreateDeck: React.FC = () => {
             Organize o seu conhecimento por áreas de estudo.
           </p>
         </div>
-
-        {/* Verificação explícita do estado de erro (evita renderização suja de '0') */}
+        
         {formError !== null && (
           <div className="mb-4 p-3 bg-red-50 text-red-700 text-sm rounded-lg border border-red-100">
             {formError}
           </div>
         )}
-
+        
         <form onSubmit={handleSubmit} className="space-y-5">
           <div className="flex flex-col gap-1">
             <label htmlFor="title" className="text-sm font-medium text-gray-700">
@@ -104,7 +91,7 @@ export const CreateDeck: React.FC = () => {
               maxLength={100}
             />
           </div>
-
+          
           <div className="flex flex-col gap-1">
             <label htmlFor="description" className="text-sm font-medium text-gray-700">
               Descrição (Opcional)
@@ -120,7 +107,7 @@ export const CreateDeck: React.FC = () => {
               maxLength={500}
             />
           </div>
-
+          
           <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
             <button
               type="button"

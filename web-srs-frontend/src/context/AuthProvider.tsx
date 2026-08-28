@@ -1,5 +1,5 @@
 import type { Session, User } from "@supabase/supabase-js";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState, useMemo } from "react";
 import { useApolloClient } from "@apollo/client/react";
 import { supabase } from "../lib/supabaseClient";
 import { AuthContext } from "./AuthContext";
@@ -30,7 +30,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let mounted = true;
-
     async function getInitialSession() {
       try {
         const { data, error } = await supabase.auth.getSession();
@@ -40,7 +39,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUser(data.session?.user ?? null);
         }
       } catch (error) {
-        // Correção: Variável de erro utilizada para manter rastreabilidade sem quebrar o linter
         const errorMessage = error instanceof Error ? error.message : "Erro desconhecido";
         console.error(`Erro ao buscar sessão inicial: ${errorMessage}`);
       } finally {
@@ -53,7 +51,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data: authListener } = supabase.auth.onAuthStateChange(
       async (_event, newSession) => {
         if (mounted) {
-          // Acesso ao estado anterior (prev) evita dependência de 'session' no array
           setSession((prevSession) => {
              if (!newSession && prevSession) {
                client.clearStore().catch(() => {});
@@ -70,10 +67,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       mounted = false;
       authListener.subscription.unsubscribe();
     };
-  }, [client]); // Correção: 'session' removida. Evita o loop infinito de re-inscrições.
+  }, [client]);
+
+  // CORREÇÃO: Estabilização de Memória O(1) do objeto de Contexto
+  // Previne Cascading Renders invalidando a criação de literais a cada ciclo
+  const contextValue = useMemo(
+    () => ({ session, user, loading, logout }),
+    [session, user, loading, logout]
+  );
 
   return (
-    <AuthContext value={{ session, user, loading, logout }}>
+    <AuthContext value={contextValue}>
       {children}
     </AuthContext>
   );

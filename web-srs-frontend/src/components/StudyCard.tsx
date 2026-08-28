@@ -21,7 +21,11 @@ export const StudyCard: React.FC<StudyCardProps> = ({
       <span className="text-xs font-bold text-amber-500 uppercase tracking-wider">
         Pergunta
       </span>
-      <MarkdownRenderer content={frontContent} />
+      {/* Inversão de Controle: Injetamos as diretrizes de Dark Mode na raiz do fluxo de estudo */}
+      <MarkdownRenderer 
+        content={frontContent} 
+        className="text-slate-100 prose-invert prose-amber [&_.katex]:text-slate-100" 
+      />
     </div>
 
     {isFlipped && backContent && (
@@ -30,8 +34,12 @@ export const StudyCard: React.FC<StudyCardProps> = ({
           <span className="text-xs font-bold text-emerald-500 uppercase tracking-wider">
             Resposta
           </span>
-          <MarkdownRenderer content={backContent} />
+          <MarkdownRenderer 
+            content={backContent} 
+            className="text-slate-100 prose-invert prose-amber [&_.katex]:text-slate-100" 
+          />
         </div>
+
         {sourceContext && (
           <div className="flex flex-col gap-1 bg-slate-950 p-3 rounded border border-slate-800/60 mt-2">
             <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">

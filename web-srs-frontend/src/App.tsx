@@ -3,6 +3,7 @@ import { AuthProvider } from "./context/AuthProvider";
 import { ToastProvider } from "./context/ToastProvider";
 import { AppRoutes } from "./routes";
 
+// Exportação Nomeada Estrita: Remoção do "export default" ambíguo
 export function App() {
   return (
     <AuthProvider>
@@ -14,5 +15,3 @@ export function App() {
     </AuthProvider>
   );
 }
-
-export default App;

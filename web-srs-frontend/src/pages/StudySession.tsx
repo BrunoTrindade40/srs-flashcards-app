@@ -10,6 +10,8 @@ import { useStudyKeyboard } from "../hooks/useStudyKeyboard";
 export const StudySession: React.FC = () => {
   const { deckId } = useParams<{ deckId: string }>();
   const navigate = useNavigate();
+  
+  // Segurança de Nulidade em Parâmetros de Rota
   const resolvedDeckId = deckId ?? "";
 
   const {
@@ -19,7 +21,6 @@ export const StudySession: React.FC = () => {
     isFlipped,
     loading,
     error,
-    submitting,
     handleShowAnswer,
     handleRating,
     handleExit,
@@ -30,10 +31,17 @@ export const StudySession: React.FC = () => {
     onShowAnswer: handleShowAnswer,
     onRate: handleRating,
     onExit: handleExit,
-    disabled: loading || submitting || !currentCard,
+    // 1. Correção (Fim das Flags de Bloqueio Otimistas):
+    // Remoção absoluta da flag de rede 'loading'. O bloqueio restringe-se
+    // unicamente à ausência matemática de um cartão lógico na memória local.
+    disabled: !currentCard,
   });
 
-  if (loading) {
+  // 2. Correção (Prevenção de DOM Flickering via Cache-and-Network):
+  // O Apollo Client emite 'loading = true' mesmo quando devolve dados do cache local 
+  // caso esteja checando novidades no background. Se não exigirmos '!currentCard', 
+  // a tela piscará abruptamente e destruirá o estado do usuário a cada re-fetch.
+  if (loading && !currentCard) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen w-full bg-slate-950 gap-4">
         <div className="text-amber-500 text-4xl animate-pulse">🧠</div>
@@ -44,6 +52,7 @@ export const StudySession: React.FC = () => {
     );
   }
 
+  // Avaliação booleana pura
   const isSessionExhausted = !currentCard || totalCards === 0;
 
   if (error || isSessionExhausted) {
@@ -70,9 +79,8 @@ export const StudySession: React.FC = () => {
   return (
     <div className="min-h-screen w-full bg-slate-950 flex flex-col items-center py-8 px-4 relative overflow-hidden">
       <div className="flex flex-col items-center w-full max-w-3xl mx-auto gap-6 z-10">
-        
         <StudyHeader totalCards={totalCards} onExit={handleExit} />
-
+        
         <StudyCard
           frontContent={currentCard.frontContent}
           backContent={currentCard.backContent}
@@ -82,9 +90,8 @@ export const StudySession: React.FC = () => {
         />
 
         {isFlipped && (
-          <StudyControls submitting={submitting} onRate={handleRating} />
+          <StudyControls onRate={handleRating} />
         )}
-
       </div>
 
       {nextCard && (

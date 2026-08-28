@@ -18,30 +18,24 @@ export function useDashboard() {
     fetchPolicy: "cache-and-network",
   });
 
-  // 1. Extração Estabilizada O(1) (SSOT)
-  // O fallback '?? []' agora está envelopado. O array será recriado APENAS
-  // se o objeto 'dataDecks' originado pelo Apollo Client sofrer mutação real.
-  const rawDecks = useMemo(() => {
-    return dataDecks?.myDecks ?? [];
-  }, [dataDecks]);
+  const rawDecks = dataDecks?.myDecks;
 
-  // 2. Agora 'rawDecks' possui uma identidade de memória imutável e segura
-  // para ser utilizada como dependência.
   const activeDecks = useMemo(() => {
-    return rawDecks.filter((deck) => !deck.isArchived);
+    return rawDecks?.filter((deck) => !deck.isArchived) ?? [];
   }, [rawDecks]);
 
   const archivedDecks = useMemo(() => {
-    return rawDecks.filter((deck) => deck.isArchived);
+    return rawDecks?.filter((deck) => deck.isArchived) ?? [];
   }, [rawDecks]);
 
+  // CORREÇÃO: Consome estritamente o "_count" estabilizado
   const totalActiveCards = useMemo(() => {
-    return activeDecks.reduce((acc, deck) => acc + (deck.flashcards?.length ?? 0), 0);
+    return activeDecks.reduce((acc, deck) => acc + (deck._count?.flashcards ?? 0), 0);
   }, [activeDecks]);
 
   const user = dataMe?.me ?? null;
   const streak = user?.currentStreak ?? 0;
-  const showStreakBonus = streak >= 3;
+  const showStreakBonus = Boolean(user && streak >= 3);
   const userName = user?.name ?? "Estudante";
 
   const loading = loadingMe || loadingDecks;
