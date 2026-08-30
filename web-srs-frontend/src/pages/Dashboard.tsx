@@ -26,12 +26,11 @@ export const Dashboard: React.FC = () => {
   const openSettings = useCallback(() => setIsSettingsOpen(true), [setIsSettingsOpen]);
   const closeSettings = useCallback(() => setIsSettingsOpen(false), [setIsSettingsOpen]);
 
-  // Padrão Bouncer intercepta a falta de dados (Nulidade) logo no início
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] w-full gap-4">
-        <div className="text-amber-500 text-4xl animate-pulse">⏳</div>
-        <div className="text-slate-600 font-medium text-sm animate-pulse tracking-wider uppercase">
+        <div className="text-amber-500 text-4xl animate-pulse">⚙️</div>
+        <div className="text-slate-500 font-medium text-sm animate-pulse tracking-wider uppercase">
           Carregando seu painel cognitivo...
         </div>
       </div>
@@ -42,33 +41,32 @@ export const Dashboard: React.FC = () => {
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh] w-full gap-4 p-6 text-center">
         <span className="text-5xl">⚠️</span>
-        <h2 className="text-xl font-bold text-rose-600">
+        <h2 className="text-xl font-bold text-rose-500">
           Erro ao carregar dados do Dashboard.
         </h2>
-        <p className="text-sm text-slate-500 max-w-md">
+        <p className="text-sm text-slate-400 max-w-md">
           {error.message || "Não foi possível sincronizar suas informações com o servidor."}
         </p>
       </div>
     );
   }
 
-  // Uma vez que o fluxo atinge este ponto, os arrays são sabidamente não-nulos e garantidos.
   return (
     <div className="flex flex-col w-full max-w-6xl mx-auto gap-8 p-6 animate-fadeIn">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-200 pb-6">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-800 pb-6">
         <div className="flex flex-col gap-1">
-          <h1 className="text-3xl font-extrabold text-slate-800 flex items-center gap-3">
+          <h1 className="text-3xl font-extrabold text-slate-100 flex items-center gap-3">
             <span>Olá, {userName}</span>
             <span className="text-2xl">👋</span>
           </h1>
-          <p className="text-slate-500 text-sm">
+          <p className="text-slate-400 text-sm">
             Acompanhe o seu progresso e mantenha sua rotina de retenção ativa.
           </p>
         </div>
         <div className="flex flex-wrap gap-3 w-full md:w-auto">
           <button
             onClick={openSettings}
-            className="flex-1 md:flex-none px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-xs rounded-xl border border-slate-300 transition-all cursor-pointer flex items-center justify-center gap-2 shadow-sm"
+            className="flex-1 md:flex-none px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs rounded-xl border border-slate-700 transition-all cursor-pointer flex items-center justify-center gap-2 shadow-sm"
           >
             ⚙️ Configurações
           </button>
@@ -81,7 +79,6 @@ export const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* RENDERIZAÇÃO LIMPA E ESTRITA: Zero falsas guardas lógicas */}
       <DashboardStats
         streak={streak}
         showStreakBonus={showStreakBonus}

@@ -9,14 +9,21 @@ import {
 import { SetContextLink } from "@apollo/client/link/context";
 import { supabase } from "./supabaseClient";
 
-const apiUrl = import.meta.env.VITE_API_URL;
-if (typeof apiUrl !== "string" || !apiUrl.trim()) {
-  throw new Error(
-    "A variável VITE_API_URL é obrigatória e não foi configurada. A inicialização do Apollo Client foi abortada."
-  );
-}
+// 1. Delegação da extração para uma Função Pura (Lazy Evaluation).
+// Isso previne o colapso da thread principal no escopo do módulo e permite 
+// que o React Error Boundary capture a falha durante a montagem.
+const getApiUrl = (): string => {
+  const apiUrl = import.meta.env.VITE_API_URL;
+  if (typeof apiUrl !== "string" || !apiUrl.trim()) {
+    throw new Error(
+      "A variável VITE_API_URL é obrigatória e não foi configurada no arquivo .env local. A inicialização do Apollo Client foi abortada."
+    );
+  }
+  return apiUrl;
+};
 
-const httpLink = new HttpLink({ uri: apiUrl });
+// 2. Injeção Funcional: O HttpLink suporta injeção por callback na URI.
+const httpLink = new HttpLink({ uri: () => getApiUrl() });
 
 // Tipagem 100% nativa. prevContext inferido automaticamente pelo TS.
 const authLink = new SetContextLink(async (_operation, prevContext) => {
@@ -26,13 +33,11 @@ const authLink = new SetContextLink(async (_operation, prevContext) => {
     if (error) {
       console.error("Falha na autorização via Supabase:", error.message);
     }
-
-    // Segurança de Nulidade: Optional Chaining previne falhas de acesso
+    
     const token = data?.session?.access_token;
     
     const headers: Record<string, string> = {};
 
-    // Duck Typing com Validação Estrita de Runtime (Tolerância Zero a 'as')
     if (
         prevContext &&
         typeof prevContext === "object" &&
@@ -40,8 +45,6 @@ const authLink = new SetContextLink(async (_operation, prevContext) => {
         typeof prevContext.headers === "object" &&
         prevContext.headers !== null
     ) {
-        // Itera sobre as chaves originais, garantindo que apenas valores 'string'
-        // sejam mapeados para o nosso Record<string, string>.
         Object.entries(prevContext.headers).forEach(([key, value]) => {
             if (typeof value === "string") {
                 headers[key] = value;
@@ -56,7 +59,6 @@ const authLink = new SetContextLink(async (_operation, prevContext) => {
       },
     };
   } catch (err: unknown) {
-    // Inspeção com Type Guard, garantindo tolerância zero a 'any' na exceção
     if (err instanceof Error) {
       console.error(
         "Erro crítico no ciclo do interceptador de contexto:",
@@ -64,9 +66,7 @@ const authLink = new SetContextLink(async (_operation, prevContext) => {
       );
     }
     
-    // Recuperação segura do header original em caso de falha severa, mantendo a tipagem estrita
     const fallbackHeaders: Record<string, string> = {};
-
     if (
         prevContext &&
         typeof prevContext === "object" &&
@@ -80,16 +80,11 @@ const authLink = new SetContextLink(async (_operation, prevContext) => {
             }
         });
     }
-          
+               
     return { headers: fallbackHeaders };
   }
 });
 
-/**
- * Função Pura de Deduplicação de Cache O(N)
- * Anexa novos nós de paginação de forma segura sem sobrescrever o histórico
- * ou permitir referências duplicadas (Utiliza Set para performance em buscas O(1)).
- */
 const mergeDeduplicating = (
   existing: readonly Reference[] = [],
   incoming: readonly Reference[] = [],
@@ -97,11 +92,13 @@ const mergeDeduplicating = (
 ): Reference[] => {
   const merged = [...existing];
   const existingIds = new Set(existing.map((ref) => readField("id", ref)));
+
   incoming.forEach((ref) => {
     if (!existingIds.has(readField("id", ref))) {
       merged.push(ref);
     }
   });
+
   return merged;
 };
 
@@ -136,13 +133,9 @@ export const client = new ApolloClient({
             merge: mergeDeduplicating,
           },
           _count: {
-            // CORREÇÃO: Derivação Estrita e Local (SSOT Rule)
-            // Substitui a dependência passiva pelo cálculo dinâmico se a coleção estiver cacheada.
             read(existing, { readField }) {
               const flashcardsRefs = readField("flashcards");
               
-              // Se o array de cartões estiver em memória (ex: após abrir o DeckDetails), 
-              // forçamos o React a derivar a contagem deste array (array.length)
               if (Array.isArray(flashcardsRefs)) {
                 return {
                   ...(existing && typeof existing === "object" ? existing : {}),
@@ -150,7 +143,6 @@ export const client = new ApolloClient({
                 };
               }
               
-              // Fallback para a contagem estática do banco se o array não foi carregado
               return existing;
             },
           },

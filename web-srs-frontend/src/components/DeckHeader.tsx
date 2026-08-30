@@ -1,4 +1,3 @@
-import React from "react";
 import { useNavigate } from "react-router-dom";
 
 interface DeckHeaderProps {
@@ -7,25 +6,23 @@ interface DeckHeaderProps {
   description: string | null;
   isArchived: boolean;
   flashcardsCount: number;
-  updatingDeck: boolean;
   onToggleArchive: () => void;
   onEditDeck: () => void;
   onDeleteDeck: () => void;
   onCreateCard: () => void;
 }
 
-export const DeckHeader: React.FC<DeckHeaderProps> = ({
+export const DeckHeader = ({
   deckId,
   title,
   description,
   isArchived,
   flashcardsCount,
-  updatingDeck,
   onToggleArchive,
   onEditDeck,
   onDeleteDeck,
   onCreateCard,
-}) => {
+}: DeckHeaderProps) => {
   const navigate = useNavigate();
 
   return (
@@ -43,26 +40,24 @@ export const DeckHeader: React.FC<DeckHeaderProps> = ({
           <div className="flex flex-wrap gap-2 md:ml-2 mt-2 md:mt-0">
             <button
               onClick={onToggleArchive}
-              disabled={updatingDeck}
-              className="px-3 py-1 text-xs font-semibold bg-slate-800 text-slate-300 hover:text-white rounded border border-slate-700 transition-colors cursor-pointer shadow-sm disabled:opacity-50"
+              className="px-3 py-1 text-xs font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-slate-100 rounded border border-slate-700 transition-colors cursor-pointer shadow-sm"
             >
               {isArchived ? "Desarquivar" : "Arquivar"}
             </button>
             <button
               onClick={onEditDeck}
-              className="px-3 py-1 text-xs font-semibold bg-slate-800 text-slate-300 hover:text-white rounded border border-slate-700 transition-colors cursor-pointer shadow-sm"
+              className="px-3 py-1 text-xs font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-slate-100 rounded border border-slate-700 transition-colors cursor-pointer shadow-sm"
             >
-              ✎ Editar
+              Editar
             </button>
             <button
               onClick={onDeleteDeck}
-              className="px-3 py-1 text-xs font-semibold bg-rose-950/30 text-rose-400 hover:bg-rose-900/50 rounded border border-rose-900/50 transition-colors cursor-pointer shadow-sm"
+              className="px-3 py-1 text-xs font-semibold bg-rose-950/30 text-rose-400 hover:bg-rose-900/50 hover:text-rose-300 rounded border border-rose-900/50 transition-colors cursor-pointer shadow-sm"
             >
-              🗑 Excluir
+              Excluir
             </button>
           </div>
         </div>
-
         <p className="text-slate-400 text-sm">
           {description || "Sem descrição."}
         </p>
@@ -78,7 +73,7 @@ export const DeckHeader: React.FC<DeckHeaderProps> = ({
         </button>
         <button
           onClick={onCreateCard}
-          className="flex-1 md:flex-none px-5 py-2.5 bg-slate-800 text-slate-100 font-bold rounded-lg hover:bg-slate-700 border border-slate-700 transition-colors cursor-pointer shadow-sm"
+          className="flex-1 md:flex-none px-5 py-2.5 bg-slate-800 text-slate-200 font-bold rounded-lg hover:bg-slate-700 border border-slate-700 transition-colors cursor-pointer shadow-sm"
         >
           + Criar Card
         </button>

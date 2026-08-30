@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useQuery, useMutation } from '@apollo/client/react';
+import { useMutation, useSuspenseQuery } from '@apollo/client/react';
 import { useNavigate } from 'react-router-dom';
 import type { Reference } from '@apollo/client/core';
 import { GET_DUE_FLASHCARDS, SUBMIT_REVIEW } from '../lib/graphql/study';
@@ -9,14 +9,13 @@ export const useStudyEngine = (deckId: string | null) => {
   const navigate = useNavigate();
   const { showToast } = useToast();
 
-  const { data, loading, error } = useQuery(GET_DUE_FLASHCARDS, {
+  // Suspensão nativa: delega o estado pending ao boundary do React 19
+  // REMOVIDO: Extração fantasma de 'error'. O Suspense Boundary protege esta fronteira.
+  const { data } = useSuspenseQuery(GET_DUE_FLASHCARDS, {
     variables: { deckId: deckId ?? "" },
-    skip: !deckId,
     fetchPolicy: 'cache-and-network',
   });
 
-  // 1. Extração Estabilizada (React Compiler Proof)
-  // Evita o vazamento de Optional Chaining nos arrays de dependência de Hooks
   const rawDueFlashcards = data?.dueFlashcards ?? null;
 
   // 2. Barreira Defensiva Temporal (Filtro Secundário local O(N))
@@ -62,13 +61,8 @@ export const useStudyEngine = (deckId: string | null) => {
   const startTimeRef = useRef<number>(0);
 
   const [submitReviewMutation] = useMutation(SUBMIT_REVIEW);
-
-  // 4. Extração Atômica Estabilizada
-  // Isolamos o identificador primitivo da carta, forçando nulidade clara, 
-  // eliminando renderizações causadas por simples trocas de referência do objeto.
   const currentCardId = currentCard?.id ?? null;
 
-  // 5. Efeito Puro para Telemetria
   useEffect(() => {
     if (currentCardId !== null) {
       startTimeRef.current = performance.now();
@@ -141,8 +135,6 @@ export const useStudyEngine = (deckId: string | null) => {
     nextCard,
     totalCards,
     isFlipped,
-    loading,
-    error,
     handleShowAnswer,
     handleRating,
     handleExit,

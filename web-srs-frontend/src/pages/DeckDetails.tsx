@@ -22,7 +22,6 @@ export const DeckDetails: React.FC = () => {
     visibleFlashcards,
     handleLoadMore,
     deletingDeck,
-    updatingDeck,
     isCreateOpen,
     setIsCreateOpen,
     isEditDeckOpen,
@@ -45,15 +44,39 @@ export const DeckDetails: React.FC = () => {
     }
   }, [error, showToast]);
 
-  const handleCloseCreateModal = useCallback(() => setIsCreateOpen(false), [setIsCreateOpen]);
-  const handleCloseEditCardModal = useCallback(() => setEditingCard(null), [setEditingCard]);
-  const handleCloseEditDeckModal = useCallback(() => setIsEditDeckOpen(false), [setIsEditDeckOpen]);
-  const handleCloseDeleteCardModal = useCallback(() => setDeletingCardId(null), [setDeletingCardId]);
-  const handleCloseDeleteDeckModal = useCallback(() => setIsDeletingDeck(false), [setIsDeletingDeck]);
+  const handleCloseCreateModal = useCallback(
+    () => setIsCreateOpen(false),
+    [setIsCreateOpen],
+  );
+  const handleCloseEditCardModal = useCallback(
+    () => setEditingCard(null),
+    [setEditingCard],
+  );
+  const handleCloseEditDeckModal = useCallback(
+    () => setIsEditDeckOpen(false),
+    [setIsEditDeckOpen],
+  );
+  const handleCloseDeleteCardModal = useCallback(
+    () => setDeletingCardId(null),
+    [setDeletingCardId],
+  );
+  const handleCloseDeleteDeckModal = useCallback(
+    () => setIsDeletingDeck(false),
+    [setIsDeletingDeck],
+  );
 
-  const handleOpenCreateModal = useCallback(() => setIsCreateOpen(true), [setIsCreateOpen]);
-  const handleOpenEditDeckModal = useCallback(() => setIsEditDeckOpen(true), [setIsEditDeckOpen]);
-  const handleOpenDeleteDeckModal = useCallback(() => setIsDeletingDeck(true), [setIsDeletingDeck]);
+  const handleOpenCreateModal = useCallback(
+    () => setIsCreateOpen(true),
+    [setIsCreateOpen],
+  );
+  const handleOpenEditDeckModal = useCallback(
+    () => setIsEditDeckOpen(true),
+    [setIsEditDeckOpen],
+  );
+  const handleOpenDeleteDeckModal = useCallback(
+    () => setIsDeletingDeck(true),
+    [setIsDeletingDeck],
+  );
 
   if (loading && !deck) {
     return (
@@ -65,7 +88,6 @@ export const DeckDetails: React.FC = () => {
     );
   }
 
-  // Padrão Bouncer: Se chegarmos após esta linha, é garantido estaticamente que 'deck' não é nulo.
   if (error || !deck) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4 p-6 text-center w-full">
@@ -81,27 +103,24 @@ export const DeckDetails: React.FC = () => {
       <div className="flex items-center w-full">
         <Link
           to="/dashboard"
-          className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-amber-400 transition-colors bg-slate-900/80 hover:bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-800"
+          className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-slate-200 transition-colors bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg border border-slate-700 shadow-sm"
         >
-          <span>⬅ Voltar ao Dashboard</span>
+          <span>← Voltar ao Dashboard</span>
         </Link>
       </div>
 
-      {/* 🔵 SUGESTÃO APLICADA: Trava '{deck && ...}' removida. O Early Return acima já assegura que o 'deck' existe. */}
       <DeckHeader
         deckId={deck.id}
         title={deck.title}
         description={deck.description ?? null}
         isArchived={deck.isArchived}
         flashcardsCount={deck.flashcards?.length ?? 0}
-        updatingDeck={updatingDeck}
         onToggleArchive={handleToggleArchive}
         onEditDeck={handleOpenEditDeckModal}
         onDeleteDeck={handleOpenDeleteDeckModal}
         onCreateCard={handleOpenCreateModal}
       />
 
-      {/* 🔵 SUGESTÃO APLICADA: Trava '{visibleFlashcards && ...}' removida. 'visibleFlashcards' é array, logo, sempre truthy. */}
       <FlashcardList
         flashcards={visibleFlashcards}
         hasMore={hasMore}
@@ -112,7 +131,10 @@ export const DeckDetails: React.FC = () => {
 
       {/* Montagem Condicional Estrita dos Modais */}
       {isCreateOpen && (
-        <CreateFlashcardModal deckId={deck.id} onClose={handleCloseCreateModal} />
+        <CreateFlashcardModal
+          deckId={deck.id}
+          onClose={handleCloseCreateModal}
+        />
       )}
 
       {editingCard !== null && (

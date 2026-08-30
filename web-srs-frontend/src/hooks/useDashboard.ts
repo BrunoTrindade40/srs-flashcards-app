@@ -1,8 +1,11 @@
+// src/hooks/useDashboard.ts
 import { useQuery } from "@apollo/client/react";
 import { useMemo, useState } from "react";
 import { GET_MY_DECKS } from "../lib/graphql/deck";
 import { GET_ME } from "../lib/graphql/settings";
 import type { GetMyDecksQuery } from "../gql/graphql";
+// Importação estrita da regra de negócio (SSOT)
+import { checkStreakBonusEligibility } from "../domain/validators";
 
 export type DeckItem = NonNullable<GetMyDecksQuery["myDecks"]>[number];
 
@@ -28,16 +31,17 @@ export function useDashboard() {
     return rawDecks?.filter((deck) => deck.isArchived) ?? [];
   }, [rawDecks]);
 
-  // CORREÇÃO: Consome estritamente o "_count" estabilizado
   const totalActiveCards = useMemo(() => {
     return activeDecks.reduce((acc, deck) => acc + (deck._count?.flashcards ?? 0), 0);
   }, [activeDecks]);
 
   const user = dataMe?.me ?? null;
   const streak = user?.currentStreak ?? 0;
-  const showStreakBonus = Boolean(user && streak >= 3);
+  
+  // Consumo limpo da função pura de domínio para verificação de elegibilidade
+  const showStreakBonus = Boolean(user && checkStreakBonusEligibility(streak));
+  
   const userName = user?.name ?? "Estudante";
-
   const loading = loadingMe || loadingDecks;
   const error = errorMe || errorDecks || null;
 

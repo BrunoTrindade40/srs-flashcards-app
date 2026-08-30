@@ -1,0 +1,52 @@
+{
+  /* ==========================================================
+     1. MOTOR DE FORMATAÇÃO E LINTING (FRONT & BACK)
+     ========================================================== */
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit"
+  },
+
+  /* Força o Prettier assumir o controle estético do React e NestJS */
+  "[typescript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[typescriptreact]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[javascript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[javascriptreact]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+
+  /* ==========================================================
+     2. RESOLUÇÃO DE MONOREPO PARA O ESLINT
+     ========================================================== */
+  "eslint.workingDirectories": [
+    "./web-srs-frontend",
+    "./api-srs-backend"
+  ],
+  "eslint.validate": [
+    "javascript",
+    "javascriptreact",
+    "typescript",
+    "typescriptreact"
+  ],
+
+  /* ==========================================================
+     3. INFRAESTRUTURA DO TAILWIND V4 E CSS
+     ========================================================== */
+  "css.validate": false,
+  "css.lint.unknownAtRules": "ignore",
+  "tailwindCSS.includeLanguages": {
+    "css": "css"
+  },
+
+  /* ==========================================================
+     4. COMPILADOR TYPESCRIPT (CORREÇÃO DE DEPRECIAÇÃO)
+     ========================================================== */
+  "js/ts.tsdk.path": "web-srs-frontend/node_modules/typescript/lib"
+}

@@ -9,17 +9,17 @@
     "prebuild": "npm run generate",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "format": "prettier --write .",
     "preview": "vite preview",
-    "test": "npx vitest",
+    "test": "vitest",
     "generate": "graphql-codegen",
     "generate:watch": "graphql-codegen -w",
     "dev:all": "concurrently \"npm run generate:watch\" \"npm run dev\""
   },
   "dependencies": {
     "@apollo/client": "^4.2.7",
-    "@graphql-typed-document-node/core": "^3.2.0",
     "@supabase/supabase-js": "^2.105.4",
-    "@tailwindcss/typography": "^0.5.20",
+    "@tailwindcss/typography": "^0.5.15",
     "graphql": "^16.14.0",
     "katex": "^0.16.0",
     "react": "^19.2.6",
@@ -34,6 +34,8 @@
     "@eslint/js": "^10.0.1",
     "@graphql-codegen/cli": "5.0.2",
     "@graphql-codegen/client-preset": "4.2.5",
+    "@graphql-typed-document-node/core": "^3.2.0",
+    "@parcel/watcher": "^2.4.1",
     "@tailwindcss/vite": "^4.3.2",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",
@@ -43,12 +45,13 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
-    "concurrently": "^10.0.5",
+    "concurrently": "^9.1.0",
     "eslint": "^10.3.0",
+    "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-react-hooks": "^7.1.1",
-    "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.6.0",
     "jsdom": "^29.1.1",
+    "prettier": "^3.3.3",
     "tailwindcss": "^4.3.2",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.59.2",
@@ -57,5 +60,8 @@
   },
   "overrides": {
     "lodash": "^4.17.21"
+  },
+  "allowScripts": {
+    "@parcel/watcher@2.6.0": true
   }
 }

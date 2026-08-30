@@ -66,37 +66,55 @@ export function useDeckDetails(deckId: string | null) {
   const editingCardId = editingCard?.id ?? null;
 
   const handleToggleArchive = useCallback(async () => {
-    if (!deckId) return; // Bouncer Estrito, utilizando apenas o identificador primário
-    
+    // Padrão Bouncer: Exige o deck resolvido para garantir a extração dos metadados otimistas
+    if (!deckId || !deck) return; 
+
     try {
       await updateDeck({
         variables: {
           data: {
             id: deckId,
-            isArchived: !isArchived, // Utiliza a constante primitiva estabilizada
+            isArchived: !isArchived, 
+          },
+        },
+        // INJEÇÃO OTIMISTA: Espelha estritamente o Schema GraphQL do retorno da Mutation
+        optimisticResponse: {
+          __typename: "Mutation",
+          updateDeck: {
+            __typename: "Deck",
+            id: deckId,
+            title: deck.title,
+            description: deck.description ?? null,
+            sourceLanguage: deck.sourceLanguage ?? null,
+            targetLanguage: deck.targetLanguage ?? null,
+            isArchived: !isArchived, // Acarreta a inversão imediata do badge visual na UI
           },
         },
       });
+
       showToast(
         isArchived 
-          ? "Baralho desarquivado com sucesso."
+          ? "Baralho desarquivado com sucesso." 
           : "Baralho arquivado com sucesso.",
         "success"
       );
     } catch (err: unknown) {
       if (err instanceof Error) {
-        showToast(`Erro ao alterar arquivamento: ${err.message}`, "error");
+        // Em caso de falha de rede, o Apollo Client executa o Rollback automaticamente.
+        // Cumprimos o requisito de UX de notificar ativamente sobre o Silent-Fail.
+        showToast(`Erro de conexão. Ação revertida: ${err.message}`, "error");
       }
     }
-  }, [deckId, isArchived, updateDeck, showToast]); // Array estabilizado 100% primitivo
+  }, [deckId, deck, isArchived, updateDeck, showToast]);
 
+ // Assinatura estrita: Exigência de retorno booleano para estabilidade do Modal
   const handleSaveEdit = useCallback(async (
     frontContent: string,
     backContent: string,
     sourceContext?: string | null,
     resetProgress?: boolean
-  ) => {
-    if (!editingCardId) return; // Bouncer Estrito no primitivo extraído
+  ): Promise<boolean> => {
+    if (!editingCardId) return false; // Padrão Bouncer
 
     try {
       await updateFlashcard({
@@ -111,13 +129,15 @@ export function useDeckDetails(deckId: string | null) {
         },
       });
       showToast("Cartão atualizado com sucesso!", "success");
-      setEditingCard(null);
+      setEditingCard(null); // Tear-down comandado pela fonte da verdade
+      return true; // Comunica vitória à interface
     } catch (err: unknown) {
       if (err instanceof Error) {
         showToast(`Erro ao atualizar cartão: ${err.message}`, "error");
       }
+      return false; // Comunica falha; mutação abortada, preservando a interface
     }
-  }, [editingCardId, updateFlashcard, showToast]); // Referência obsoleta 'editingCard' removida
+  }, [editingCardId, updateFlashcard, showToast]);
 
   const handleConfirmDeleteCard = useCallback(async () => {
     if (!deletingCardId) return;

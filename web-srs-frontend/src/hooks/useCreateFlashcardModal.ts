@@ -42,17 +42,12 @@ export function useCreateFlashcardModal({
     }
   });
 
-  const resetForm = useCallback(() => {
-    setFront("");
-    setBack("");
-    setSourceContext("");
-    setIsPreviewMode(false);
-  }, []);
-
   const handleClose = useCallback(() => {
-    resetForm();
+    // REGRA APLICADA: A função resetForm() foi removida.
+    // A injeção imperativa de strings vazias ("") milissegundos antes do 
+    // modal ser destruído pelo onClose() causa processamento inútil na thread do React.
     onClose();
-  }, [onClose, resetForm]);
+  }, [onClose]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {

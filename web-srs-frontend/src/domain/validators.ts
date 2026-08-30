@@ -60,3 +60,9 @@ export const validateSettingsInput = (
   }
   return null;
 };
+
+// SSOT: Regra de negócio para elegibilidade de recompensa cognitiva (RN11)
+export const checkStreakBonusEligibility = (streak: number): boolean => {
+  // A regra de negócio exige um mínimo de 3 dias consecutivos para o bônus
+  return streak >= 3;
+};

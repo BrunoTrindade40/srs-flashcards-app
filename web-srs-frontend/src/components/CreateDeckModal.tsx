@@ -1,16 +1,15 @@
 import { type Reference } from "@apollo/client/core";
 import { useMutation } from "@apollo/client/react";
-import React, { useEffect, useState } from "react";
+import { useEffect, useState, type SyntheticEvent } from "react";
 import { useToast } from "../hooks/useToast";
 import { CREATE_DECK } from "../lib/graphql/deck";
 import { validateDeckInput } from "../domain/validators";
 
 interface CreateDeckModalProps {
   onClose: () => void;
-  onSuccess?: () => void;
 }
 
-export const CreateDeckModal: React.FC<CreateDeckModalProps> = ({ onClose }) => {
+export const CreateDeckModal = ({ onClose }: CreateDeckModalProps) => {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [sourceLanguage, setSourceLanguage] = useState("pt-BR");
@@ -20,9 +19,13 @@ export const CreateDeckModal: React.FC<CreateDeckModalProps> = ({ onClose }) => 
   const [createDeck, { loading }] = useMutation(CREATE_DECK, {
     update(cache, { data: mutationData }) {
       if (!mutationData?.createDeck) return;
+
       cache.modify({
         fields: {
-          myDecks(existingDeckRefs: readonly Reference[] = [], { toReference }) {
+          myDecks(
+            existingDeckRefs: readonly Reference[] = [],
+            { toReference },
+          ) {
             const newDeckRef = toReference(mutationData.createDeck);
             if (!newDeckRef) return existingDeckRefs;
             return [newDeckRef, ...existingDeckRefs];
@@ -32,9 +35,9 @@ export const CreateDeckModal: React.FC<CreateDeckModalProps> = ({ onClose }) => 
     },
   });
 
-  const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (loading) return; // Padrão Bouncer Estrito
+    if (loading) return;
 
     const validationError = validateDeckInput(title, description);
     if (validationError) {
@@ -73,20 +76,19 @@ export const CreateDeckModal: React.FC<CreateDeckModalProps> = ({ onClose }) => 
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
 
-  // Transição do Modal para Modo Claro (Alinhado com o Dashboard)
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
-      <div className="w-full max-w-md bg-white border border-slate-200 rounded-2xl p-6 shadow-2xl flex flex-col gap-6">
-        <div className="flex items-center justify-between border-b border-slate-200 pb-4">
+      <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl flex flex-col gap-6">
+        <div className="flex items-center justify-between border-b border-slate-800 pb-4">
           <div className="flex items-center gap-2">
-            <span className="text-xl">📚</span>
-            <h2 className="text-lg font-bold text-slate-800">
+            <span className="text-xl">✨</span>
+            <h2 className="text-lg font-bold text-slate-100">
               Criar Novo Deck
             </h2>
           </div>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 text-sm p-1 transition-colors cursor-pointer"
+            className="text-slate-500 hover:text-slate-300 text-sm p-1 transition-colors cursor-pointer"
             aria-label="Fechar Modal"
           >
             ✕
@@ -97,7 +99,7 @@ export const CreateDeckModal: React.FC<CreateDeckModalProps> = ({ onClose }) => 
           <div className="flex flex-col gap-1.5">
             <label
               htmlFor="deck-title"
-              className="text-xs font-semibold text-slate-600 uppercase tracking-wider"
+              className="text-xs font-semibold text-slate-300 uppercase tracking-wider"
             >
               Título do Baralho *
             </label>
@@ -109,14 +111,14 @@ export const CreateDeckModal: React.FC<CreateDeckModalProps> = ({ onClose }) => 
               placeholder="Ex: Vocabulário de Inglês..."
               required
               disabled={loading}
-              className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-xl text-slate-800 text-sm placeholder-slate-400 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-colors"
+              className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 text-sm placeholder-slate-600 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-colors"
             />
           </div>
 
           <div className="flex flex-col gap-1.5">
             <label
               htmlFor="deck-desc"
-              className="text-xs font-semibold text-slate-600 uppercase tracking-wider"
+              className="text-xs font-semibold text-slate-300 uppercase tracking-wider"
             >
               Descrição (Opcional)
             </label>
@@ -127,35 +129,36 @@ export const CreateDeckModal: React.FC<CreateDeckModalProps> = ({ onClose }) => 
               placeholder="Breve resumo do conteúdo..."
               rows={3}
               disabled={loading}
-              className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-xl text-slate-800 text-sm placeholder-slate-400 resize-none focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-colors"
+              className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 text-sm placeholder-slate-600 resize-none focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-colors"
             />
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-4 border-t border-slate-200 pt-3 mt-1">
+          <div className="flex flex-col sm:flex-row gap-4 border-t border-slate-800/50 pt-3 mt-1">
             <div className="flex flex-col gap-1.5 flex-1">
-              <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">
+              <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
                 Idioma de Origem
               </label>
               <select
                 value={sourceLanguage}
                 onChange={(e) => setSourceLanguage(e.target.value)}
                 disabled={loading}
-                className="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-xl text-slate-800 text-sm focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-colors appearance-none cursor-pointer"
+                className="w-full px-3 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 text-sm focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-colors appearance-none cursor-pointer"
               >
                 <option value="pt-BR">Português (Brasil)</option>
                 <option value="en-US">Inglês (EUA)</option>
                 <option value="es-ES">Espanhol</option>
               </select>
             </div>
+
             <div className="flex flex-col gap-1.5 flex-1">
-              <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">
+              <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
                 Idioma Alvo
               </label>
               <select
                 value={targetLanguage}
                 onChange={(e) => setTargetLanguage(e.target.value)}
                 disabled={loading}
-                className="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-xl text-slate-800 text-sm focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-colors appearance-none cursor-pointer"
+                className="w-full px-3 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 text-sm focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-colors appearance-none cursor-pointer"
               >
                 <option value="">Não Especificado</option>
                 <option value="en-US">Inglês (EUA)</option>
@@ -166,19 +169,19 @@ export const CreateDeckModal: React.FC<CreateDeckModalProps> = ({ onClose }) => 
             </div>
           </div>
 
-          <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-200 mt-2">
+          <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800 mt-2">
             <button
               type="button"
               onClick={onClose}
               disabled={loading}
-              className="px-4 py-2 text-xs font-medium text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
+              className="px-4 py-2 text-xs font-medium text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={loading || !title.trim()}
-              className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs transition-all cursor-pointer disabled:opacity-50 shadow-sm"
+              className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-xs transition-all cursor-pointer disabled:opacity-50 shadow-sm"
             >
               {loading ? "Criando..." : "Criar Baralho"}
             </button>
