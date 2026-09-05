@@ -7,18 +7,19 @@ interface EditFlashcardModalProps {
   initialBackContent: string;
   initialSourceContext?: string | null;
   onClose: () => void;
+  // A assinatura obriga o contrato ser cumprido pela View Pai sem omissões
   onSave: (
     frontContent: string,
     backContent: string,
     sourceContext: string | null,
     resetProgress: boolean,
-  ) => Promise<boolean>;
+  ) => void;
 }
 
 export const EditFlashcardModal: React.FC<EditFlashcardModalProps> = ({
   initialFrontContent,
   initialBackContent,
-  initialSourceContext = "",
+  initialSourceContext = null,
   onClose,
   onSave,
 }) => {
@@ -28,12 +29,10 @@ export const EditFlashcardModal: React.FC<EditFlashcardModalProps> = ({
   const [sourceContext, setSourceContext] = useState(
     initialSourceContext ?? "",
   );
-  const [loading, setLoading] = useState(false);
   const [step, setStep] = useState<1 | 2>(1);
 
   const handleFirstSubmit = (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (loading) return;
 
     const validationError = validateFlashcardInput(
       frontContent,
@@ -48,19 +47,18 @@ export const EditFlashcardModal: React.FC<EditFlashcardModalProps> = ({
     setStep(2);
   };
 
-  const handleFinalSubmit = async (resetProgress: boolean) => {
-    setLoading(true);
-
-    const isSuccess = await onSave(
+  const handleFinalSubmit = (resetProgress: boolean) => {
+    // Execução Otimista (0ms delay perceptível)
+    // Execução Otimista: A assinatura trafega 'null' invés de omitir o campo
+    onSave(
       frontContent.trim(),
       backContent.trim(),
       sourceContext.trim() ? sourceContext.trim() : null,
       resetProgress,
     );
-
-    if (!isSuccess) {
-      setLoading(false);
-    }
+    // Fechamento instantâneo, a rede resolve no background.
+    // Opcionalmente, pode-se retirar a chamada onClose() daqui se
+    // a View pai já executa o tear-down desmontando o componente ao definir state como null.
   };
 
   return (
@@ -74,10 +72,9 @@ export const EditFlashcardModal: React.FC<EditFlashcardModalProps> = ({
           </h2>
           <button
             onClick={onClose}
-            disabled={loading}
-            className="text-slate-500 hover:text-slate-300 transition-colors p-1 cursor-pointer disabled:opacity-50"
+            className="text-slate-500 hover:text-slate-300 transition-colors p-1 cursor-pointer"
           >
-            ✕
+            ✖
           </button>
         </div>
 
@@ -172,26 +169,23 @@ export const EditFlashcardModal: React.FC<EditFlashcardModalProps> = ({
               <button
                 type="button"
                 onClick={() => setStep(1)}
-                disabled={loading}
-                className="w-full sm:w-auto px-4 py-2 text-xs font-medium text-slate-400 hover:text-slate-200 cursor-pointer disabled:opacity-50 transition-colors"
+                className="w-full sm:w-auto px-4 py-2 text-xs font-medium text-slate-400 hover:text-slate-200 cursor-pointer transition-colors"
               >
                 Voltar
               </button>
               <button
                 type="button"
                 onClick={() => handleFinalSubmit(false)}
-                disabled={loading}
-                className="w-full sm:w-auto px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-emerald-800/50 font-bold rounded-xl text-xs transition-all cursor-pointer disabled:opacity-50 shadow-sm"
+                className="w-full sm:w-auto px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-emerald-800/50 font-bold rounded-xl text-xs transition-all cursor-pointer shadow-sm"
               >
-                {loading ? "Processando..." : "Manter Progresso"}
+                Manter Progresso
               </button>
               <button
                 type="button"
                 onClick={() => handleFinalSubmit(true)}
-                disabled={loading}
-                className="w-full sm:w-auto px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-xs transition-all cursor-pointer disabled:opacity-50 shadow-sm"
+                className="w-full sm:w-auto px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-xs transition-all cursor-pointer shadow-sm"
               >
-                {loading ? "Processando..." : "Resetar Progresso"}
+                Resetar Progresso
               </button>
             </div>
           </div>

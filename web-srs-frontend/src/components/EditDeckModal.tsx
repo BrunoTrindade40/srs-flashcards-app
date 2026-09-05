@@ -3,7 +3,6 @@ import React, { useEffect, useState } from "react";
 import { useToast } from "../hooks/useToast";
 import { UPDATE_DECK } from "../lib/graphql/deck";
 import type { GetDeckDetailsQuery } from "../gql/graphql";
-// 1. Importação da regra pura, prevenindo disparidade lógica
 import { validateDeckInput } from "../domain/validators";
 
 type DeckDetails = NonNullable<GetDeckDetailsQuery["deck"]>;
@@ -19,47 +18,68 @@ export const EditDeckModal: React.FC<EditDeckModalProps> = ({
 }) => {
   const [title, setTitle] = useState(deck.title);
   const [description, setDescription] = useState(deck.description ?? "");
-  const [sourceLanguage, setSourceLanguage] = useState(deck.sourceLanguage ?? "pt-BR");
-  const [targetLanguage, setTargetLanguage] = useState(deck.targetLanguage ?? "");
+  const [sourceLanguage, setSourceLanguage] = useState(
+    deck.sourceLanguage ?? "pt-BR",
+  );
+  const [targetLanguage, setTargetLanguage] = useState(
+    deck.targetLanguage ?? "",
+  );
 
   const { showToast } = useToast();
-  const [updateDeck, { loading }] = useMutation(UPDATE_DECK);
+  // Removido o bloqueio stateful de 'loading'.
+  const [updateDeck] = useMutation(UPDATE_DECK);
 
-  const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
+  const handleSubmit = (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (loading) return;
 
-    // 2. Acionamento Estrito da Validação (SSOT)
-    // Impede atualizações perigosas que corromperiam o banco de dados
-    const validationError = validateDeckInput(title, description);
-    if (validationError) {
+    const safeTitle = title.trim();
+    const safeDescription = description.trim() ? description.trim() : null;
+    const safeSourceLanguage = sourceLanguage ? sourceLanguage : null;
+    const safeTargetLanguage = targetLanguage ? targetLanguage : null;
+
+    // Acionamento Estrito da Validação (SSOT - Padrão Bouncer)
+    const validationError = validateDeckInput(safeTitle, description ?? "");
+    if (validationError !== null) {
       showToast(validationError, "error");
       return;
     }
 
-    try {
-      const response = await updateDeck({
-        variables: {
-          data: {
-            id: deck.id,
-            title: title.trim(),
-            description: description.trim() ? description.trim() : null,
-            sourceLanguage: sourceLanguage ? sourceLanguage : null,
-            targetLanguage: targetLanguage ? targetLanguage : null,
-          },
+    // Execução Otimista (Fire and Forget seguro via Apollo Cache)
+    updateDeck({
+      variables: {
+        data: {
+          id: deck.id,
+          title: safeTitle,
+          description: safeDescription,
+          sourceLanguage: safeSourceLanguage,
+          targetLanguage: safeTargetLanguage,
         },
-      });
-
-      if (response.data?.updateDeck) {
-        showToast("Deck atualizado com sucesso!", "success");
-        onClose();
-      }
-    } catch (err: unknown) {
+      },
+      optimisticResponse: {
+        __typename: "Mutation",
+        updateDeck: {
+          __typename: "Deck",
+          id: deck.id,
+          title: safeTitle,
+          description: safeDescription,
+          sourceLanguage: safeSourceLanguage,
+          targetLanguage: safeTargetLanguage,
+          isArchived: deck.isArchived, // Preservado do estado local atual
+        },
+      },
+    }).catch((err: unknown) => {
+      // Regra 16: Alerta claro e explícito de rollback otimista
       if (err instanceof Error) {
-        showToast(`Erro ao atualizar deck: ${err.message}`, "error");
-        console.error("Falha na atualização:", err.message);
+        showToast(
+          `Erro de rede. A ação foi revertida: ${err.message}`,
+          "error",
+        );
       }
-    }
+    });
+
+    // Interface avança em 0ms (Zero-Latency)
+    showToast("Deck atualizado com sucesso!", "success");
+    onClose();
   };
 
   useEffect(() => {
@@ -75,7 +95,7 @@ export const EditDeckModal: React.FC<EditDeckModalProps> = ({
       <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl flex flex-col gap-6">
         <div className="flex items-center justify-between border-b border-slate-800 pb-4">
           <div className="flex items-center gap-2">
-            <span className="text-xl">🛠️</span>
+            <span className="text-xl">✏️</span>
             <h2 className="text-lg font-bold text-slate-100">Editar Deck</h2>
           </div>
           <button
@@ -97,7 +117,6 @@ export const EditDeckModal: React.FC<EditDeckModalProps> = ({
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               required
-              disabled={loading}
               className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 text-sm focus:outline-none focus:border-amber-500 transition-colors"
             />
           </div>
@@ -110,7 +129,6 @@ export const EditDeckModal: React.FC<EditDeckModalProps> = ({
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
-              disabled={loading}
               className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 text-sm resize-none focus:outline-none focus:border-amber-500 transition-colors"
             />
           </div>
@@ -123,7 +141,6 @@ export const EditDeckModal: React.FC<EditDeckModalProps> = ({
               <select
                 value={sourceLanguage}
                 onChange={(e) => setSourceLanguage(e.target.value)}
-                disabled={loading}
                 className="w-full px-3 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 text-sm focus:outline-none focus:border-amber-500 transition-colors appearance-none cursor-pointer"
               >
                 <option value="pt-BR">Português (Brasil)</option>
@@ -139,7 +156,6 @@ export const EditDeckModal: React.FC<EditDeckModalProps> = ({
               <select
                 value={targetLanguage}
                 onChange={(e) => setTargetLanguage(e.target.value)}
-                disabled={loading}
                 className="w-full px-3 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 text-sm focus:outline-none focus:border-amber-500 transition-colors appearance-none cursor-pointer"
               >
                 <option value="">Não Especificado</option>
@@ -155,17 +171,16 @@ export const EditDeckModal: React.FC<EditDeckModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              disabled={loading}
               className="px-4 py-2 text-xs font-medium text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              disabled={loading || !title.trim()}
-              className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-xs transition-all cursor-pointer disabled:opacity-50"
+              disabled={title.trim().length === 0}
+              className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-xs transition-all cursor-pointer disabled:opacity-50 shadow-sm"
             >
-              {loading ? "Salvando..." : "Salvar Alterações"}
+              Salvar Alterações
             </button>
           </div>
         </form>

@@ -1,33 +1,30 @@
-import { useApolloClient } from "@apollo/client/react";
 import React, { useState, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { SettingsModal } from "./SettingsModal";
 
-/**
- * SRP: Gerencia o cabeçalho global do sistema, perfil e logout.
- * UI02: Ancoragem Estática imutável em tema claro (Branco/Off-white).
- */
+// SRP ESTRITO: O Header passa a atuar estritamente como Ancoragem Visual.
 export const Header: React.FC = () => {
   const { user, logout } = useAuth();
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const navigate = useNavigate();
-  const client = useApolloClient();
 
+  // Inversão de Controle: UI apenas emite intenções e roteia mediante sucesso
   const handleLogout = async () => {
     try {
       await logout();
-      await client.clearStore();
-      navigate("/");
+      navigate("/"); // Redirecionamento blindado pela garantia da camada lógica
     } catch (error: unknown) {
       if (error instanceof Error) {
-        console.error("Erro ao realizar logout:", error.message);
+        console.error(
+          "Falha visual ao despachar a intenção de logout:",
+          error.message,
+        );
       }
     }
   };
 
-  // CORREÇÃO: Estabilização de referência para evitar Thrashing no EventListener do Modal
-  // O useCallback garante que a função preserve a mesma identidade de memória entre os renders
+  // Estabilização Referencial (O(1)) combatendo Thrashing de DOM no modal filho
   const closeSettings = useCallback(() => setIsSettingsOpen(false), []);
 
   return (
@@ -46,14 +43,15 @@ export const Header: React.FC = () => {
           </span>
         </Link>
 
-        {user && (
+        {/* Padrão Booleano Absoluto contra vazamento numérico no React 19 */}
+        {user !== null && (
           <div className="flex items-center gap-3">
             <button
               disabled
               title="Funcionalidade mapeada para a Fase 2 (TCC 2)"
               className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 text-slate-400 border border-slate-200 rounded-lg text-xs font-bold cursor-not-allowed opacity-75"
             >
-              <span>🔥 Modo Caos (Em Breve)</span>
+              <span>🎲 Modo Caos (Em Breve)</span>
             </button>
 
             <button
@@ -75,13 +73,8 @@ export const Header: React.FC = () => {
         )}
       </div>
 
-      {/* CORREÇÃO CRÍTICA: Desmontagem Condicional Estrita (Tear-down) */}
-      {/* O componente só é montado na árvore DOM quando o estado é true */}
-      {isSettingsOpen && (
-        <SettingsModal
-          onClose={closeSettings}
-        />
-      )}
+      {/* Montagem Condicional: Desmontagem estrita de Tear-Down na Memória RAM */}
+      {isSettingsOpen && <SettingsModal onClose={closeSettings} />}
     </header>
   );
 };

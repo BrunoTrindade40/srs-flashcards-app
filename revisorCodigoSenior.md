@@ -206,3 +206,27 @@
 ## 32. Auditoria de Tooling e Manutenção Contínua 🛠️
 
 - **Tolerância Zero a Chaves Obsoletas (Deprecation):** Ao configurar infraestrutura ou recuperar snippets antigos de IDE, valide imediatamente se a chave da API ainda é suportada. Uso de chaves depreciadas (como typescript.tsdk ao invés da correta js/ts.tsdk.path) quebra os servidores de linguagem (LSP) e destrói o IntelliSense do desenvolvedor. Remova configurações obsoletas imediatamente.
+
+## 33. Infraestrutura de DOM e Eventos Globais (DRY e Memory Safety) 🖱️
+
+- **Abstração Obrigatória de Interações Nativas (DRY):**
+  - 🔴 **PROIBIDO:** Espalhar lógica repetitiva de manipulação direta do DOM (ex: `window.addEventListener`, `document.querySelectorAll`) diretamente no corpo de componentes visuais (Páginas ou Modais).
+  - 🟢 **OBRIGATÓRIO:** Comportamentos transversais de UX, como _Focus Traps_ (para A11y) ou atalhos globais de teclado (UI04), devem ser isolados em **Custom Hooks puros** (ex: `useFocusTrap`). A UI apenas invoca o hook passando a `ref`.
+- **Resolução Tardia de Nós Dinâmicos (Dynamic DOM Refs):**
+  - 🔴 **PROIBIDO:** Armazenar coleções de nós do DOM (`querySelectorAll`) no momento da montagem (`mount`) do `useEffect` caso os elementos filhos dependam de requisições assíncronas (ex: formulários aguardando uma query GraphQL). Isso gera _Dangling Pointers_ (ponteiros órfãos).
+  - 🟢 **OBRIGATÓRIO:** Realizar a varredura de elementos tabuláveis estritamente **dentro da função de callback do evento** (ex: `handleKeyDown`). O teclado deve sempre interagir com a árvore viva do DOM no exato milissegundo do disparo.
+- **Restauração Educada de Foco (A11y Flow):**
+  - 🔴 **PROIBIDO:** Desmontar modais ou sobreposições e largar o foco do teclado no limbo (foco rebaixado para o `<body>`), forçando o usuário a tabular tudo novamente.
+  - 🟢 **OBRIGATÓRIO:** Todo Hook de sobreposição visual deve gravar quem era o `document.activeElement` antes de sua abertura (via `useRef`) e, na função de _cleanup_ (desmontagem), devolver o foco obrigatoriamente a esse elemento original.
+
+## 34. Coerção de Tipos e Precedência Lógica (O Paradoxo do NaN) 🧮
+
+- **Precedência Estrita na Coalescência de Nulos:** Ao extrair valores brutos de APIs nativas não-tipadas (como `FormData.get()`), a proteção contra nulidade (`??`) deve ser executada de forma envelopada, **antes** do Cast estrutural.
+  - 🔴 **PROIBIDO:** `String(formData.get("id")) ?? "0"` -> Se o campo for nulo, a coerção nativa do JS transforma em `"null"`, ignorando o operador `??` e gerando um erro de `NaN` se passado para validações matemáticas.
+  - 🟢 **OBRIGATÓRIO:** `String(formData.get("id") ?? "0")` -> O operador de coalescência deve proteger a extração primitiva antes de qualquer mutação de tipo.
+
+## 35. Validação em Fronteiras de Rede (Strict Type Guards em Enums) 🛡️
+
+- **Validação O(1) de Enums Constantes:** Ao receber primitivos assíncronos da fronteira de rede (ex: um `number` devolvido pelo Apollo representando o estado algorítmico do FSRS), a validação contra o Dicionário de Dados local deve forçar o _Type Casting_.
+  - 🔴 **PROIBIDO:** Usar iteradores passivos como `Object.values(FsrsState).includes(state)`. No TypeScript, isso destrói a inferência, rebaixando a checagem estatística para `any[]` ou gerando alertas em transpiladores estritos (Babel/Vite).
+  - 🟢 **OBRIGATÓRIO:** Assegurar a integridade aplicando Cast seguro na extração: `const validValues = Object.values(FsrsState) as number[]; return validValues.includes(state);`.

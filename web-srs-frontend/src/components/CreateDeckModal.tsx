@@ -1,7 +1,10 @@
+// src/components/CreateDeckModal.tsx
 import { type Reference } from "@apollo/client/core";
 import { useMutation } from "@apollo/client/react";
-import { useEffect, useState, type SyntheticEvent } from "react";
+import { useState, type SyntheticEvent } from "react";
+
 import { useToast } from "../hooks/useToast";
+import { useFocusTrap } from "../hooks/useFocusTrap";
 import { CREATE_DECK } from "../lib/graphql/deck";
 import { validateDeckInput } from "../domain/validators";
 
@@ -14,12 +17,12 @@ export const CreateDeckModal = ({ onClose }: CreateDeckModalProps) => {
   const [description, setDescription] = useState("");
   const [sourceLanguage, setSourceLanguage] = useState("pt-BR");
   const [targetLanguage, setTargetLanguage] = useState("");
+
   const { showToast } = useToast();
 
   const [createDeck, { loading }] = useMutation(CREATE_DECK, {
     update(cache, { data: mutationData }) {
       if (!mutationData?.createDeck) return;
-
       cache.modify({
         fields: {
           myDecks(
@@ -35,11 +38,14 @@ export const CreateDeckModal = ({ onClose }: CreateDeckModalProps) => {
     },
   });
 
+  const modalRef = useFocusTrap(!loading, onClose);
+
   const handleSubmit = async (e: SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (loading) return;
 
     const validationError = validateDeckInput(title, description);
+
     if (validationError) {
       showToast(validationError, "error");
       return;
@@ -68,20 +74,17 @@ export const CreateDeckModal = ({ onClose }: CreateDeckModalProps) => {
     }
   };
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
-      <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl flex flex-col gap-6">
+      <div
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl flex flex-col gap-6"
+      >
         <div className="flex items-center justify-between border-b border-slate-800 pb-4">
           <div className="flex items-center gap-2">
-            <span className="text-xl">✨</span>
+            <span className="text-xl">📚</span>
             <h2 className="text-lg font-bold text-slate-100">
               Criar Novo Deck
             </h2>
@@ -91,7 +94,7 @@ export const CreateDeckModal = ({ onClose }: CreateDeckModalProps) => {
             className="text-slate-500 hover:text-slate-300 text-sm p-1 transition-colors cursor-pointer"
             aria-label="Fechar Modal"
           >
-            ✕
+            ❌
           </button>
         </div>
 

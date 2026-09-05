@@ -1,6 +1,6 @@
 import { useMutation, useQuery } from "@apollo/client/react";
 import { useCallback, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import type { Reference } from "@apollo/client/core";
 import {
   DELETE_DECK,
   GET_DECK_DETAILS,
@@ -8,32 +8,25 @@ import {
 } from "../lib/graphql/deck";
 import { REMOVE_FLASHCARD, UPDATE_FLASHCARD } from "../lib/graphql/flashcard";
 import { useToast } from "./useToast";
-import type { Reference } from "@apollo/client/core";
 import type { GetDeckDetailsQuery } from "../gql/graphql";
 
 type QueryDeck = NonNullable<GetDeckDetailsQuery["deck"]>;
 export type FlashcardItem = NonNullable<QueryDeck["flashcards"]>[number];
 
+// Tipagem preservada na raiz para assegurar integridade com o FlashcardList.tsx
 export interface EditingCardState {
   id: string;
   frontContent: string;
   backContent: string;
-  sourceContext?: string | null;
+  sourceContext: string | null;
 }
 
 const CARDS_PER_PAGE = 20;
 
 export function useDeckDetails(deckId: string | null) {
-  const navigate = useNavigate();
   const { showToast } = useToast();
 
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [isEditDeckOpen, setIsEditDeckOpen] = useState(false);
-  const [editingCard, setEditingCard] = useState<EditingCardState | null>(null);
-  const [deletingCardId, setDeletingCardId] = useState<string | null>(null);
-  const [isDeletingDeck, setIsDeletingDeck] = useState(false);
-  
-  // Estado local para Paginação Client-Side (Performance O(1))
+  // Estado local para Paginação Client-Side O(1)
   const [visibleCount, setVisibleCount] = useState(CARDS_PER_PAGE);
 
   const { data, loading, error } = useQuery(GET_DECK_DETAILS, {
@@ -42,11 +35,9 @@ export function useDeckDetails(deckId: string | null) {
     fetchPolicy: "cache-and-network",
   });
 
-  // Extração estabilizada (Single Source of Truth)
   const deck = data?.deck ?? null;
   const allFlashcards = deck?.flashcards ?? [];
   const totalCount = allFlashcards.length;
-
   const visibleFlashcards = allFlashcards.slice(0, visibleCount);
   const hasMore = visibleCount < totalCount;
 
@@ -57,122 +48,159 @@ export function useDeckDetails(deckId: string | null) {
   const [removeFlashcard] = useMutation(REMOVE_FLASHCARD);
   const [updateFlashcard] = useMutation(UPDATE_FLASHCARD);
   const [deleteDeck, { loading: deletingDeck }] = useMutation(DELETE_DECK);
-  const [updateDeck, { loading: updatingDeck }] = useMutation(UPDATE_DECK);
+  const [updateDeck] = useMutation(UPDATE_DECK);
 
-  // CORREÇÃO CRÍTICA: Extração de valores primitivos (Regra 14)
-  // Isso isola os identificadores e booleanos necessários, prevenindo que o React 
-  // rastreie as instâncias complexas de "deck" ou "editingCard" nos arrays de dependência.
+  // Extração Primitiva para proteção de referência (Regra 14)
   const isArchived = deck?.isArchived ?? false;
-  const editingCardId = editingCard?.id ?? null;
+  const deckTitle = deck?.title ?? "";
+  const deckDescription = deck?.description ?? null;
+  const deckSourceLanguage = deck?.sourceLanguage ?? null;
+  const deckTargetLanguage = deck?.targetLanguage ?? null;
 
-  const handleToggleArchive = useCallback(async () => {
-    // Padrão Bouncer: Exige o deck resolvido para garantir a extração dos metadados otimistas
-    if (!deckId || !deck) return; 
-
+  const handleToggleArchive = useCallback(async (): Promise<boolean> => {
+    if (!deckId) return false;
     try {
       await updateDeck({
         variables: {
-          data: {
-            id: deckId,
-            isArchived: !isArchived, 
-          },
+          data: { id: deckId, isArchived: !isArchived },
         },
-        // INJEÇÃO OTIMISTA: Espelha estritamente o Schema GraphQL do retorno da Mutation
         optimisticResponse: {
           __typename: "Mutation",
           updateDeck: {
             __typename: "Deck",
             id: deckId,
-            title: deck.title,
-            description: deck.description ?? null,
-            sourceLanguage: deck.sourceLanguage ?? null,
-            targetLanguage: deck.targetLanguage ?? null,
-            isArchived: !isArchived, // Acarreta a inversão imediata do badge visual na UI
+            title: deckTitle,
+            description: deckDescription,
+            sourceLanguage: deckSourceLanguage,
+            targetLanguage: deckTargetLanguage,
+            isArchived: !isArchived,
           },
         },
       });
-
       showToast(
-        isArchived 
-          ? "Baralho desarquivado com sucesso." 
+        isArchived
+          ? "Baralho desarquivado com sucesso."
           : "Baralho arquivado com sucesso.",
-        "success"
+        "success",
       );
+      return true;
     } catch (err: unknown) {
       if (err instanceof Error) {
-        // Em caso de falha de rede, o Apollo Client executa o Rollback automaticamente.
-        // Cumprimos o requisito de UX de notificar ativamente sobre o Silent-Fail.
         showToast(`Erro de conexão. Ação revertida: ${err.message}`, "error");
       }
+      return false;
     }
-  }, [deckId, deck, isArchived, updateDeck, showToast]);
+  }, [
+    deckId,
+    isArchived,
+    deckTitle,
+    deckDescription,
+    deckSourceLanguage,
+    deckTargetLanguage,
+    updateDeck,
+    showToast,
+  ]);
 
- // Assinatura estrita: Exigência de retorno booleano para estabilidade do Modal
-  const handleSaveEdit = useCallback(async (
-    frontContent: string,
-    backContent: string,
-    sourceContext?: string | null,
-    resetProgress?: boolean
-  ): Promise<boolean> => {
-    if (!editingCardId) return false; // Padrão Bouncer
-
-    try {
-      await updateFlashcard({
+  const handleSaveEdit = useCallback(
+    (
+      cardId: string,
+      frontContent: string,
+      backContent: string,
+      sourceContext: string | null,
+      resetProgress: boolean,
+    ): void => {
+      // Retorno alterado para void (Fire and Forget)
+      // Removida a Promise e o async
+      updateFlashcard({
         variables: {
           data: {
-            id: editingCardId,
+            id: cardId,
             frontContent,
             backContent,
             sourceContext,
             resetProgress,
           },
         },
-      });
-      showToast("Cartão atualizado com sucesso!", "success");
-      setEditingCard(null); // Tear-down comandado pela fonte da verdade
-      return true; // Comunica vitória à interface
-    } catch (err: unknown) {
-      if (err instanceof Error) {
-        showToast(`Erro ao atualizar cartão: ${err.message}`, "error");
-      }
-      return false; // Comunica falha; mutação abortada, preservando a interface
-    }
-  }, [editingCardId, updateFlashcard, showToast]);
-
-  const handleConfirmDeleteCard = useCallback(async () => {
-    if (!deletingCardId) return;
-    try {
-      await removeFlashcard({
-        variables: { id: deletingCardId },
-        update(cache) {
-          const normalizedId = cache.identify({
-            id: deletingCardId,
+        // SUGESTÃO APLICADA: UI Otimista para Edição de Flashcards
+        optimisticResponse: {
+          __typename: "Mutation",
+          updateFlashcard: {
             __typename: "Flashcard",
-          });
-          cache.evict({ id: normalizedId });
-          cache.gc(); // Garbage Collection
+            id: cardId,
+            frontContent,
+            backContent,
+            sourceContext: sourceContext ?? null,
+            imageUrl: null, // MVP Fase 1: Injeção segura de nulidade para mídias
+            audioUrl: null, // MVP Fase 1
+          },
         },
+      }).catch((err: unknown) => {
+        // Regra 16: Tratamento de Rollback Otimista
+        if (err instanceof Error) {
+          showToast(
+            `Erro de rede. A edição foi revertida: ${err.message}`,
+            "error",
+          );
+        }
       });
-      showToast("Flashcard removido do baralho.", "success");
-      setDeletingCardId(null);
-    } catch (err: unknown) {
-      if (err instanceof Error) {
-        showToast(`Erro ao deletar cartão: ${err.message}`, "error");
-      }
-    }
-  }, [deletingCardId, removeFlashcard, showToast]);
 
-  const handleConfirmDeleteDeck = useCallback(async () => {
-    if (!deckId) return;
+      // Interface avança em 0ms
+      showToast("Cartão atualizado com sucesso!", "success");
+    },
+    [updateFlashcard, showToast],
+  );
+
+  const handleConfirmDeleteCard = useCallback(
+    async (cardId: string): Promise<boolean> => {
+      try {
+        await removeFlashcard({
+          variables: { id: cardId },
+          // SUGESTÃO APLICADA: Injeção de Deleção Otimista em O(1)
+          optimisticResponse: {
+            __typename: "Mutation",
+            removeFlashcard: {
+              __typename: "Flashcard",
+              id: cardId, // Devolve o ID imutável para o cache reconhecer o alvo instantaneamente
+            },
+          },
+          update(cache) {
+            const normalizedId = cache.identify({
+              id: cardId,
+              __typename: "Flashcard",
+            });
+            cache.evict({ id: normalizedId });
+            cache.gc(); // Garbage Collection síncrono limpa a referência fantasma na hora
+          },
+        });
+        showToast("Flashcard removido do baralho.", "success");
+        return true;
+      } catch (err: unknown) {
+        if (err instanceof Error) {
+          showToast(
+            `Erro de rede. A ação foi revertida: ${err.message}`,
+            "error",
+          );
+        }
+        return false;
+      }
+    },
+    [removeFlashcard, showToast],
+  );
+
+  const handleConfirmDeleteDeck = useCallback(async (): Promise<boolean> => {
+    if (!deckId) return false;
     try {
       await deleteDeck({
         variables: { id: deckId },
         update(cache) {
           cache.modify({
             fields: {
-              myDecks(existingDeckRefs: readonly Reference[] = [], { readField }) {
+              myDecks(
+                existingDeckRefs: readonly Reference[] = [],
+                { readField },
+              ) {
                 return existingDeckRefs.filter(
-                  (ref) => readField("id", ref) !== deckId
+                  (ref) => readField("id", ref) !== deckId,
                 );
               },
             },
@@ -186,34 +214,23 @@ export function useDeckDetails(deckId: string | null) {
         },
       });
       showToast("Baralho excluído permanentemente.", "success");
-      setIsDeletingDeck(false);
-      navigate("/dashboard");
+      return true;
     } catch (err: unknown) {
       if (err instanceof Error) {
         showToast(`Erro ao excluir baralho: ${err.message}`, "error");
       }
+      return false;
     }
-  }, [deckId, deleteDeck, showToast, navigate]);
+  }, [deckId, deleteDeck, showToast]);
 
   return {
-    deck: data?.deck,
+    deck,
     loading,
     error,
     visibleFlashcards,
     hasMore,
     handleLoadMore,
     deletingDeck,
-    updatingDeck,
-    isCreateOpen,
-    setIsCreateOpen,
-    isEditDeckOpen,
-    setIsEditDeckOpen,
-    editingCard,
-    setEditingCard,
-    deletingCardId,
-    setDeletingCardId,
-    isDeletingDeck,
-    setIsDeletingDeck,
     handleSaveEdit,
     handleConfirmDeleteCard,
     handleConfirmDeleteDeck,

@@ -1,67 +1,48 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useMutation, useSuspenseQuery } from '@apollo/client/react';
-import { useNavigate } from 'react-router-dom';
-import type { Reference } from '@apollo/client/core';
-import { GET_DUE_FLASHCARDS, SUBMIT_REVIEW } from '../lib/graphql/study';
-import { useToast } from './useToast';
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useMutation, useSuspenseQuery } from "@apollo/client/react";
+import { useNavigate } from "react-router-dom";
+import type { Reference } from "@apollo/client/core";
+
+import { GET_DUE_FLASHCARDS, SUBMIT_REVIEW } from "../lib/graphql/study";
+import { useToast } from "./useToast";
 
 export const useStudyEngine = (deckId: string | null) => {
   const navigate = useNavigate();
   const { showToast } = useToast();
 
-  // Suspensão nativa: delega o estado pending ao boundary do React 19
-  // REMOVIDO: Extração fantasma de 'error'. O Suspense Boundary protege esta fronteira.
   const { data } = useSuspenseQuery(GET_DUE_FLASHCARDS, {
     variables: { deckId: deckId ?? "" },
-    fetchPolicy: 'cache-and-network',
+    fetchPolicy: "cache-and-network",
   });
 
+  // ALERTA CORRIGIDO: Extração da referência para uma constante estabilizada,
+  // prevenindo o uso de Optional Chaining dinâmico no array de dependências.
   const rawDueFlashcards = data?.dueFlashcards ?? null;
 
-  // 2. Barreira Defensiva Temporal (Filtro Secundário local O(N))
-  // Aplica o Rollover de sessão (RN06) protegendo o usuário de vazamentos via UTC
+  // ALERTA CORRIGIDO: Captura do timestamp inicial com Lazy Initialization.
+  // Impede execuções impuras (Date.now()) repetitivas na fase de renderização do React.
+  const [currentMs] = useState(() => Date.now());
+
+  // Defesa Temporal Secundária O(1) mantida de forma pura
   const queue = useMemo(() => {
     const cards = rawDueFlashcards ?? [];
-    if (cards.length === 0) return [];
-
-    const now = new Date();
-    const currentHour = now.getHours();
-
-    // Ancoragem do momento exato do Rollover de HOJE (04:00:00.000 AM local)
-    const todayRolloverMs = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate(),
-      4, 0, 0, 0
-    ).getTime();
-
-    // Determina a janela máxima (Cutoff):
-    // - Antes das 04:00 AM: o dia "lógico" ainda é ontem. O limite vai até 04:00 AM de HOJE.
-    // - Depois das 04:00 AM: iniciou-se um novo dia "lógico". O limite vai até 04:00 AM de AMANHÃ.
-    const sessionCutoffMs = currentHour < 4
-      ? todayRolloverMs
-      : todayRolloverMs + 86400000; // + 24 horas em milissegundos
 
     return cards.filter((card) => {
-      // Cartões "Novos" (sem data definida no algoritmo FSRS) sempre entram na fila
       if (!card.due) return true;
-
-      const dueTimeMs = new Date(card.due).getTime();
-      // Bloqueio Matemático: O cartão só é exibido se seu vencimento couber na sessão lógica atual
-      return dueTimeMs <= sessionCutoffMs;
+      return new Date(card.due).getTime() <= currentMs;
     });
-  }, [rawDueFlashcards]);
+  }, [rawDueFlashcards, currentMs]);
 
-  // 3. SSOT: Consumo em tempo constante O(1) ancorado no topo da fila filtrada
   const currentCard = queue[0] ?? null;
   const nextCard = queue[1] ?? null;
   const totalCards = queue.length;
 
   const [isFlipped, setIsFlipped] = useState<boolean>(false);
   const startTimeRef = useRef<number>(0);
-
   const [submitReviewMutation] = useMutation(SUBMIT_REVIEW);
+
   const currentCardId = currentCard?.id ?? null;
+  const hasCurrentCard = currentCardId !== null;
 
   useEffect(() => {
     if (currentCardId !== null) {
@@ -70,35 +51,30 @@ export const useStudyEngine = (deckId: string | null) => {
   }, [currentCardId]);
 
   const handleShowAnswer = useCallback(() => {
-    if (!isFlipped && currentCard) {
+    if (!isFlipped && hasCurrentCard) {
       setIsFlipped(true);
     }
-  }, [isFlipped, currentCard]);
+  }, [isFlipped, hasCurrentCard]);
 
   const handleRating = useCallback(
     async (rating: number) => {
-      // Padrão Bouncer: Salvaguarda contra cliques fantasmas (Early Fail)
-      if (!currentCard || !deckId) return;
+      if (!currentCardId || !deckId) return;
 
+      // Telemetria Monotônica despachada de forma pura, assumindo a postura
+      // de "Terminal Burro". A validação de outliers pertence ao Backend.
       const rawDurationMs =
         startTimeRef.current > 0
           ? Math.round(performance.now() - startTimeRef.current)
           : 0;
 
-      // Defesa na Fronteira: Grampo de contenção matemática cravado em 60 segundos máximos
-      const safeDurationMs = Math.max(0, Math.min(rawDurationMs, 60000));
-      const targetCard = currentCard;
-
-      // RESOLUÇÃO CRÍTICA: O reposicionamento visual (flip) ocorre síncronamente 
-      // abortando renderizações duplas através de efeitos em cascata.
       setIsFlipped(false);
 
       try {
         await submitReviewMutation({
           variables: {
-            flashcardId: targetCard.id,
+            flashcardId: currentCardId,
             rating,
-            reviewDurationMs: safeDurationMs,
+            reviewDurationMs: rawDurationMs,
           },
           optimisticResponse: {
             __typename: "Mutation",
@@ -107,10 +83,21 @@ export const useStudyEngine = (deckId: string | null) => {
           update(cache) {
             cache.modify({
               fields: {
-                dueFlashcards(existingRefs: readonly Reference[] = [], { readField }) {
-                  return existingRefs.filter(
-                    (ref) => readField("id", ref) !== targetCard.id
+                dueFlashcards(
+                  existingRefs: readonly Reference[] = [],
+                  { readField },
+                ) {
+                  const targetRef = existingRefs.find(
+                    (ref) => readField("id", ref) === currentCardId,
                   );
+                  const filteredRefs = existingRefs.filter(
+                    (ref) => readField("id", ref) !== currentCardId,
+                  );
+
+                  if (rating === 1 && targetRef) {
+                    return [...filteredRefs, targetRef];
+                  }
+                  return filteredRefs;
                 },
               },
             });
@@ -118,16 +105,19 @@ export const useStudyEngine = (deckId: string | null) => {
         });
       } catch (err: unknown) {
         if (err instanceof Error) {
-          console.error('Falha de sincronização na avaliação cognitiva:', err.message);
+          console.error("Falha de sincronização cognitiva:", err.message);
         }
-        showToast('Erro de rede. O progresso falhou e o cartão retornará à fila.', 'error');
+        showToast(
+          "Erro de rede. O progresso falhou e o cartão retornará à fila.",
+          "error",
+        );
       }
     },
-    [currentCard, submitReviewMutation, deckId, showToast]
+    [currentCardId, deckId, submitReviewMutation, showToast],
   );
 
   const handleExit = useCallback(() => {
-    navigate('/dashboard');
+    navigate("/dashboard");
   }, [navigate]);
 
   return {

@@ -5,9 +5,10 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
 
   const showToast = useCallback((message: string, type: ToastType = "info") => {
+    // Math.random envelopado de forma pura perante o Handler, preservando a imutabilidade do DOM Principal
     const id = Math.random().toString(36).substring(2, 9);
     setToasts((prev) => [...prev, { id, message, type }]);
-    
+
     setTimeout(() => {
       setToasts((prev) => prev.filter((toast) => toast.id !== id));
     }, 4000);
@@ -17,16 +18,22 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     setToasts((prev) => prev.filter((toast) => toast.id !== id));
   }, []);
 
-  // CORREÇÃO: Estabilização Referencial do Payload do Contexto
-  // 'showToast' já é estabilizado pelo useCallback, agora o objeto resultante também é.
   const contextValue = useMemo(() => ({ showToast }), [showToast]);
 
+  // CORREÇÃO: Consumo enxuto direto do objeto de Contexto (Padrão React 19)
   return (
     <ToastContext value={contextValue}>
       {children}
-      
-      {/* Container fixo para Toasts operando apenas via Flexbox (UI01) */}
-      <div className="fixed bottom-5 right-5 z-50 flex flex-col gap-2 max-w-sm w-full px-4 pointer-events-none">
+
+      {/* 
+        Container fixo para Toasts operando apenas via Flexbox (UI01).
+        CORREÇÃO a11y: Injeção de aria-live="polite" informando mudanças aos Screen Readers
+        de forma não invasiva e orgânica ao navegador.
+      */}
+      <div
+        aria-live="polite"
+        className="fixed bottom-5 right-5 z-50 flex flex-col gap-2 max-w-sm w-full px-4 pointer-events-none"
+      >
         {toasts.map((toast) => (
           <div
             key={toast.id}
@@ -40,7 +47,11 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
           >
             <div className="flex items-center gap-3">
               <span className="text-lg">
-                {toast.type === "error" ? "❌" : toast.type === "success" ? "✅" : "ℹ️"}
+                {toast.type === "error"
+                  ? "❌"
+                  : toast.type === "success"
+                    ? "✅"
+                    : "ℹ️"}
               </span>
               <p className="text-sm font-medium">{toast.message}</p>
             </div>

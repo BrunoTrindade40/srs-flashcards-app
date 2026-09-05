@@ -20,15 +20,16 @@ export type FsrsState = (typeof FsrsState)[keyof typeof FsrsState];
  * Type Guard puro para validação de fronteira (Network Boundary).
  * Garante que o número bruto retornado pelo Apollo Client seja um estado FSRS válido.
  */
-export function isValidFsrsState(state: number | null | undefined): state is FsrsState {
+export function isValidFsrsState(
+  state: number | null | undefined,
+): state is FsrsState {
   // 1. Padrão Bouncer: Rejeita imediatamente nulos ou indefinidos
   if (state === null || state === undefined) {
     return false;
   }
 
-  // 2. Transforma os valores do objeto constante em um array nativo
-  // A tipagem 'number[]' é declarada para evitar inferências frouxas
-  const validValues: number[] = Object.values(FsrsState);
-  
+  // 2. Transforma os valores do objeto constante em um array nativo validado
+  // CORREÇÃO: Assegura a integridade estática referenciando diretamente o Tipo
+  const validValues = Object.values(FsrsState) as number[];
   return validValues.includes(state);
 }

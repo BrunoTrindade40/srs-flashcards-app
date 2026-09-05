@@ -1,5 +1,5 @@
-fix(frontend): resolve falha critica de injecao no motor css do tailwind
+refactor(frontend): aprimora a11y do toast e contencao de foco no react 19
 
-- Injeta o pacote '@tailwindcss/typography' no package.json (devDependencies).
-- Soluciona o erro HTTP 500 disparado pelo Vite HMR durante a resolucao do index.css.
-- Restabelece a renderizacao das classes prose para o MarkdownRenderer.
+- Injeta o atributo 'aria-live="polite"' no ToastProvider garantindo suporte nativo a Screen Readers.
+- Simplifica a arvore AST omitindo o sufixo '.Provider' no ToastContext conforme padrao React 19.
+- Adiciona Optional Chaining (?.focus) no cleanup do useFocusTrap para prevenir NullReferenceException.

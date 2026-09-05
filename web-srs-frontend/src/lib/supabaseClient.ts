@@ -1,7 +1,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 // -----------------------------------------------------------------------------
-// Adaptador de Storage Defensivo O(1) (Mantido Inalterado)
+// Adaptador de Storage Defensivo O(1)
 // -----------------------------------------------------------------------------
 const memoryStorage = new Map<string, string>();
 const safeStorage = {
@@ -40,8 +40,6 @@ const getSupabaseClient = (): SupabaseClient => {
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-  // Type Guard: A exceção agora só explodirá SE o cliente for efetivamente utilizado,
-  // permitindo que o React já esteja montado e o GlobalErrorBoundary intercepte a falha.
   if (typeof supabaseUrl !== "string" || typeof supabaseAnonKey !== "string") {
     throw new Error(
       "As variáveis VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY são obrigatórias no Frontend.",
@@ -63,15 +61,23 @@ const getSupabaseClient = (): SupabaseClient => {
 // -----------------------------------------------------------------------------
 // Padrão Inversão de Proxy (Zero Refactoring Overhead)
 // -----------------------------------------------------------------------------
-// Exportamos uma interface mascarada. Nenhuma linha de código que importa
-// `supabase` na aplicação precisa ser reescrita. A interceptação ocorre em tempo de execução.
-export const supabase = new Proxy({} as SupabaseClient, {
+// Alvo estrutural inerte (Duck Typing) para pacificar o compilador.
+const inertDummyTarget = createClient(
+  "https://placeholder.supabase.co",
+  "placeholder",
+  {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+  },
+);
+
+export const supabase = new Proxy(inertDummyTarget, {
   get(_, prop: keyof SupabaseClient) {
-    // 1. Invoca a avaliação tardia apenas quando alguma propriedade (ex: .auth) for acessada
     const client = getSupabaseClient();
     const value = client[prop];
-
-    // 2. Garante o binding correto do contexto (this) para métodos internos da classe Supabase
     return typeof value === "function" ? value.bind(client) : value;
   },
 });

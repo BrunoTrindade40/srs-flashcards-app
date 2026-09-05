@@ -1,35 +1,38 @@
-// CORREÇÃO CRÍTICA: Importação restaurada para o módulo ESM oficial do Apollo React
 import { useMutation } from "@apollo/client/react";
+import React from "react";
 import { UPDATE_MY_SETTINGS } from "../../lib/graphql/settings";
 import { useToast } from "../../hooks/useToast";
 import { validateSettingsInput } from "../../domain/validators";
 import type { GetMeQuery } from "../../gql/graphql";
 
-// Extração Estrutural (Duck Typing Nativo)
+// Extração Estrutural Estrita (Duck Typing)
 type UserSettings = NonNullable<GetMeQuery["me"]>;
 
-// ----------------------------------------------------------------------
-// Subcomponente: Formulário de Configurações (Uncontrolled Components)
-// ----------------------------------------------------------------------
-export const SettingsForm: React.FC<{ initialData: UserSettings; onClose: () => void }> = ({
-  initialData,
-  onClose,
-}) => {
+export const SettingsForm: React.FC<{
+  initialData: UserSettings;
+  onClose: () => void;
+}> = ({ initialData, onClose }) => {
   const { showToast } = useToast();
-  const [updateSettings, { loading: mutationLoading }] = useMutation(UPDATE_MY_SETTINGS);
+  // Removido o stateful loading visual.
+  const [updateSettings] = useMutation(UPDATE_MY_SETTINGS);
 
   const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const savedTimezone = initialData.timezone || browserTimezone;
   const hasTimezoneDivergence = browserTimezone !== savedTimezone;
 
-  const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
+  const handleSubmit = (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (mutationLoading) return;
-    
     const formData = new FormData(e.currentTarget);
-    
-    const dailyNewCardLimit = parseInt(String(formData.get("dailyNewCardLimit") ?? "0"), 10);
-    const maxDailyReviews = parseInt(String(formData.get("maxDailyReviews") ?? "0"), 10);
+
+    // Ordem de precedência lógica para coalescência de nulos
+    const dailyNewCardLimit = parseInt(
+      String(formData.get("dailyNewCardLimit") ?? "0"),
+      10,
+    );
+    const maxDailyReviews = parseInt(
+      String(formData.get("maxDailyReviews") ?? "0"),
+      10,
+    );
     const dailyRolloverTime = String(formData.get("dailyRolloverTime") ?? "");
     const timezone = String(formData.get("timezone") ?? "");
 
@@ -37,32 +40,48 @@ export const SettingsForm: React.FC<{ initialData: UserSettings; onClose: () => 
       dailyNewCardLimit,
       maxDailyReviews,
       dailyRolloverTime,
-      timezone
+      timezone,
     );
 
-    if (validationError) {
+    if (validationError !== null) {
       showToast(validationError, "error");
       return;
     }
 
-    try {
-      await updateSettings({
-        variables: {
-          data: {
-            dailyNewCardLimit,
-            maxDailyReviews,
-            timezone,
-            dailyRolloverTime,
-          },
+    // Execução Otimista (0ms delay perceptível)
+    updateSettings({
+      variables: {
+        data: {
+          dailyNewCardLimit,
+          maxDailyReviews,
+          timezone,
+          dailyRolloverTime,
         },
-      });
-      showToast("Configurações atualizadas!", "success");
-      onClose();
-    } catch (err: unknown) {
+      },
+      optimisticResponse: {
+        __typename: "Mutation",
+        updateMySettings: {
+          __typename: "User",
+          id: initialData.id,
+          dailyNewCardLimit,
+          maxDailyReviews,
+          timezone,
+          dailyRolloverTime,
+        },
+      },
+    }).catch((err: unknown) => {
+      // Regra 16: Fallback de UI Otimista Falha interceptado via bloco de promessa
       if (err instanceof Error) {
-        showToast(`Falha ao salvar: ${err.message}`, "error");
+        showToast(
+          `Erro de rede. A ação foi revertida: ${err.message}`,
+          "error",
+        );
       }
-    }
+    });
+
+    // Fechamento síncrono da tela e notificação fluida
+    showToast("Configurações atualizadas!", "success");
+    onClose();
   };
 
   return (
@@ -77,11 +96,11 @@ export const SettingsForm: React.FC<{ initialData: UserSettings; onClose: () => 
           defaultValue={initialData.dailyNewCardLimit}
           min="0"
           max="500"
-          disabled={mutationLoading}
           required
-          className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 text-sm focus:outline-none focus:border-amber-500 font-sans"
+          className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 text-sm focus:outline-none focus:border-amber-500 font-sans transition-colors"
         />
       </div>
+
       <div className="flex flex-col gap-2">
         <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
           Limite Máximo de Revisões
@@ -92,9 +111,8 @@ export const SettingsForm: React.FC<{ initialData: UserSettings; onClose: () => 
           defaultValue={initialData.maxDailyReviews}
           min="10"
           max="2000"
-          disabled={mutationLoading}
           required
-          className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 text-sm focus:outline-none focus:border-amber-500 font-sans"
+          className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 text-sm focus:outline-none focus:border-amber-500 font-sans transition-colors"
         />
       </div>
 
@@ -106,10 +124,9 @@ export const SettingsForm: React.FC<{ initialData: UserSettings; onClose: () => 
           <select
             name="timezone"
             defaultValue={savedTimezone}
-            disabled={mutationLoading}
             className={`w-full px-3 py-2.5 bg-slate-950 border rounded-xl text-slate-100 text-sm focus:outline-none focus:ring-1 appearance-none cursor-pointer transition-colors ${
-              hasTimezoneDivergence 
-                ? "border-amber-500/50 focus:border-amber-500 focus:ring-amber-500" 
+              hasTimezoneDivergence
+                ? "border-amber-500/50 focus:border-amber-500 focus:ring-amber-500"
                 : "border-slate-800 focus:border-blue-500 focus:ring-blue-500"
             }`}
           >
@@ -120,10 +137,12 @@ export const SettingsForm: React.FC<{ initialData: UserSettings; onClose: () => 
           </select>
           {hasTimezoneDivergence && (
             <span className="text-[10px] text-amber-500/90 leading-tight animate-fadeIn font-medium">
-                Você está em um fuso diferente. Atualize para evitar o bloqueio prematuro ou atraso da sua fila diária.
+              Você está em um fuso diferente. Atualize para evitar o bloqueio
+              prematuro ou atraso da sua fila diária.
             </span>
           )}
         </div>
+
         <div className="flex flex-col gap-2 flex-1">
           <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
             Horário de Virada
@@ -132,9 +151,8 @@ export const SettingsForm: React.FC<{ initialData: UserSettings; onClose: () => 
             type="time"
             name="dailyRolloverTime"
             defaultValue={initialData.dailyRolloverTime || "04:00"}
-            disabled={mutationLoading}
             required
-            className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 text-sm focus:outline-none focus:border-amber-500 font-sans"
+            className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 text-sm focus:outline-none focus:border-amber-500 font-sans transition-colors"
           />
         </div>
       </div>
@@ -143,17 +161,15 @@ export const SettingsForm: React.FC<{ initialData: UserSettings; onClose: () => 
         <button
           type="button"
           onClick={onClose}
-          disabled={mutationLoading}
-          className="px-4 py-2 text-xs font-medium text-slate-400 hover:text-slate-200 cursor-pointer disabled:opacity-50"
+          className="px-4 py-2 text-xs font-medium text-slate-400 hover:text-slate-200 cursor-pointer transition-colors"
         >
           Cancelar
         </button>
         <button
           type="submit"
-          disabled={mutationLoading}
-          className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-xs transition-all cursor-pointer disabled:opacity-50"
+          className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-xs transition-all cursor-pointer shadow-sm"
         >
-          {mutationLoading ? "Salvando..." : "Salvar Alterações"}
+          Salvar Alterações
         </button>
       </div>
     </form>

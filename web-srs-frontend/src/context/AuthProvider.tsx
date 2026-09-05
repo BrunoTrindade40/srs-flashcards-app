@@ -1,84 +1,58 @@
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import type { Session, User } from "@supabase/supabase-js";
-import React, { useCallback, useEffect, useState, useMemo } from "react";
-import { useApolloClient } from "@apollo/client/react";
 import { supabase } from "../lib/supabaseClient";
+import { client } from "../lib/apollo"; // SSOT: Instância central do Apollo importada
 import { AuthContext } from "./AuthContext";
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+// SRP ESTRITO: O módulo exporta unicamente o Provedor lógico.
+// A interface visual (Header) foi isolada fisicamente.
+export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
-  const client = useApolloClient();
-
-  const logout = useCallback(async () => {
-    try {
-      setLoading(true);
-      await client.clearStore();
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
-      setSession(null);
-      setUser(null);
-    } catch (error: unknown) {
-      if (error instanceof Error) {
-        console.error("Falha ao invalidar a sessão:", error.message);
-      }
-      throw error;
-    } finally {
-      setLoading(false);
-    }
-  }, [client]);
 
   useEffect(() => {
-    let mounted = true;
-    async function getInitialSession() {
-      try {
-        const { data, error } = await supabase.auth.getSession();
-        if (error) throw error;
-        if (mounted) {
-          setSession(data.session);
-          setUser(data.session?.user ?? null);
-        }
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : "Erro desconhecido";
-        console.error(`Erro ao buscar sessão inicial: ${errorMessage}`);
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    }
-    
-    getInitialSession();
+    // Avaliação Tardia (Lazy) e síncrona do estado
+    supabase.auth.getSession().then(({ data: { session: activeSession } }) => {
+      setSession(activeSession);
+      setUser(activeSession?.user ?? null);
+      setLoading(false);
+    });
 
-    const { data: authListener } = supabase.auth.onAuthStateChange(
-      async (_event, newSession) => {
-        if (mounted) {
-          setSession((prevSession) => {
-             if (!newSession && prevSession) {
-               client.clearStore().catch(() => {});
-             }
-             return newSession;
-          });
-          setUser(newSession?.user ?? null);
-          setLoading(false);
-        }
-      }
-    );
+    // Inscrição reativa para mutações de autorização
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, activeSession) => {
+      setSession(activeSession);
+      setUser(activeSession?.user ?? null);
+      setLoading(false);
+    });
 
+    // Tear-down estrito prevenindo Stale Closures (Regra 6)
     return () => {
-      mounted = false;
-      authListener.subscription.unsubscribe();
+      subscription.unsubscribe();
     };
-  }, [client]);
+  }, []);
 
-  // CORREÇÃO: Estabilização de Memória O(1) do objeto de Contexto
-  // Previne Cascading Renders invalidando a criação de literais a cada ciclo
+  // Delegação Estrita de Destruição (Regra 44)
+  const logout = useCallback(async (): Promise<void> => {
+    try {
+      await supabase.auth.signOut();
+      await client.clearStore(); // Purga física e síncrona do cache GraphQL na RAM
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        console.error("Falha no colapso sistêmico da sessão:", error.message);
+      }
+      throw error; // Transfere o controle de falha visual para a UI invocadora
+    }
+  }, []);
+
+  // Memoização rigorosa para bloqueio de re-renders na árvore (Regra 42)
   const contextValue = useMemo(
     () => ({ session, user, loading, logout }),
-    [session, user, loading, logout]
+    [session, user, loading, logout],
   );
 
-  return (
-    <AuthContext value={contextValue}>
-      {children}
-    </AuthContext>
-  );
-}
+  // Utilização nativa da API de Contexto do React 19
+  return <AuthContext value={contextValue}>{children}</AuthContext>;
+};
