@@ -1,13 +1,7 @@
 import React from "react";
 import { MarkdownRenderer } from "./MarkdownRenderer";
-
-interface StudyCardProps {
-  frontContent: string;
-  backContent?: string | null;
-  sourceContext?: string | null;
-  isFlipped: boolean;
-  onShowAnswer: () => void;
-}
+// 🟢 CORRIGIDO (Regra 11): Importação tipada pura de arquivo lógico
+import type { StudyCardProps } from "./StudyCard.types";
 
 export const StudyCard: React.FC<StudyCardProps> = ({
   frontContent,
@@ -22,9 +16,9 @@ export const StudyCard: React.FC<StudyCardProps> = ({
         Pergunta
       </span>
       {/* Inversão de Controle: Injetamos as diretrizes de Dark Mode na raiz do fluxo de estudo */}
-      <MarkdownRenderer 
-        content={frontContent} 
-        className="text-slate-100 prose-invert prose-amber [&_.katex]:text-slate-100" 
+      <MarkdownRenderer
+        content={frontContent}
+        className="text-slate-100 prose-invert prose-amber [&_.katex]:text-slate-100"
       />
     </div>
 
@@ -34,9 +28,9 @@ export const StudyCard: React.FC<StudyCardProps> = ({
           <span className="text-xs font-bold text-emerald-500 uppercase tracking-wider">
             Resposta
           </span>
-          <MarkdownRenderer 
-            content={backContent} 
-            className="text-slate-100 prose-invert prose-amber [&_.katex]:text-slate-100" 
+          <MarkdownRenderer
+            content={backContent}
+            className="text-slate-100 prose-invert prose-amber [&_.katex]:text-slate-100"
           />
         </div>
 
@@ -61,7 +55,9 @@ export const StudyCard: React.FC<StudyCardProps> = ({
           <kbd className="px-2 py-1 bg-slate-950 border border-slate-700 rounded-md text-[10px] font-mono text-slate-400 uppercase tracking-wider shadow-inner">
             Espaço
           </kbd>
-          <span className="text-slate-500 text-[10px] font-bold lowercase">ou</span>
+          <span className="text-slate-500 text-[10px] font-bold lowercase">
+            ou
+          </span>
           <kbd className="px-2 py-1 bg-slate-950 border border-slate-700 rounded-md text-[10px] font-mono text-slate-400 uppercase tracking-wider shadow-inner">
             Enter
           </kbd>

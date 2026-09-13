@@ -1,25 +1,14 @@
 import React, { useState } from "react";
 import { validateFlashcardInput } from "../domain/validators";
 import { useToast } from "../hooks/useToast";
-
-interface EditFlashcardModalProps {
-  initialFrontContent: string;
-  initialBackContent: string;
-  initialSourceContext?: string | null;
-  onClose: () => void;
-  // A assinatura obriga o contrato ser cumprido pela View Pai sem omissões
-  onSave: (
-    frontContent: string,
-    backContent: string,
-    sourceContext: string | null,
-    resetProgress: boolean,
-  ) => void;
-}
+// Correção: Hook de Focus Trap importado
+import { useFocusTrap } from "../hooks/useFocusTrap";
+import type { EditFlashcardModalProps } from "./EditFlashcardModal.types";
 
 export const EditFlashcardModal: React.FC<EditFlashcardModalProps> = ({
   initialFrontContent,
   initialBackContent,
-  initialSourceContext = null,
+  initialSourceContext,
   onClose,
   onSave,
 }) => {
@@ -31,6 +20,9 @@ export const EditFlashcardModal: React.FC<EditFlashcardModalProps> = ({
   );
   const [step, setStep] = useState<1 | 2>(1);
 
+  // Correção CRÍTICA: Aplicação incondicional do Focus Trap no ciclo de edição
+  const modalRef = useFocusTrap(true, onClose);
+
   const handleFirstSubmit = (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
 
@@ -39,6 +31,7 @@ export const EditFlashcardModal: React.FC<EditFlashcardModalProps> = ({
       backContent,
       sourceContext,
     );
+
     if (validationError) {
       showToast(validationError, "error");
       return;
@@ -48,22 +41,23 @@ export const EditFlashcardModal: React.FC<EditFlashcardModalProps> = ({
   };
 
   const handleFinalSubmit = (resetProgress: boolean) => {
-    // Execução Otimista (0ms delay perceptível)
-    // Execução Otimista: A assinatura trafega 'null' invés de omitir o campo
     onSave(
       frontContent.trim(),
       backContent.trim(),
       sourceContext.trim() ? sourceContext.trim() : null,
       resetProgress,
     );
-    // Fechamento instantâneo, a rede resolve no background.
-    // Opcionalmente, pode-se retirar a chamada onClose() daqui se
-    // a View pai já executa o tear-down desmontando o componente ao definir state como null.
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fadeIn">
-      <div className="w-full max-w-2xl bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
+      {/* Correção de A11y: Injeção da referência do DOM e declaração ARIA */}
+      <div
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        className="w-full max-w-2xl bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden"
+      >
         <div className="flex items-center justify-between border-b border-slate-800 p-5 shrink-0 bg-slate-900/50">
           <h2 className="text-lg font-bold text-slate-100">
             {step === 1
@@ -74,7 +68,7 @@ export const EditFlashcardModal: React.FC<EditFlashcardModalProps> = ({
             onClick={onClose}
             className="text-slate-500 hover:text-slate-300 transition-colors p-1 cursor-pointer"
           >
-            ✖
+            ✕
           </button>
         </div>
 
@@ -143,7 +137,6 @@ export const EditFlashcardModal: React.FC<EditFlashcardModalProps> = ({
                 Você alterou o conteúdo deste cartão. Alterações significativas
                 mudam o conceito e exigem reiniciar o agendamento cognitivo.
               </p>
-
               <div className="p-4 bg-amber-950/20 border border-amber-900/50 rounded-xl flex flex-col gap-2">
                 <span className="text-xs font-bold text-amber-500">
                   SE FOI UMA MUDANÇA ESTRUTURAL:
@@ -153,7 +146,6 @@ export const EditFlashcardModal: React.FC<EditFlashcardModalProps> = ({
                   voltará para a fila de "Novos".
                 </p>
               </div>
-
               <div className="flex flex-col gap-2 p-4 bg-emerald-950/20 border border-emerald-900/50 rounded-xl">
                 <span className="text-xs font-bold text-emerald-500">
                   SE FOI APENAS CORREÇÃO DE ERRO:
@@ -164,7 +156,6 @@ export const EditFlashcardModal: React.FC<EditFlashcardModalProps> = ({
                 </p>
               </div>
             </div>
-
             <div className="flex flex-col sm:flex-row items-center justify-end gap-3 pt-4 border-t border-slate-800">
               <button
                 type="button"

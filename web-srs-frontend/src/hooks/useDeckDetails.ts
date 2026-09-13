@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from "@apollo/client/react";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import type { Reference } from "@apollo/client/core";
 import {
   DELETE_DECK,
@@ -13,7 +13,6 @@ import type { GetDeckDetailsQuery } from "../gql/graphql";
 type QueryDeck = NonNullable<GetDeckDetailsQuery["deck"]>;
 export type FlashcardItem = NonNullable<QueryDeck["flashcards"]>[number];
 
-// Tipagem preservada na raiz para assegurar integridade com o FlashcardList.tsx
 export interface EditingCardState {
   id: string;
   frontContent: string;
@@ -25,8 +24,6 @@ const CARDS_PER_PAGE = 20;
 
 export function useDeckDetails(deckId: string | null) {
   const { showToast } = useToast();
-
-  // Estado local para Paginação Client-Side O(1)
   const [visibleCount, setVisibleCount] = useState(CARDS_PER_PAGE);
 
   const { data, loading, error } = useQuery(GET_DECK_DETAILS, {
@@ -38,7 +35,19 @@ export function useDeckDetails(deckId: string | null) {
   const deck = data?.deck ?? null;
   const allFlashcards = deck?.flashcards ?? [];
   const totalCount = allFlashcards.length;
-  const visibleFlashcards = allFlashcards.slice(0, visibleCount);
+
+  // 🟢 CORRIGIDO: Mapeamento defensivo com memoização.
+  // O array é sanitizado na fronteira lógica, convertendo qualquer 'undefined'
+  // gerado pelo Apollo Codegen em 'null' absoluto antes de atingir a UI.
+  const visibleFlashcards = useMemo(() => {
+    return allFlashcards.slice(0, visibleCount).map((card) => ({
+      id: card.id,
+      frontContent: card.frontContent,
+      backContent: card.backContent,
+      sourceContext: card.sourceContext ?? null,
+    }));
+  }, [allFlashcards, visibleCount]);
+
   const hasMore = visibleCount < totalCount;
 
   const handleLoadMore = useCallback(() => {

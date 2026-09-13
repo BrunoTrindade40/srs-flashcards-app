@@ -3,15 +3,13 @@ import React from "react";
 import { UPDATE_MY_SETTINGS } from "../../lib/graphql/settings";
 import { useToast } from "../../hooks/useToast";
 import { validateSettingsInput } from "../../domain/validators";
-import type { GetMeQuery } from "../../gql/graphql";
+// 🟢 CORRIGIDO: Eliminação do Type anônimo. Importação limpa do contrato estrutural.
+import type { SettingsFormProps } from "./SettingsForm.types";
 
-// Extração Estrutural Estrita (Duck Typing)
-type UserSettings = NonNullable<GetMeQuery["me"]>;
-
-export const SettingsForm: React.FC<{
-  initialData: UserSettings;
-  onClose: () => void;
-}> = ({ initialData, onClose }) => {
+export const SettingsForm: React.FC<SettingsFormProps> = ({
+  initialData,
+  onClose,
+}) => {
   const { showToast } = useToast();
   // Removido o stateful loading visual.
   const [updateSettings] = useMutation(UPDATE_MY_SETTINGS);

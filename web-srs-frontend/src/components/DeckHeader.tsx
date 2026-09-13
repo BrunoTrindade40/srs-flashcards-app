@@ -1,18 +1,9 @@
 import { useNavigate } from "react-router-dom";
+// 🔵 SUGESTÃO: Injeção do React para tipagem do FC
+import React from "react";
+import type { DeckHeaderProps } from "./DeckHeader.types";
 
-interface DeckHeaderProps {
-  deckId: string;
-  title: string;
-  description: string | null;
-  isArchived: boolean;
-  flashcardsCount: number;
-  onToggleArchive: () => void;
-  onEditDeck: () => void;
-  onDeleteDeck: () => void;
-  onCreateCard: () => void;
-}
-
-export const DeckHeader = ({
+export const DeckHeader: React.FC<DeckHeaderProps> = ({
   deckId,
   title,
   description,

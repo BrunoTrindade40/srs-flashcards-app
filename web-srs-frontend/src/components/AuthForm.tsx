@@ -1,19 +1,6 @@
 import React from "react";
-// Importamos o tipo da fonte da verdade no domínio
-import type { AuthMode } from "../domain/auth";
-
-interface AuthFormProps {
-  mode: AuthMode;
-  email: string;
-  password: string;
-  loading: boolean;
-  errorMsg: string | null;
-  successMsg: string | null;
-  onEmailChange: (value: string) => void;
-  onPasswordChange: (value: string) => void;
-  onSubmit: (e: React.SyntheticEvent<HTMLFormElement>) => void;
-  onSwitchMode: (mode: AuthMode) => void;
-}
+// Importação tipada pura (Type-Only Import) garantindo que o compilador apague a referência no bundle
+import type { AuthFormProps } from "./AuthForm.types";
 
 export const AuthForm: React.FC<AuthFormProps> = ({
   mode,
@@ -40,9 +27,12 @@ export const AuthForm: React.FC<AuthFormProps> = ({
             {mode === "FORGOT_PASSWORD" && "Recuperar Senha"}
           </h1>
           <p className="text-sm text-slate-400 mt-2">
-            {mode === "LOGIN" && "Acesse seus Flashcards e continue sua ofensiva."}
-            {mode === "SIGNUP" && "Junte-se à plataforma e otimize seu aprendizado."}
-            {mode === "FORGOT_PASSWORD" && "Enviaremos um link seguro para o seu e-mail."}
+            {mode === "LOGIN" &&
+              "Acesse seus Flashcards e continue sua ofensiva."}
+            {mode === "SIGNUP" &&
+              "Junte-se à plataforma e otimize seu aprendizado."}
+            {mode === "FORGOT_PASSWORD" &&
+              "Enviaremos um link seguro para o seu e-mail."}
           </p>
         </div>
 
@@ -60,7 +50,10 @@ export const AuthForm: React.FC<AuthFormProps> = ({
 
         <form onSubmit={onSubmit} className="flex flex-col gap-5">
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-slate-300" htmlFor="email">
+            <label
+              className="text-sm font-medium text-slate-300"
+              htmlFor="email"
+            >
               E-mail
             </label>
             <input
@@ -76,7 +69,10 @@ export const AuthForm: React.FC<AuthFormProps> = ({
 
           {mode !== "FORGOT_PASSWORD" && (
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-slate-300" htmlFor="password">
+              <label
+                className="text-sm font-medium text-slate-300"
+                htmlFor="password"
+              >
                 Senha
               </label>
               <input
@@ -97,7 +93,13 @@ export const AuthForm: React.FC<AuthFormProps> = ({
             disabled={loading}
             className="w-full mt-2 py-3 flex items-center justify-center bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading ? "Processando..." : mode === "LOGIN" ? "Entrar" : mode === "SIGNUP" ? "Cadastrar" : "Enviar Link"}
+            {loading
+              ? "Processando..."
+              : mode === "LOGIN"
+                ? "Entrar"
+                : mode === "SIGNUP"
+                  ? "Cadastrar"
+                  : "Enviar Link"}
           </button>
         </form>
 

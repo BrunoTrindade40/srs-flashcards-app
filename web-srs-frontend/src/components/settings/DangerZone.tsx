@@ -1,14 +1,12 @@
-import { useState } from "react";
+// 🔵 SUGESTÃO: Injeção do React para tipagem do FC
+import React, { useState } from "react";
 import { useMutation } from "@apollo/client/react";
 import { useAuth } from "../../hooks/useAuth";
 import { useToast } from "../../hooks/useToast";
 import { ANONYMIZE_ME } from "../../lib/graphql/settings";
+import type { DangerZoneProps } from "./DangerZone.types";
 
-interface DangerZoneProps {
-  onClose: () => void;
-}
-
-export const DangerZone = ({ onClose }: DangerZoneProps) => {
+export const DangerZone: React.FC<DangerZoneProps> = ({ onClose }) => {
   const { showToast } = useToast();
   const { logout } = useAuth();
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
@@ -19,7 +17,7 @@ export const DangerZone = ({ onClose }: DangerZoneProps) => {
       await anonymizeMe();
       showToast(
         "Direito ao esquecimento exercido. Seus dados foram anonimizados irreversivelmente.",
-        "success"
+        "success",
       );
 
       try {
@@ -43,9 +41,10 @@ export const DangerZone = ({ onClose }: DangerZoneProps) => {
       </h3>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-rose-950/20 border border-rose-900/50 rounded-xl">
         <p className="text-[10px] text-rose-200/70 leading-relaxed flex-1">
-          Ao excluir sua conta, você exerce o <b>direito ao esquecimento</b>. Seus dados sofrerão anonimização irreversível.
+          Ao excluir sua conta, você exerce o <b>direito ao esquecimento</b>.
+          Seus dados sofrerão anonimização irreversível.
         </p>
-        
+
         {!showConfirmDelete ? (
           <button
             type="button"

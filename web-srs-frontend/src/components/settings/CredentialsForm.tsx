@@ -6,8 +6,11 @@ import { useState } from "react";
 import { useToast } from "../../hooks/useToast";
 import { validateCredentialsInput } from "../../domain/validators";
 import { supabase } from "../../lib/supabaseClient";
+import type { CredentialsFormProps } from "./CredentialsForm.types";
 
-export const CredentialsForm: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+export const CredentialsForm: React.FC<CredentialsFormProps> = ({
+  onClose,
+}) => {
   const { showToast } = useToast();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -16,13 +19,13 @@ export const CredentialsForm: React.FC<{ onClose: () => void }> = ({ onClose }) 
   const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (loading) return;
-    
+
     const validationError = validateCredentialsInput(email, password);
     if (validationError) {
       showToast(validationError, "error");
       return;
     }
-    
+
     setLoading(true);
     try {
       const updates: { email?: string; password?: string } = {};

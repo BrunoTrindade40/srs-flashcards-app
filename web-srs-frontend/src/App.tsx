@@ -4,7 +4,7 @@ import { ToastProvider } from "./context/ToastProvider";
 import { AppRoutes } from "./routes";
 
 // Exportação Nomeada Estrita: Remoção do "export default" ambíguo
-export function App() {
+export const App: React.FC = () => {
   return (
     <AuthProvider>
       <ToastProvider>
@@ -14,4 +14,4 @@ export function App() {
       </ToastProvider>
     </AuthProvider>
   );
-}
+};

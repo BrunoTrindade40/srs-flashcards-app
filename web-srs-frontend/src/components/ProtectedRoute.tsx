@@ -4,7 +4,7 @@ import { useAuth } from "../hooks/useAuth";
 // Removida a interface ProtectedRouteProps.
 // Componentes de Layout no React Router v6 não precisam receber 'children'.
 
-export function ProtectedRoute() {
+export const ProtectedRoute: React.FC = () => {
   const { user, loading } = useAuth();
   const location = useLocation();
 
@@ -28,4 +28,4 @@ export function ProtectedRoute() {
 
   // 3. Sucesso: Renderiza as rotas aninhadas através do Outlet
   return <Outlet />;
-}
+};

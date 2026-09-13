@@ -6,7 +6,7 @@ import type { AuthMode } from "../domain/auth";
 // 1. Importação obrigatória da Fonte Única da Verdade (SSOT)
 import { validateCredentialsInput } from "../domain/validators";
 
-export function Login() {
+export const Login: React.FC = () => {
   const navigate = useNavigate();
   const [mode, setMode] = useState<AuthMode>("LOGIN");
   const [email, setEmail] = useState("");
@@ -23,20 +23,25 @@ export function Login() {
   const switchMode = (newMode: AuthMode) => {
     setMode(newMode);
     resetFeedback();
-    setPassword(""); 
+    setPassword("");
   };
 
   const handleSignIn = async (): Promise<boolean> => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
     if (error) throw error;
-    return true; 
+    return true;
   };
 
   const handleSignUp = async (): Promise<boolean> => {
     const { error } = await supabase.auth.signUp({ email, password });
     if (error) throw error;
-    setSuccessMsg("Conta criada com sucesso! Verifique seu e-mail para confirmação.");
-    return false; 
+    setSuccessMsg(
+      "Conta criada com sucesso! Verifique seu e-mail para confirmação.",
+    );
+    return false;
   };
 
   const handleForgotPassword = async (): Promise<boolean> => {
@@ -45,17 +50,17 @@ export function Login() {
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
       redirectTo: `${window.location.origin}/dashboard`,
     });
-    
+
     if (error) throw error;
     setSuccessMsg("Instruções de recuperação enviadas para o seu e-mail.");
-    return false; 
+    return false;
   };
 
   const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
-    
+
     // 3. Padrão Bouncer: Previne submissões duplicadas na UI
-    if (loading) return; 
+    if (loading) return;
 
     resetFeedback();
 
@@ -63,8 +68,8 @@ export function Login() {
     // Se o modo for "FORGOT_PASSWORD", omitimos a senha da verificação
     // para focar estritamente na validação do Regex do E-mail.
     const validationError = validateCredentialsInput(
-      email, 
-      mode === "FORGOT_PASSWORD" ? "" : password
+      email,
+      mode === "FORGOT_PASSWORD" ? "" : password,
     );
 
     // Bloqueia a execução síncrona sem disparar requisições inúteis ao Supabase
@@ -74,7 +79,7 @@ export function Login() {
     }
 
     setLoading(true);
-    
+
     try {
       let shouldNavigate = false;
 
@@ -113,4 +118,4 @@ export function Login() {
       onSwitchMode={switchMode}
     />
   );
-}
+};

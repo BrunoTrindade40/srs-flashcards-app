@@ -1,5 +1,6 @@
-refactor(frontend): aprimora a11y do toast e contencao de foco no react 19
+refactor(frontend): aprimora a11y do toast, contencao de foco e segregacao de tipagem no react 19
 
-- Injeta o atributo 'aria-live="polite"' no ToastProvider garantindo suporte nativo a Screen Readers.
-- Simplifica a arvore AST omitindo o sufixo '.Provider' no ToastContext conforme padrao React 19.
-- Adiciona Optional Chaining (?.focus) no cleanup do useFocusTrap para prevenir NullReferenceException.
+- Injeta o atributo 'aria-live="polite"' no ToastProvider, garantindo suporte nativo a Screen Readers para feedbacks assincronos.
+- Simplifica a arvore AST omitindo o sufixo '.Provider' no ToastContext, adequando a sintaxe ao padrao nativo do React 19.
+- Adiciona Optional Chaining (?.focus) no cleanup do hook useFocusTrap, prevenindo NullReferenceException durante a desmontagem do DOM.
+- Extrai interfaces e contratos de dominio para novos arquivos dedicados '.types.ts', blindando o Fast Refresh (HMR) do Vite ao restringir arquivos '.tsx' estritamente a exportacao de UI.

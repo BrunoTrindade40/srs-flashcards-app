@@ -6,8 +6,9 @@ import { StudyCard } from "../components/StudyCard";
 import { StudyControls } from "../components/StudyControls";
 import { useStudyEngine } from "../hooks/useStudyEngine";
 import { useStudyKeyboard } from "../hooks/useStudyKeyboard";
+import type { StudySessionCoreProps } from "./StudySession.types";
 
-const StudySessionCore: React.FC<{ deckId: string }> = ({ deckId }) => {
+const StudySessionCore: React.FC<StudySessionCoreProps> = ({ deckId }) => {
   const navigate = useNavigate();
   const {
     currentCard,

@@ -1,7 +1,12 @@
-import React, { useCallback, useState, useMemo } from "react";
+import React, {
+  useCallback,
+  useState,
+  useMemo,
+  type PropsWithChildren,
+} from "react";
 import { ToastContext, type Toast, type ToastType } from "./ToastContext";
 
-export function ToastProvider({ children }: { children: React.ReactNode }) {
+export const ToastProvider: React.FC<PropsWithChildren> = ({ children }) => {
   const [toasts, setToasts] = useState<Toast[]>([]);
 
   const showToast = useCallback((message: string, type: ToastType = "info") => {
@@ -67,4 +72,4 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       </div>
     </ToastContext>
   );
-}
+};

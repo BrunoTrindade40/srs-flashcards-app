@@ -1,9 +1,5 @@
 import React from "react";
-
-interface StudyHeaderProps {
-  totalCards: number;
-  onExit: () => void;
-}
+import type { StudyHeaderProps } from "./StudyHeader.types";
 
 export const StudyHeader: React.FC<StudyHeaderProps> = ({
   totalCards,

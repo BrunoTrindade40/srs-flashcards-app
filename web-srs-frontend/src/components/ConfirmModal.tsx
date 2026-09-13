@@ -1,15 +1,7 @@
 import React from "react";
 import { useFocusTrap } from "../hooks/useFocusTrap";
-
-interface ConfirmModalProps {
-  title: string;
-  message: string;
-  confirmText?: string;
-  isDanger?: boolean;
-  onConfirm: () => void;
-  onClose: () => void;
-  loading?: boolean;
-}
+// 🟢 CORRIGIDO (Regra 11): Importação tipada pura extraída do corpo do JSX
+import type { ConfirmModalProps } from "./ConfirmModal.types";
 
 export const ConfirmModal: React.FC<ConfirmModalProps> = ({
   title,
@@ -25,6 +17,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
 
   const baseButtonClass =
     "px-4 py-2.5 text-sm font-bold rounded-lg shadow-md transition-colors cursor-pointer flex items-center justify-center";
+
   const buttonColorClass = isDanger
     ? loading
       ? "bg-rose-900/50 text-rose-300 border border-rose-900/50 cursor-not-allowed opacity-70"

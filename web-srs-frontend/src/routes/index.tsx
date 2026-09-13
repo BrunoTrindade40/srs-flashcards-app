@@ -9,7 +9,7 @@ import { ProtectedRoute } from "../components/ProtectedRoute";
 import { RequireDeckParam } from "../components/RequireDeckParam";
 import { RootRedirect } from "../components/RootRedirect";
 
-export function AppRoutes() {
+export const AppRoutes: React.FC = () => {
   return (
     <Routes>
       {/* 1. Tratamento da URL raiz */}
@@ -41,4 +41,4 @@ export function AppRoutes() {
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
-}
+};

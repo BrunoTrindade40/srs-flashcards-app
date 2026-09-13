@@ -2,15 +2,8 @@ import { useMutation } from "@apollo/client/react";
 import React, { useEffect, useState } from "react";
 import { useToast } from "../hooks/useToast";
 import { UPDATE_DECK } from "../lib/graphql/deck";
-import type { GetDeckDetailsQuery } from "../gql/graphql";
 import { validateDeckInput } from "../domain/validators";
-
-type DeckDetails = NonNullable<GetDeckDetailsQuery["deck"]>;
-
-interface EditDeckModalProps {
-  onClose: () => void;
-  deck: DeckDetails;
-}
+import type { EditDeckModalProps } from "./EditDeckModal.types";
 
 export const EditDeckModal: React.FC<EditDeckModalProps> = ({
   onClose,

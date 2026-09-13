@@ -21,10 +21,22 @@ export const Dashboard: React.FC = () => {
     setIsSettingsOpen,
   } = useDashboard();
 
-  const openCreateDeck = useCallback(() => setIsCreateDeckOpen(true), [setIsCreateDeckOpen]);
-  const closeCreateDeck = useCallback(() => setIsCreateDeckOpen(false), [setIsCreateDeckOpen]);
-  const openSettings = useCallback(() => setIsSettingsOpen(true), [setIsSettingsOpen]);
-  const closeSettings = useCallback(() => setIsSettingsOpen(false), [setIsSettingsOpen]);
+  const openCreateDeck = useCallback(
+    () => setIsCreateDeckOpen(true),
+    [setIsCreateDeckOpen],
+  );
+  const closeCreateDeck = useCallback(
+    () => setIsCreateDeckOpen(false),
+    [setIsCreateDeckOpen],
+  );
+  const openSettings = useCallback(
+    () => setIsSettingsOpen(true),
+    [setIsSettingsOpen],
+  );
+  const closeSettings = useCallback(
+    () => setIsSettingsOpen(false),
+    [setIsSettingsOpen],
+  );
 
   if (loading) {
     return (
@@ -45,7 +57,8 @@ export const Dashboard: React.FC = () => {
           Erro ao carregar dados do Dashboard.
         </h2>
         <p className="text-sm text-slate-400 max-w-md">
-          {error.message || "Não foi possível sincronizar suas informações com o servidor."}
+          {error.message ||
+            "Não foi possível sincronizar suas informações com o servidor."}
         </p>
       </div>
     );

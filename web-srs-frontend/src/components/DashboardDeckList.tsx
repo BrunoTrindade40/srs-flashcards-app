@@ -1,12 +1,6 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import type { DeckItem } from "../hooks/useDashboard";
-
-interface DashboardDeckListProps {
-  activeDecks: DeckItem[];
-  archivedDecks: DeckItem[];
-  onCreateDeck: () => void;
-}
+import type { DashboardDeckListProps } from "./DashboardDeckList.types";
 
 export const DashboardDeckList: React.FC<DashboardDeckListProps> = ({
   activeDecks,
@@ -47,7 +41,7 @@ export const DashboardDeckList: React.FC<DashboardDeckListProps> = ({
           <div className="flex flex-col gap-3">
             {activeDecks.map((deck) => {
               const cardCount = deck._count?.flashcards ?? 0;
-              
+
               return (
                 <div
                   key={deck.id}

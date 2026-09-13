@@ -1,7 +1,7 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 
-export function RootRedirect() {
+export const RootRedirect: React.FC = () => {
   const { user, loading } = useAuth();
 
   // 1. Estado de Espera: Idêntico ao ProtectedRoute para coerência visual
@@ -22,4 +22,4 @@ export function RootRedirect() {
   }
 
   return <Navigate to="/login" replace />;
-}
+};

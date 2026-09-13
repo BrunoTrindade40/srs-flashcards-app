@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, {
+  useState,
+  useEffect,
+  useMemo,
+  useCallback,
+  type PropsWithChildren,
+} from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabaseClient";
 import { client } from "../lib/apollo"; // SSOT: Instância central do Apollo importada
@@ -6,7 +12,7 @@ import { AuthContext } from "./AuthContext";
 
 // SRP ESTRITO: O módulo exporta unicamente o Provedor lógico.
 // A interface visual (Header) foi isolada fisicamente.
-export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
+export const AuthProvider: React.FC<PropsWithChildren> = ({ children }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState<boolean>(true);

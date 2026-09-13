@@ -7,10 +7,7 @@ import { GET_ME } from "../lib/graphql/settings";
 import { CredentialsForm } from "./settings/CredentialsForm";
 import { SettingsForm } from "./settings/SettingsForm";
 import { DangerZone } from "./settings/DangerZone";
-
-interface SettingsModalProps {
-  onClose: () => void;
-}
+import type { SettingsModalProps } from "./SettingsModal.types";
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
   const { showToast } = useToast();

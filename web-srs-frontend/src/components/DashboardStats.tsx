@@ -1,11 +1,5 @@
 import React from "react";
-
-interface DashboardStatsProps {
-  streak: number;
-  showStreakBonus: boolean;
-  activeDecksCount: number;
-  totalActiveCards: number;
-}
+import type { DashboardStatsProps } from "./DashboardStats.types";
 
 export const DashboardStats: React.FC<DashboardStatsProps> = ({
   streak,

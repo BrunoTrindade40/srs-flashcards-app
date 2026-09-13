@@ -1,18 +1,18 @@
-// src/components/CreateDeckModal.tsx
 import { type Reference } from "@apollo/client/core";
 import { useMutation } from "@apollo/client/react";
-import { useState, type SyntheticEvent } from "react";
+// 🔵 SUGESTÃO: Injeção do React para tipagem do FC
+import React, { useState, type SyntheticEvent } from "react";
 
 import { useToast } from "../hooks/useToast";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import { CREATE_DECK } from "../lib/graphql/deck";
 import { validateDeckInput } from "../domain/validators";
+// 🟢 CORRIGIDO (Regra 11): Importação tipada isolando a AST visual
+import type { CreateDeckModalProps } from "./CreateDeckModal.types";
 
-interface CreateDeckModalProps {
-  onClose: () => void;
-}
-
-export const CreateDeckModal = ({ onClose }: CreateDeckModalProps) => {
+export const CreateDeckModal: React.FC<CreateDeckModalProps> = ({
+  onClose,
+}) => {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [sourceLanguage, setSourceLanguage] = useState("pt-BR");

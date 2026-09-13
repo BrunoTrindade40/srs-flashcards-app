@@ -366,3 +366,27 @@
 - **Desmontagem Síncrona vs Assíncrona:**
   - 🔴 **PROIBIDO:** Manter o _state_ de renderização de um modal ativado enquanto se aguarda um `await` que fechará a tela posteriormente.
   - 🟢 **OBRIGATÓRIO:** Em operações não-destrutivas munidas de _Optimistic UI_, o _Tear-down_ (fechamento do Modal via `setState(null)`) deve ser síncrono e instantâneo na view orquestradora. O fluxo não deve aguardar a rede para liberar a interação do usuário.
+
+## 46. Acessibilidade Dinâmica e Leitores de Tela (A11y) 📢
+
+- **Visibilidade de Componentes Flutuantes:**
+  - 🔴 **PROIBIDO:** Renderizar componentes de feedback de interface (como _Toasts_, _Snackbars_ ou _Alerts_ dinâmicos) sem sinalização para tecnologias assistivas, "cegando" os usuários que dependem de leitores de tela (Screen Readers).
+  - 🟢 **OBRIGATÓRIO:** Injetar o atributo `aria-live="polite"` (ou `assertive` em erros críticos) no contêiner mestre dessas notificações. Isso garante que a Web API do navegador narre o feedback assíncrono (ex: "Flashcard criado!") sem roubar o foco ou abortar a interação vigente do estudante, alinhando-se às diretrizes de UX inclusiva do projeto.
+
+## 47. Sintaxe Enxuta de Contextos (Padrões React 19) ⚛️
+
+- **Omissão do Sufixo Provider (AST Optimization):**
+  - 🔴 **PROIBIDO:** Utilizar a sintaxe legada e verbosa `<Context.Provider value={...}>` na montagem de provedores de estado global em projetos que operam na versão 19+ do React.
+  - 🟢 **OBRIGATÓRIO:** Omitir o `.Provider` e utilizar diretamente o objeto do contexto como empacotador (ex: `<AuthContext value={contextValue}>`). Essa prática reduz o encapsulamento obsoleto e resulta em uma _Abstract Syntax Tree (AST)_ mais limpa e rápida na camada de reconciliação (Fiber Tree).
+
+## 48. Segurança Atômica em Desmontagem de Efeitos (Fail-Safe Cleanups) 🧹
+
+- **Prevenção de NullReferenceException no Unmount:**
+  - 🔴 **PROIBIDO:** Invocar métodos diretos do Web API em referências capturadas via `useRef` dentro de funções de _cleanup_ do `useEffect` (ex: `previousFocusRef.current.focus()`) contando apenas com a intuição ou checagens simples de sintaxe (`if (ref.current)`).
+  - 🟢 **OBRIGATÓRIO:** Aplicar invariavelmente o Operador de Encadeamento Opcional Absoluto (`?.`) na restauração de estados do DOM (ex: `previousFocusRef.current?.focus()`). Como a referência pode ser perdida ou nunca engatilhada (dependendo de quem originou o evento), o operador silencia a rota e impede um _Full Crash_ no DOM virtual caso o ponteiro retorne nulo.
+
+## 49. Proteção Estrita em Nós do DOM (Type Guards vs Coerção) 🛡️
+
+- **Validação Matemática de Elementos HTML:**
+  - 🔴 **PROIBIDO:** Forçar a tipagem de ponteiros nativos do DOM utilizando _Type Assertions_ (ex: `document.activeElement as HTMLElement` ou `Array.from(nodeList) as HTMLElement[]`). Isso "mente" para o compilador e mascara retornos incompatíveis, como elementos `<svg>` isolados ou `null`, que quebrarão a aplicação em _runtime_.
+  - 🟢 **OBRIGATÓRIO:** Utilizar _Type Guards_ puros avaliados em tempo de execução (`if (activeElement instanceof HTMLElement)`). Ao iterar ou mapear listas de nós (NodeLists), é obrigatório o uso de _Type Predicates_ para higienizar o array (`.filter((node): node is HTMLElement => node instanceof HTMLElement)`). A validação deve ser baseada na corrente de protótipos real da V8 Engine, garantindo integridade absoluta.

@@ -1,18 +1,16 @@
-import React, { Component, type ReactNode } from "react";
+import React, { Component } from "react";
 import ReactMarkdown from "react-markdown";
 import rehypeKatex from "rehype-katex";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import "katex/dist/katex.min.css";
+import type {
+  ErrorBoundaryProps,
+  ErrorBoundaryState,
+  MarkdownRendererProps,
+} from "./MarkdownRenderer.types";
 
-interface ErrorBoundaryProps {
-  children: ReactNode;
-}
-interface ErrorBoundaryState {
-  hasError: boolean;
-  errorMessage: string | null;
-}
-
+// 🔴 CORRIGIDO: Restauração da sintaxe da Classe, construtor e métodos
 class MarkdownErrorBoundary extends Component<
   ErrorBoundaryProps,
   ErrorBoundaryState
@@ -23,12 +21,17 @@ class MarkdownErrorBoundary extends Component<
   }
 
   static getDerivedStateFromError(error: unknown): ErrorBoundaryState {
-    const message = error instanceof Error ? error.message : "Erro sintético irreversível.";
+    const message =
+      error instanceof Error ? error.message : "Erro sintático irreversível.";
     return { hasError: true, errorMessage: message };
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
-    console.error("Falha ao renderizar Markdown/LaTeX:", error.message, errorInfo);
+    console.error(
+      "Falha ao renderizar Markdown/LaTeX:",
+      error.message,
+      errorInfo,
+    );
   }
 
   render() {
@@ -39,7 +42,8 @@ class MarkdownErrorBoundary extends Component<
             Falha de Renderização Visual
           </span>
           <p className="text-sm leading-relaxed">
-            O conteúdo estrutural deste cartão contém sintaxe inválida que impediu a exibição correta.
+            O conteúdo estrutural deste cartão contém sintaxe inválida que
+            impediu a exibição correta.
           </p>
           <code className="text-[10px] font-mono bg-rose-950 p-2 rounded border border-rose-900 overflow-x-auto whitespace-pre-wrap">
             {this.state.errorMessage}
@@ -51,11 +55,6 @@ class MarkdownErrorBoundary extends Component<
   }
 }
 
-interface MarkdownRendererProps {
-  content: string;
-  className?: string;
-}
-
 export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   content,
   className = "",
@@ -63,8 +62,6 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   return (
     <div
       // CRÍTICO (RESOLVIDO): O componente agora é um "Agnostic Wrapper".
-      // A responsabilidade de injetar "prose-invert text-slate-100" ou "prose-slate text-slate-700" 
-      // é delegada estritamente ao componente pai através da prop 'className'.
       className={`flex flex-col w-full overflow-x-auto prose max-w-none wrap-break-word whitespace-pre-wrap ${className}`}
     >
       <MarkdownErrorBoundary>
@@ -82,7 +79,6 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
             code({ className, children, ...props }) {
               const match = /language-(\w+)/.exec(className || "");
               const isBlock = match || String(children).includes("\n");
-
               if (isBlock) {
                 return (
                   <>

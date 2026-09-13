@@ -1,9 +1,6 @@
 import React from "react";
 import { FsrsState, isValidFsrsState } from "../domain/fsrs";
-
-interface FsrsStateBadgeProps {
-  rawState: number | null | undefined;
-}
+import type { FsrsStateBadgeProps } from "./FsrsStateBadge.types";
 
 /**
  * 1. Padrão Dictionary / Tabela de Espalhamento (Lookup Table).
@@ -12,21 +9,21 @@ interface FsrsStateBadgeProps {
  * Se `FsrsState` ganhar um novo estado no futuro, este arquivo quebrará no build.
  */
 const STATE_CONFIG: Record<FsrsState, { label: string; colorClass: string }> = {
-  [FsrsState.NEW]: { 
-    label: "Novo", 
-    colorClass: "bg-blue-950 text-blue-400 border-blue-900" 
+  [FsrsState.NEW]: {
+    label: "Novo",
+    colorClass: "bg-blue-950 text-blue-400 border-blue-900",
   },
-  [FsrsState.LEARNING]: { 
-    label: "Aprendendo", 
-    colorClass: "bg-amber-950 text-amber-400 border-amber-900" 
+  [FsrsState.LEARNING]: {
+    label: "Aprendendo",
+    colorClass: "bg-amber-950 text-amber-400 border-amber-900",
   },
-  [FsrsState.REVIEW]: { 
-    label: "Revisão", 
-    colorClass: "bg-emerald-950 text-emerald-400 border-emerald-900" 
+  [FsrsState.REVIEW]: {
+    label: "Revisão",
+    colorClass: "bg-emerald-950 text-emerald-400 border-emerald-900",
   },
-  [FsrsState.RELEARNING]: { 
-    label: "Reaprendendo", 
-    colorClass: "bg-rose-950 text-rose-400 border-rose-900" 
+  [FsrsState.RELEARNING]: {
+    label: "Reaprendendo",
+    colorClass: "bg-rose-950 text-rose-400 border-rose-900",
   },
 };
 
@@ -46,7 +43,9 @@ export const FsrsStateBadge: React.FC<FsrsStateBadgeProps> = ({ rawState }) => {
 
   // 4. Renderização 100% Flexbox
   return (
-    <div className={`flex items-center justify-center px-2 py-1 border rounded text-[10px] uppercase tracking-wider font-bold shadow-sm ${colorClass}`}>
+    <div
+      className={`flex items-center justify-center px-2 py-1 border rounded text-[10px] uppercase tracking-wider font-bold shadow-sm ${colorClass}`}
+    >
       {label}
     </div>
   );

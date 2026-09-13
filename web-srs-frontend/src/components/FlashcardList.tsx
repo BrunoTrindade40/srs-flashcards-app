@@ -1,20 +1,20 @@
 import React, { useCallback } from "react";
 import { MarkdownRenderer } from "./MarkdownRenderer";
-import type { EditingCardState } from "../hooks/useDeckDetails";
-
-interface FlashcardItemProps {
-  id: string;
-  frontContent: string;
-  backContent: string;
-  sourceContext?: string | null;
-  onEdit: (card: EditingCardState) => void;
-  onDelete: (id: string) => void;
-}
+import type {
+  FlashcardItemProps,
+  FlashcardListProps,
+} from "./FlashcardList.types";
 
 const FlashcardListItem: React.FC<FlashcardItemProps> = React.memo(
   ({ id, frontContent, backContent, sourceContext, onEdit, onDelete }) => {
     const handleEdit = useCallback(() => {
-      onEdit({ id, frontContent, backContent, sourceContext });
+      onEdit({
+        id,
+        frontContent,
+        backContent,
+        // Garantia defensiva (Fail-Safe): Coalescência interceptando qualquer sujeira residual
+        sourceContext: sourceContext ?? null,
+      });
     }, [id, frontContent, backContent, sourceContext, onEdit]);
 
     const handleDelete = useCallback(() => {
@@ -66,18 +66,6 @@ const FlashcardListItem: React.FC<FlashcardItemProps> = React.memo(
 // ==============================================================================
 // Componente Pai Orquestrador
 // ==============================================================================
-interface FlashcardListProps {
-  flashcards: Array<{
-    id: string;
-    frontContent: string;
-    backContent: string;
-    sourceContext?: string | null;
-  }>;
-  hasMore: boolean;
-  onLoadMore: () => void;
-  onEditCard: (card: EditingCardState) => void;
-  onDeleteCard: (id: string) => void;
-}
 
 export const FlashcardList: React.FC<FlashcardListProps> = ({
   flashcards,
@@ -106,6 +94,7 @@ export const FlashcardList: React.FC<FlashcardListProps> = ({
               id={card.id}
               frontContent={card.frontContent}
               backContent={card.backContent}
+              // O repasse agora é nativamente matemático e suportado pelo schema: `string | null`
               sourceContext={card.sourceContext}
               onEdit={onEditCard}
               onDelete={onDeleteCard}

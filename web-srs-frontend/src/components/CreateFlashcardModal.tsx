@@ -1,17 +1,15 @@
 import React from "react";
 import { useCreateFlashcardModal } from "../hooks/useCreateFlashcardModal";
 import { MarkdownRenderer } from "./MarkdownRenderer";
-
-interface CreateFlashcardModalProps {
-  deckId: string;
-  onClose: () => void;
-}
+// Correção: Hook de Focus Trap importado
+import { useFocusTrap } from "../hooks/useFocusTrap";
+// 🟢 CORRIGIDO: Importação tipada pura garantindo que a AST contenha apenas a UI
+import type { CreateFlashcardModalProps } from "./CreateFlashcardModal.types";
 
 export const CreateFlashcardModal: React.FC<CreateFlashcardModalProps> = ({
   deckId,
   onClose,
 }) => {
-  // 🟢 Toda a complexidade de mutação e atalhos é injetada via Hook
   const {
     front,
     setFront,
@@ -26,14 +24,22 @@ export const CreateFlashcardModal: React.FC<CreateFlashcardModalProps> = ({
     handleClose,
   } = useCreateFlashcardModal({ deckId, onClose });
 
+  // Correção CRÍTICA: Aplicação do Focus Trap atrelada ao carregamento visual
+  const modalRef = useFocusTrap(!loading, handleClose);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-fadeIn">
-      {/* 🟢 Flexbox rigoroso (sem CSS Grid) */}
-      <div className="flex flex-col w-full max-w-4xl bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden max-h-[90vh]">
+      {/* Correção de A11y: Injeção da referência do DOM e declaração ARIA */}
+      <div
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        className="flex flex-col w-full max-w-4xl bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden max-h-[90vh]"
+      >
         {/* Cabeçalho */}
         <div className="flex justify-between items-center px-6 py-4 border-b border-slate-800 bg-slate-900/50">
           <div className="flex items-center gap-3">
-            <span className="text-xl">✨</span>
+            <span className="text-xl">🗂️</span>
             <h2 className="text-lg font-bold text-slate-100">
               Criar Novo Flashcard
             </h2>
@@ -96,7 +102,6 @@ export const CreateFlashcardModal: React.FC<CreateFlashcardModalProps> = ({
                   required
                 />
               </div>
-
               <div className="flex flex-col flex-1 gap-2">
                 <label className="text-xs font-bold text-emerald-500 uppercase tracking-wider flex justify-between items-center">
                   <span>Verso (Resposta / Explicação) *</span>
@@ -128,7 +133,6 @@ export const CreateFlashcardModal: React.FC<CreateFlashcardModalProps> = ({
                   </span>
                 )}
               </div>
-
               <div className="flex flex-col flex-1 gap-2 bg-slate-950 p-5 rounded-xl border border-slate-800 min-h-48 overflow-y-auto">
                 <span className="text-xs font-bold text-emerald-500 uppercase tracking-wider border-b border-slate-800/80 pb-2 mb-1">
                   Verso (Preview AST)
