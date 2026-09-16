@@ -1,52 +1,40 @@
 ---
 # Documento: Escopo de Evolução Acadêmica e Produto (Fases 2 e 3)
 Área: Planejamento de Escala e Evolução do Produto
-Data de geração: 2026-09-13
+Data de geração: 2026-09-16
 Status: Rascunho
-Fontes utilizadas: Levantamento de Requisitos, Arquitetura do Repositório, Modelo Entidade-Relacionamento
+Fontes utilizadas: Levantamento de Requisitos, Documento 02_Especificação do MVP
 ---
 
-Este documento estabelece o escopo das Fases 2 (TCC 2) e 3 (Escala de Negócio), detalhando funcionalidades futuras e avaliando o nível de fundação técnica atual no _backend_ e _schema_ da aplicação.
+## 1. Fase 2 (TCC 2) - Telemetria, Retenção e Operação PWA
 
-## 1. Fase 2 / TCC 2: Gamificação, Retenção e Offline
+### Requisitos Funcionais e Não Funcionais
 
-A segunda fase tem foco na usabilidade avançada, retenção diária e flexibilidade de estudo do usuário.
+- **RF06 - Dashboard de Estatísticas:** Entrega de painéis gamificados atestando dias seguidos de consistência e carga futura de revisão. _(Status Fundação: Backend já projeta `currentStreak` e `longestStreak` via `submitReview` em `study.service.ts`; interface do dashboard pendente na Fase 2)._
+- **RF09 - Modo Chaos:** Botão em interface que executa as views globais agrupadas em rotinas estocásticas em massa. _(Status Fundação: Backend implementado, cálculo de `chaosTz` e `RolloverService.getStudyDayBounds` operacionais no `study.service.ts`; interface e roteamento pendentes na Fase 2)._
+- **RF11 - Suporte a Upload e Renderização Multimídia:** Associa URLs seguras providas por object storage dentro do render do flashcard, protegendo payloads e processamentos transacionais.
+- **RF12 - Importação de Dados:** Motor de importação .csv contendo bypass curatorial ou fracionamento paginado de blocos (50).
+- **RNF07 - Arquitetura PWA e Sincronização Offline:** Acionamento de Service Workers com caches via IndexedDB para permitir a fila desvinculada de banda. A sincronização opera por rota append-only idempotente: cada `ReviewLog` carrega um UUID único gerado no cliente e o backend processa o lote via `createMany` + `skipDuplicates`. O campo `version` (Int, default 1) permanece exclusivamente como controle de ordenação de eventos, sem atuar na resolução de conflitos; não há versionamento no `CardFSRSData`, reflexo derivado dos logs.
 
-- **Dashboard de Estatísticas e Streaks (RF06):**
-  - _Objetivo:_ Exibir taxa de acerto, carga de revisão futura e dias seguidos de estudo (Levantamento de Requisitos, RF06).
-  - _Nível de Fundação (Backend em uso / UI pendente):_ O _backend_ já projeta as métricas `currentStreak` e `longestStreak` no select de atualização do usuário dentro da lógica de `submitReview` no `study.service.ts`, participando do fluxo de revisão. A UI gráfica do dashboard e as _queries_ específicas de totalização precisam ser implementadas no frontend.
-- **Modo Chaos (RF09):**
-  - _Objetivo:_ Misturar baralhos atrasados em uma única sessão global, forçando a intercalação cognitiva (Interleaving) para solidificar a memória (Levantamento de Requisitos, RN05).
-  - _Nível de Fundação (Backend Implementado / Frontend Pendente):_ O _backend_ já possui a fundação funcional estabelecida: o arquivo `study.service.ts` calcula o `chaosTz` e chama `RolloverService.getStudyDayBounds(chaosTz)`. A modalidade é registrada no campo `StudySession.studyMode` (campo String estrito com valores controlados — decisão deliberada do projeto, convertido de Enum nativo do Prisma para String). A fase 2 exigirá apenas o roteamento e a construção da interface.
-- **Suporte a Upload e Multimídia (RF11):**
-  - _Objetivo:_ Anexar imagens e áudios à Frente ou Verso do _flashcard_ (Levantamento de Requisitos, RF11).
-  - _Nível de Fundação (Modelado):_ O _schema_ do Prisma e o Modelo ER comportam os atributos `imageUrl` e `audioUrl` para a entidade. Resta a integração com o Object Storage do Supabase e a validação MIME.
-- **Importação de Dados CSV (RF12):**
-  - _Objetivo:_ Geração em lote de _flashcards_ via _upload_ de arquivo externo (Levantamento de Requisitos, RF12).
-  - _Nível de Fundação (Pendente):_ Requer criação da rotina de processamento assíncrona e interface de curadoria visual no _frontend_.
-- **Arquitetura PWA e Sincronização Offline (RNF07):**
-  - _Objetivo:_ Permitir acesso à fila de revisões sem internet através de IndexedDB e _Service Workers_ (Levantamento de Requisitos, RNF07).
-  - _Nível de Fundação (Parcialmente Modelado):_ O controle de concorrência para sincronização offline é fundamentado no campo `version` (Int, default 1) da entidade `ReviewLog` (Modelo Entidade-Relacionamento). `CardFSRSData` não utiliza versionamento, pois seu estado é derivado das operações registradas no log de revisões. Isso viabilizará a futura resolução otimista de sincronismo de logs de estudo ao reconectar.
+### Regras de Negócio e Interface
 
-## 2. Fase 3 / Negócio: Ecossistema, IA e Integrações
+- **RN09 - Modulação de Cartões Novos:** Suspensão automática de novas aquisições de decks perante a deteção de um estado de fadiga e erro sistemático no período pregresso.
+- **RN10 - Dias de Consolidação:** Aferição rígida no calendário suspendendo entregas para promover saneamento de fluxos volumosos em atraso.
+- **RN11 - Multiplicador de Consistência (Streak):** Aplica gatilhos comportamentais contrários ao método de Cramming.
+- **RN12 - Ancoragem Temporal de Estudo:** Cria mapeamento temporal de acerto diário otimizando bonificações de aderência à janela comportamental ("Janela de Foco").
+- **UI06 - Microcopy Afetivo Dinâmico:** Sublinha o progresso adaptando blocos de texto a partir de percentuais base (validação positiva versus humor de limite da sobrecarga).
 
-Esta fase direciona o projeto à escala de comercialização e autonomia pedagógica via infraestrutura avançada.
+## 2. Fase 3 (Negócio) - Ecossistema, IA, Portabilidade e Portões Pagos
 
-- **Módulo de Marketplace e DRM (RF08):**
-  - _Objetivo:_ Permitir publicação, compra e transferência de licenças de Decks entre os usuários (Levantamento de Requisitos, RF08).
-  - _Nível de Fundação (Parcialmente Modelado):_ O atributo `isPublished` já está inserido no modelo do Baralho (`Deck`) conforme verificado nas migrações do banco de dados, mapeando itens públicos para a vitrine. Falta integrar pagamentos (Stripe/Pix) e a política de Direitos Digitais (DRM).
-- **Geração Automatizada de Conteúdo via IA / LLMs (RF13):**
-  - _Objetivo:_ Integração com APIs como OpenAI/Gemini para extrair conceitos-chave de arquivos `.pdf` ou texto livre (Levantamento de Requisitos, RF13).
-  - _Nível de Fundação (Parcialmente Modelado):_ O Modelo Entidade-Relacionamento mapeia rigorosamente a origem da IA via atributo `aiModelSource` na tabela `Flashcard` e exige auditoria flaggada no atributo `isEditedAfterAi`. Requer a construção da infraestrutura de _prompts_ no NestJS.
-- **Metas Dinâmicas Baseadas em Biometria IoT (RF17):**
-  - _Objetivo:_ Ajuste algorítmico da carga de _cards_ embasado na variabilidade cardíaca e horas de sono extraídas de smartwatches (Levantamento de Requisitos, RF17).
-  - _Nível de Fundação (Apenas Modelado Conceitualmente):_ Previsto estruturalmente via entidade de logs biométricos na base de dados (`BiometricLog`) para modulação futura (Modelo Entidade-Relacionamento).
-- **Integração a APIs de Mensageria (RF07):**
-  - _Objetivo:_ Disparo automatizado de "pílulas de estudo" e atalhos de retenção via WhatsApp ou Telegram (Levantamento de Requisitos, RF07).
-  - _Nível de Fundação (Planejado na Stack):_ A infraestrutura do NestJS já possui a dependência `@nestjs/schedule` provisionada no `package.json`, que será responsável por orquestrar os _Cron Jobs_ de envio assíncrono.
+### Requisitos Funcionais e Não Funcionais
 
----
+- **RF07 - Integração a APIs de Mensageria:** Envio automatizado via WhatsApp ou Telegram de hiperlinks que compõem pílulas de estudo ativas, utilizando a mesma base agendadora do `@nestjs/schedule` instaurada na Fase 1.
+- **RF08 - Módulo de Marketplace:** Criação do ecossistema para intercâmbio/compra de Decks profissionais.
+- **RF13 - Geração Automatizada de Conteúdo:** Otimização dos processos de elaboração de cartões usando LLMs em arquivos brutos injetados e transformados na lógica atômica.
+- **RF14 - Portabilidade Direcionada de Dados:** Liberação garantida em JSON/CSV de textos nativos das Frentes e Versos para todo arranjo "Autoral". Em composições sob DRM (adquiridas comercialmente no Marketplace), as métricas são exportadas unicamente sem o repasse da PI, validadas pelo tracking assinalado no campo `lastDataExportAt` mapeado na tabela de controle de usuários.
+- **RF17 - Meta Dinâmica Baseada em Biometria:** Balanceamento orgânico extraindo pesos estocásticos do IoT biométrico.
+- **RNF09 - Proteção DRM e Prevenção de Clonagem:** Defesa arquitetural do código-fonte baseada no relacionamento relacional, sem colunas redundantes de origem. A autoria é determinada por `deck.creatorId`; conteúdos autorais permitem clonagem/exportação quando `deck.creatorId === userId`, enquanto conteúdos comerciais exigem `Enrollment.status = ACTIVE` com origem em `Transaction` vinculada ao usuário. O bloqueio de duplicatas ("Duplicar Deck", "Mover Flashcards") sem licença é centralizado na guarda `checkDeckOwnershipOrLicense` do módulo `DeckService` (NestJS), alinhado ao Documento 05 e ao Levantamento de Requisitos.
 
-## PRÓXIMOS PASSOS
+### Regras de Negócio
 
-- **Pendência:** Revisão final do autor.
+- **RN13 - Rendimentos Decrescentes em Gamificação (Anti-Cramming):** Para vetar a prática nociva de estudo intenso de última hora, impõe-se a aplicação sistemática e indolor de penalização matemática sobre recompensas de gamificação atreladas a cargas que furam o dique orgânico delimitado, caindo o rateio de valoração padrão (ex: de 10 pontuações regulares para 0.1 ponto por cartão extra exaurido).

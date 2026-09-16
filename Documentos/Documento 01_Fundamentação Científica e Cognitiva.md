@@ -23,7 +23,7 @@ O agendamento do sistema adota o Free Spaced Repetition Scheduler (FSRS-6), impl
 
 Diferente de sistemas legados baseados em matrizes estáticas (como o SM-2), **o FSRS não é uma rede neural**. Trata-se de um modelo estocástico baseado no modelo de memória DSR (Difficulty, Stability, Retrievability), com parâmetros otimizados por gradiente descendente a partir dos logs de revisão do usuário (Revisor de Código Sênior, Seção 15).
 
-A parametrização do motor no módulo NestJS (especificamente no `study.service.ts`) inicializa instâncias padrão via `new FSRS({})` com os pesos originais da biblioteca para o MVP. Caso o usuário possua pesos customizados calibrados e persistidos no banco de dados, o serviço orquestra a injeção condicional via `new FSRS({ w: user.fsrsWeights })`.
+A parametrização do motor no módulo NestJS (especificamente no arquivo `study.service.ts`) inicializa instâncias padrão via `new FSRS({})` utilizando os pesos originais da biblioteca para o MVP. Caso o usuário possua pesos customizados calibrados e persistidos no banco de dados, o serviço orquestra a injeção condicional via `new FSRS({ w: user.fsrsWeights })`.
 
 O motor _ts-fsrs_ (^5.4.1) processa o agendamento através das seguintes variáveis contínuas, persistidas na tabela `CardFSRSData`:
 
@@ -65,5 +65,3 @@ As decisões técnicas e de produto abaixo foram adotadas no ciclo de desenvolvi
 ## PRÓXIMOS PASSOS
 
 - **Pendência:** Revisão final do autor.
-- **Ação (Aguardando Usuário):** Envio das bases de conhecimento (instruções dos Gems, prompts salvos e tom de resposta) para a elaboração do **Documento 6: Gems, Prompts e Material de Referência**.
-- **Ação (Aguardando Usuário):** Orientações para iniciar a geração do **Documento 4: Arquitetura de Software e Estrutura de Repositório** e **Documento 5: Modelagem de Dados e Integrações (Prisma & PostgreSQL)**.

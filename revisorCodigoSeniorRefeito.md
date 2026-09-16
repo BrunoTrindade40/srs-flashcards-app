@@ -1,5 +1,10 @@
 # Base de Conhecimento Técnico: Revisão de Código Sênior
 
+> **STATUS: VERSÃO CANÔNICA**
+> Este arquivo é a única fonte ativa da base de conhecimento do Revisor de Código Sênior.
+> O arquivo `revisorCodigoSenior.legado.md` (antigo `revisorCodigoSenior.md`) está **SUPERSEDED** e não deve ser citado, editado ou usado como fonte independente em qualquer documento do projeto.
+> Referências documentais apontam exclusivamente para esta versão.
+
 ## 1. Escopo e Arquitetura Global (MVP - Fase 1) 🏗️
 
 - **Stack Tecnológica e Foco no MVP (YAGNI):**
@@ -139,7 +144,7 @@
 
 - **Prevenção de Envenenamento de Dataset (Regra RN02):**
   - 🔴 **PROIBIDO:** Ao editar a "Frente" ou "Verso" de um flashcard, sobrescrever o conteúdo silenciosamente no banco de dados, misturando a estatística antiga à nova semântica da pergunta.
-  - 🟢 **OBRIGATÓRIO:** A UI de edição exige um _Prompt/Modal_ de confirmação se o card já possuir logs. A interface deve enviar um booleano ao backend (`resetProgress`). Se confirmado (mudança de semântica), o backend deve forçar o recálculo e zerar as variáveis estocásticas (`Stability / Difficulty`) para não corromper a rede neural de estudos.
+  - 🟢 **OBRIGATÓRIO:** A UI de edição exige um _Prompt/Modal_ de confirmação se o card já possuir logs. A interface deve enviar um booleano ao backend (`resetProgress`). Se confirmado (mudança de semântica), o backend deve forçar o recálculo e zerar as variáveis estocásticas (`Stability / Difficulty`) para não corromper a **otimização por gradiente descendente do modelo estocástico FSRS** — o FSRS-6 não é uma rede neural, e a terminologia "rede neural" não deve ser adotada em nenhum material do projeto.
 - **Operação Zero-Latency e UX Baseada em Teclado (UI04):**
   - 🔴 **PROIBIDO:** Telas de repetição de alto volume com bloqueios via mouse, _loaders_ no clique de resposta ou transições impeditivas de latência artificial.
   - 🟢 **OBRIGATÓRIO:** Navegação fluida garantida via teclado (_Shortcuts_: Espaço/Enter = Flip; Numéricos 1 a 4 = Ratings). A telemetria temporal (milissegundos avaliados) deve ser rastreada de forma furtiva pelo `useRef` e enviada à API GraphQL silenciosamente sem penalizar a exibição do próximo cartão.
@@ -177,11 +182,14 @@
   - 🔴 **PROIBIDO:** Modais abertos que permitam ao cursor (tecla `Tab`) circular pelos elementos de trás (`body`), gerando submissão acidental de conteúdo invisível.
   - 🟢 **OBRIGATÓRIO:** Prender a navegação circular isolada ao DOM do modal e, ao fechar a janela, restaurar programaticamente o estado nativo devolvendo o foco para o elemento original invocado (`document.activeElement`).
 
-## 19. Otimização de Contextos React (Evitando Re-renders em Cascata) 🏎️
+## 19. Otimização de Contextos React e Provedores Globais (Evitando Re-renders em Cascata) 🏎️
 
 - **Memoização do Value em Providers:**
-  - 🔴 **PROIBIDO:** Declarar objetos literais efêmeros como a propriedade injetada num container mestre (`<AuthContext.Provider value={{ user, session }}>`). Isso emula uma destruição de escopo e regera renderizações destrutivas em massa na árvore de componentes descendente.
+  - 🔴 **PROIBIDO:** Declarar objetos literais efêmeros como a propriedade injetada num container mestre (`<AuthContext.Provider value={{ user, session }}>`). Isso emula uma destruição de escopo e regenera renderizações destrutivas em massa na árvore de componentes descendente.
   - 🟢 **OBRIGATÓRIO:** A propriedade visual enviada para os provedores (`value`) tem que ser estabilizada fisicamente como variável via hook `useMemo`, blindando contra _Cascading Renders_.
+- **Estabilização de Instâncias Sistêmicas (Provedores de Alta Hierarquia):**
+  - 🔴 **PROIBIDO:** Transportar primitivos instáveis (objetos e funções anônimas literais) de forma exposta na propriedade `value` de Provedores de Alta Hierarquia (ex: `AuthProvider`, `ToastProvider`).
+  - 🟢 **OBRIGATÓRIO:** Em orquestradores raízes do React 19, a alocação de propriedades visuais e funções vitais transmitidas aos Provedores tem que ser estabilizada incondicionalmente através de hooks de memória de longo prazo (`useMemo` e `useCallback`), sufocando pela raiz renderizações massivas em cascata (_Thrashing_).
 
 ## 20. Padrões de Módulo e Compatibilidade de HMR 📦
 
@@ -339,13 +347,7 @@
   - 🔴 **PROIBIDO:** Implementar o padrão obsoleto de _Soft Delete_ tradicional baseado na inversão de _flags_ booleanas (ex: `isDeleted = true`) que retém artefatos, log ou metadados sigilosos de forma legível após a submissão de encerramento do vínculo pelo usuário.
   - 🟢 **OBRIGATÓRIO:** O fluxo de desligamento ou exclusão sensível exige a **Anonimização Irreversível**. Quando restrições de chaves estrangeiras impossibilitarem um _HARD DELETE_ imediato, os registros vitais da base devem ser sobrescritos no momento da ação por criptografia irreversível (_Hashes_ nulos) ou mascarados programaticamente na camada Prisma.
 
-## 42. Isolamento de Renderização em Provedores Globais (Providers) 🏎️
-
-- **Memoização Obrigatória de Instâncias Sistêmicas:**
-  - 🔴 **PROIBIDO:** Transportar primitivos instáveis (objetos e funções anônimas literais) de forma exposta na propriedade `value` de Provedores de Alta Hierarquia (ex: `AuthProvider`, `ToastProvider`).
-  - 🟢 **OBRIGATÓRIO:** Em orquestradores raízes do React 19, a alocação de propriedades visuais e funções vitais transmitidas aos Provedores tem que ser estabilizada incondicionalmente através de hooks de memória de longo prazo (`useMemo` e `useCallback`), sufocando pela raiz renderizações massivas em cascata (_Thrashing_).
-
-## 43. Operações Otimistas e Assinaturas de Tipagem (Strict UI Contracts) ⚡
+## 42. Operações Otimistas e Assinaturas de Tipagem (Strict UI Contracts) ⚡
 
 - **Abolição de Promises em Optimistic UI:**
   - 🔴 **PROIBIDO:** Tipar callbacks de salvamento/deleção em componentes visuais como `Promise<boolean>` ou possuir estados locais de `loading` quando a mutação parente utiliza `optimisticResponse` no Apollo Client.
@@ -355,37 +357,37 @@
   - 🔴 **PROIBIDO:** Usar o operador de parâmetro opcional do TypeScript (`sourceContext?: string | null`) na passagem de dados de domínio entre Formulários e Hooks. Isso injeta implicitamente `undefined`, que não mapeia corretamente para mutações GraphQL controladas.
   - 🟢 **OBRIGATÓRIO:** Exija a presença física do argumento tipando estritamente como `sourceContext: string | null`. O componente consumidor deve ser forçado a declarar `null` caso a informação não exista.
 
-## 44. Orquestração de Efeitos Colaterais e Separação de Preocupações (Side-Effects Orchestration) 🛠️
+## 43. Orquestração de Efeitos Colaterais e Separação de Preocupações (Side-Effects Orchestration) 🛠️
 
 - **Delegação de Destruição Sistêmica (Dumb Visual Components):**
   - 🔴 **PROIBIDO:** Componentes de interface (como `Header`, `Layout` ou botões de navegação) importarem instâncias de banco de dados ou orquestradores de cache (ex: `useApolloClient().clearStore()`) para limpar dados durante fluxos como Logout ou Deleção de Conta.
   - 🟢 **OBRIGATÓRIO:** O componente visual é um mensageiro. Ele deve apenas emitir a Intenção (ex: invocar `await logout()`). A responsabilidade física de purgar o _Tenant_ (destruir tokens e limpar a RAM) pertence exclusivamente à camada abstrata de Contexto/Provedores de Domínio (ex: `AuthProvider`).
 
-## 45. Proteção de Componentes Virtuais (Zero-Latency Tear-down) 🧹
+## 44. Proteção de Componentes Virtuais (Zero-Latency Tear-down) 🧹
 
 - **Desmontagem Síncrona vs Assíncrona:**
   - 🔴 **PROIBIDO:** Manter o _state_ de renderização de um modal ativado enquanto se aguarda um `await` que fechará a tela posteriormente.
   - 🟢 **OBRIGATÓRIO:** Em operações não-destrutivas munidas de _Optimistic UI_, o _Tear-down_ (fechamento do Modal via `setState(null)`) deve ser síncrono e instantâneo na view orquestradora. O fluxo não deve aguardar a rede para liberar a interação do usuário.
 
-## 46. Acessibilidade Dinâmica e Leitores de Tela (A11y) 📢
+## 45. Acessibilidade Dinâmica e Leitores de Tela (A11y) 📢
 
 - **Visibilidade de Componentes Flutuantes:**
   - 🔴 **PROIBIDO:** Renderizar componentes de feedback de interface (como _Toasts_, _Snackbars_ ou _Alerts_ dinâmicos) sem sinalização para tecnologias assistivas, "cegando" os usuários que dependem de leitores de tela (Screen Readers).
   - 🟢 **OBRIGATÓRIO:** Injetar o atributo `aria-live="polite"` (ou `assertive` em erros críticos) no contêiner mestre dessas notificações. Isso garante que a Web API do navegador narre o feedback assíncrono (ex: "Flashcard criado!") sem roubar o foco ou abortar a interação vigente do estudante, alinhando-se às diretrizes de UX inclusiva do projeto.
 
-## 47. Sintaxe Enxuta de Contextos (Padrões React 19) ⚛️
+## 46. Sintaxe Enxuta de Contextos (Padrões React 19) ⚛️
 
 - **Omissão do Sufixo Provider (AST Optimization):**
   - 🔴 **PROIBIDO:** Utilizar a sintaxe legada e verbosa `<Context.Provider value={...}>` na montagem de provedores de estado global em projetos que operam na versão 19+ do React.
   - 🟢 **OBRIGATÓRIO:** Omitir o `.Provider` e utilizar diretamente o objeto do contexto como empacotador (ex: `<AuthContext value={contextValue}>`). Essa prática reduz o encapsulamento obsoleto e resulta em uma _Abstract Syntax Tree (AST)_ mais limpa e rápida na camada de reconciliação (Fiber Tree).
 
-## 48. Segurança Atômica em Desmontagem de Efeitos (Fail-Safe Cleanups) 🧹
+## 47. Segurança Atômica em Desmontagem de Efeitos (Fail-Safe Cleanups) 🧹
 
 - **Prevenção de NullReferenceException no Unmount:**
   - 🔴 **PROIBIDO:** Invocar métodos diretos do Web API em referências capturadas via `useRef` dentro de funções de _cleanup_ do `useEffect` (ex: `previousFocusRef.current.focus()`) contando apenas com a intuição ou checagens simples de sintaxe (`if (ref.current)`).
   - 🟢 **OBRIGATÓRIO:** Aplicar invariavelmente o Operador de Encadeamento Opcional Absoluto (`?.`) na restauração de estados do DOM (ex: `previousFocusRef.current?.focus()`). Como a referência pode ser perdida ou nunca engatilhada (dependendo de quem originou o evento), o operador silencia a rota e impede um _Full Crash_ no DOM virtual caso o ponteiro retorne nulo.
 
-## 49. Proteção Estrita em Nós do DOM (Type Guards vs Coerção) 🛡️
+## 48. Proteção Estrita em Nós do DOM (Type Guards vs Coerção) 🛡️
 
 - **Validação Matemática de Elementos HTML:**
   - 🔴 **PROIBIDO:** Forçar a tipagem de ponteiros nativos do DOM utilizando _Type Assertions_ (ex: `document.activeElement as HTMLElement` ou `Array.from(nodeList) as HTMLElement[]`). Isso "mente" para o compilador e mascara retornos incompatíveis, como elementos `<svg>` isolados ou `null`, que quebrarão a aplicação em _runtime_.

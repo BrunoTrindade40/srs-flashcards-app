@@ -1,50 +1,48 @@
 ---
 # Documento: Arquitetura de Software e Estrutura de Repositório
 Área: Engenharia de Software e Padrões de Código
-Data de geração: 2026-09-12
+Data de geração: 2026-09-16
 Status: Rascunho
-Fontes utilizadas: Revisor de Código Sênior, package.json, Modelo Entidade-Relacionamento
+Fontes utilizadas: package.json, Registros de Commit, Revisor de Código Sênior
 ---
-
-Este documento delineia a infraestrutura tecnológica do projeto, mapeando o _stack_ operacional, a topologia de diretórios e as diretrizes arquiteturais que governam a aplicação.
 
 ## 1. Stack Tecnológica e Ferramental
 
-A plataforma adota um ecossistema estritamente tipado, garantindo alta performance e separação de responsabilidades (Terminal Burro vs. Servidor Fonte da Verdade):
+- **Backend:** TypeScript estrito alocado sobre a plataforma Node.js implementado arquiteturalmente pelo framework NestJS. O uso do Prisma como ORM atua restritamente em Postgres configurando banco transacional não exposto, vetadas configurações management obsoletas.
+- **Frontend:** Estilização de apresentação com flexibilização de layout estruturado no padrão Flexbox, declarando interdição total ao modelo CSS Grid. Bibliotecas UI integradas sobre a raiz React/Vite.
+- **BaaS Auxiliar:** Supabase garantindo segurança escalável de acessos unicamente via Auth Server e gestão BLOB via Storage.
 
-- **Backend (A Única Fonte da Verdade):**
-  - **Framework:** NestJS 11.
-  - **Persistência de Dados:** Prisma ORM 7 operando sobre PostgreSQL.
-  - **API e Comunicação:** GraphQL com Apollo Server.
-  - **Autenticação:** Supabase Auth (Segurança delegada).
-- **Frontend (Orquestrador Visual e Reativo):**
-  - **Biblioteca Core:** React 19 empacotado e otimizado pelo Vite.
-  - **Gerenciamento de Estado/Rede:** Apollo Client v4.2.7.
-  - **Estilização:** TailwindCSS v4 (implementação via variáveis CSS nativas, sem a diretriz legada `@apply`).
-  - **Tipagem Dinâmica:** GraphQL Codegen executando com vigilância contínua na AST.
+## 2. Estrutura de Diretórios e Domínios
 
-## 2. Divisão de Pastas e Topologia (`api-srs-backend/src/`)
+Isolamento absoluto delimitando domínios limpos em frontend e backend.
 
-A arquitetura do _backend_ reflete o Princípio de Responsabilidade Única (SRP), isolando domínios de negócio:
+### Topologia Frontend (`web-srs-frontend/src/`)
 
-- `auth/`: Contém os _Guards_ de interceptação do GraphQL e os extratores de contexto (ex: _decorator_ que valida o JWT do Supabase).
-- `common/`: Módulos e serviços utilitários transversais. Destaca-se o `RolloverService`, responsável por encapsular as regras matemáticas de deslocamento temporal (Offset de 4h para virada do ciclo de estudos).
-- `deck/`, `flashcard/`, `study/`, `user/`: Diretórios base do domínio. Cada um abriga a tríade modular do NestJS: Módulo, Serviço (Regras de Negócio) e _Resolver_ (Controlador GraphQL), além dos modelos do banco e DTOs de transporte.
+Estrutura fragmentada para desacoplamento cognitivo, baseada no repositório padrão:
 
-## 3. Decisões Arquiteturais e Padrões de Código
+- `pages/`: Arquitetura superior de visões de negócio agregadas na malha roteada principal.
+- `components/`: Bibliotecas de reuso UI restritas, atômicas e isoladas funcionalmente.
+- `hooks/`: Contratos customizados portando as abstrações do React.
+- `context/`: Fornecedores globais para transações essenciais assíncronas em níveis não propáveis (ex: Toast, Auth).
+- `domain/`: Estruturas analíticas limpas (Lógicas puras blindadas do React).
+- `lib/`: Envolvimentos utilitários e clientes pré-configurados de instâncias third-party.
+- `gql/`: Espelhamento auto-transpilado de conexões de contrato com GraphQL local.
+- `routes/`: Disposição paramétrica das rotinas do React Router.
 
-As engrenagens de comunicação entre cliente e servidor foram construídas sobre princípios defensivos estabelecidos na revisão de código do projeto:
+### Topologia Backend (`api-srs-backend/src/`)
 
-- **Zero-Overfetching (TypePolicy):** O _frontend_ é proibido de buscar grandes coleções de dados apenas para contagem. Agregações estáticas são interceptadas pelo cache do Apollo Client, que deriva o valor instantaneamente do tamanho da matriz em memória RAM, prevenindo a dessincronia visual (_Stale Cache_).
-- **Defesa na Fronteira (Guards e ValidationPipe):** O _backend_ rejeita tentativas de _Mass Assignment_. Todo DTO que adentra o GraphQL passa pelo `ValidationPipe` do NestJS (com `whitelist` e `forbidNonWhitelisted` ativos). Erros crus do banco são mascarados via _Exception Filters_ globais para evitar o vazamento da topologia do PostgreSQL.
-- **Supabase Auth Delegado:** A plataforma desvia o esforço de criptografia de senhas para o Supabase. O _backend_ atua apenas lendo e autorizando as sessões criptografadas nas rotas privadas.
-- **Transição de Estado Síncrona:** Operações de resposta (_ratings_) e edição aplicam Mutações Otimistas (_Optimistic UI_). O cache local é modificado e a interface avança instantaneamente, eliminando telas de carregamento intermediárias (Latência Zero) e mantendo a fluidez cognitiva do usuário.
-- **Gamificação Silenciosa:** O serviço de estudos (`study.service.ts`) não se limita ao agendamento FSRS. Ele aplica ativamente a mecânica de engajamento injetando pontos de experiência durante o método `submitReview`, mapeado sob o critério: `RATING_XP_MAP = { 1: 3, 2: 5, 3: 10, 4: 15 }`.
+Implementa o paradigma encapsulador do NestJS fragmentado em subdomínios (tríade Module/Service/Resolver):
 
-## 4. Destinação de Dependências (`package.json`)
+- `auth/`: Configura as chancelas inter-rotas de Guards JWT para interceptar metadados sem acionar lógicas impuras.
+- `common/`: Estruturas de manipulações agnósticas (Filtros globais, Constantes, DTOs compartilhados).
+- `deck/`: Tratamento semântico voltado à organização macro e dependências de entidades-filhas.
+- `flashcard/`: Gestão conteudista crua da aplicação atômica de frente-verso.
+- `study/`: Bloco central das rotinas de repetição (ex: Leech Protection imposto sobre instâncias fixadas em `SUSPENDED_STATE = 4`).
+- `user/`: Limitações sistêmicas do proprietário atuando massivamente como gerenciador base perante manipulações regidas pela LGPD.
 
-O uso dos pacotes é estritamente controlado para evitar código morto e inchaço no _bundle_:
+## 3. Diretrizes de Codificação e Isolamento Arquitetural
 
-- **Motor Visual e Parsing:** Bibliotecas como `react-markdown`, `remark-math` e `rehype-katex` estão fisicamente contidas em _Error Boundaries_ isolados (componente `MarkdownRenderer`). Uma falha na formatação de uma fórmula matemática não colapsa a árvore principal do React.
-- **Ferramental Contínuo (Continuous DX):** Pacotes de codegen (`@graphql-codegen/cli` e `client-preset`) alimentam o script de desenvolvimento `generate:watch`, recriando a tipagem a cada mudança no _backend_.
-- **Dependências de Escala (Fase 3):** O pacote `@nestjs/schedule` consta na arquitetura estrutural do servidor, porém está associado exclusivamente ao planejamento da Fase 3. Ele atuará na orquestração dos _Cron Jobs_ exigidos para as pílulas de estudo via mensageria (WhatsApp/Telegram).
+- **Segregação de Tipagem Restrita (.types.ts / .tsx):** É estabelecida no repositório a padronização estrita de separação modular dos dados. Definições estruturais puras não poderão acoplar-se nos módulos JSX. Tipagens atômicas residirão enclausuradas em extensões `.types.ts`. Extensões descritas em `.tsx` atuam imutavelmente restritas em componentes focais, preservando sem degradações a infraestrutura otimizada do módulo de Fast Refresh provida pelo framework Vite.
+- **Acessibilidade Universal (a11y):** Imposta a configuração assistiva sistêmica utilizando `aria-live="polite"` orquestrada unicamente na instância controladora do `ToastProvider` lidando com o fluxo reativo sem perturbar Leitores de Tela. O bloqueio em fluxo estrito é imposto aos overlays (Focus Trap) limitando e vedando acessos falsos às interações sobrepostas por Modais.
+- **Serialização Estocástica e Performance Transacional:** Para contornar a imprevisibilidade de atualizações no modelo estocástico FSRS (otimização por gradiente descendente), os metadados contendo os pesos vetoriais (`fsrsWeights`) operam gravados em instâncias estáticas formato JSONB direto no PostgreSQL.
+- **Coordenação Lógica Integrada (@nestjs/schedule):** O pacote utilitário de rotinas programadas integra vitalmente a fundação do Produto Fase 1 para sustentar varreduras (RN04) visando identificar falhas temporais orgânicas do estudante (Base de Fogg) reaproveitando sua estrutura em escopo horizontal na comercialização de envios comunicativos Phase 3 (RF07).

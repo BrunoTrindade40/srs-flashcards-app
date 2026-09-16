@@ -1,59 +1,48 @@
 ---
 # Documento: Especificação do MVP (Fase 1 / TCC 1)
 Área: Engenharia de Requisitos e Regras de Negócio
-Data de geração: 2026-09-13
+Data de geração: 2026-09-16
 Status: Rascunho
-Fontes utilizadas: Levantamento de Requisitos, SOP EdTech Guidelines, Revisor de Código Sênior
+Fontes utilizadas: Levantamento de Requisitos, SOP EdTech Guidelines
 ---
-
-Este documento detalha o Produto Mínimo Viável (MVP), correspondente à Fase 1 do Trabalho de Conclusão de Curso (TCC 1). O escopo está estritamente focado no núcleo operacional e pedagógico da plataforma de retenção cognitiva.
 
 ## 1. Requisitos Funcionais do MVP (Núcleo Operacional)
 
-Os requisitos funcionais primários garantem a viabilidade da sessão de estudos, a gestão atômica do conhecimento e a conformidade legal do sistema:
+- **Delegação de Identidade (RF01):** Supabase Auth gerencia contas, login e emissão de tokens JWT; NestJS autoriza rotas privadas.
+- **Gestão de Decks (RF02):** Criação, edição, exclusão e organização de agrupamentos temáticos de estudo (Decks).
+- **Criação de Flashcards (RF03):** Criação de cards com "Frente" e "Verso" atrelados a um Deck.
+- **Motor de Sessão de Estudo (RF04):** Apresentação dos cards agendados para o dia atual, ocultando a resposta inicial.
+- **Avaliação de Retenção e Telemetria Cognitiva (RF05):** Botões de autoavaliação qualitativa (Errei, Difícil, Bom, Fácil) e captura implícita da latência de resposta em milissegundos para armazenamento no `ReviewLog`.
+- **Renderização de Texto Enriquecido e Fórmulas (RF10):** Formatação de texto em Markdown e equações em LaTeX/KaTeX armazenados nativamente como texto leve no banco.
+- **Exclusão de Conta e Anonimização de Dados (RF15):** Provê um painel de configurações para garantir o "Direito ao Esquecimento" (Art. 18 LGPD). Acionar a deleção desencadeia um Hard Delete dos PIIs nas tabelas de Perfil e Auth. As métricas do `ReviewLog` não são deletadas, mas reatribuídas a um UUID randômico (RNF08).
+- **Gestão de Credenciais e Privacidade (RF16):** Telas dedicadas no Frontend para solicitação de redefinição de senha, atualização de e-mail e painel de privacidade contendo o botão de acionamento irreversível de exclusão de conta.
 
-- **Autenticação Delegada (RF01):** A plataforma utiliza o Supabase Auth para gerenciar o ciclo de vida de credenciais e emitir tokens JWT. O _backend_ NestJS não gerencia senhas, atuando unicamente na autorização das rotas privadas mediante validação criptográfica do token (Levantamento de Requisitos, RF01).
-- **Gestão de Decks e Flashcards Atômicos (RF02, RF03, RF10):** Estudantes podem criar e organizar _Decks_. A criação de _Flashcards_ exige a fragmentação do conhecimento em "Frente" (Estímulo) e "Verso" (Resposta), suportando nativamente texto enriquecido (Markdown) e fórmulas matemáticas (LaTeX/KaTeX) para garantir um banco de dados relacional leve (Levantamento de Requisitos, RF10).
-- **Motor de Sessão de Estudo e Telemetria (RF04, RF05):** O sistema exibe os cartões diários ocultando a resposta para forçar o _Active Recall_. Após revelar o verso, a autoavaliação (rating de 1 a 4) é registrada. O _frontend_ captura de forma invisível a latência de resposta (`reviewDurationMs`), e o _backend_ atua como fonte da verdade, limitando esta latência a um grampo matemático máximo de 60 segundos (`Math.min(ms, 60000)`) para mitigar _outliers_ de inatividade (SOP EdTech Guidelines, Seção 2; Revisor de Código Sênior, Seção 1).
-- **Conformidade LGPD via Anonimização (RF15):** A plataforma repudia a exclusão lógica primitiva (_Soft Delete_). O exercício do "Direito ao Esquecimento" dispara uma Anonimização Irreversível: identificadores (PIIs) sofrem _Hard Delete_, e o histórico estatístico de estudo é transferido para um UUID randômico sem chaves estrangeiras ocultas (Levantamento de Requisitos, RNF08).
+_(Nota de Arquitetura)_: A query e a validação lógica que misturam cards no "Modo Chaos" (RN05) operam desde a Fase 1. Contudo, a interface final do "Modo Chaos" (RF09) será desenvolvida na Fase 2.
 
-## 2. Requisitos Não Funcionais
+## 2. Requisitos Não Funcionais do MVP
 
-As diretrizes de arquitetura, acessibilidade e performance para o MVP estabelecem tolerância zero a desvios de design e segurança:
+- **Arquitetura de Frontend (RNF01):** Construção da interface via React e TypeScript, empacotada através do Vite.
+- **Arquitetura de Backend (RNF02):** Servidor operado em NestJS sobre Node.js garantindo modularidade e tipagem estrita via TypeScript.
+- **Persistência de Dados e Integridade (RNF03):** Uso do PostgreSQL com Prisma ORM instanciado de forma limpa, sem propriedades de gerenciamento de estado obsoletas (isento de chaves 'management' inválidas).
+- **Performance de Consulta (RNF04):** Aplicação de índices compostos (ex: `@@index([userId, due])` em `CardFSRSData` e `@@index([userId, createdAt])` em `ReviewLog`) no banco de dados e implementação obrigatória de paginação (_lazy loading_).
+- **Proteção de Rotas via Guards (RNF05):** AuthGuards globais no NestJS (Passport-JWT) para intercepção e validação criptográfica do Supabase.
+- **Storage de Arquivos (RNF06):** Armazenamento de mídia física delegado diretamente aos Buckets do Supabase Storage.
+- **Integridade Arquitetural na Anonimização (RNF08):** A exclusão física (Hard Delete) de PIIs e atribuição estatística para UUID randômico é obrigatória. O uso do padrão "Soft Delete" é terminantemente proibido.
 
-- **Interface Estritamente Flexbox (UI01):** Toda a estruturação visual e alinhamentos da aplicação utilizam nativamente o _Flexbox_. O uso de CSS Grid é terminantemente proibido para assegurar a previsibilidade da renderização em diferentes dispositivos (Levantamento de Requisitos, UI01).
-- **Acessibilidade e Navegação por Teclado (UI04):** Telas de alto volume cognitivo exigem suporte a atalhos de _hardware_. Teclas como `Espaço`/`Enter` revelam a resposta, e numéricos de `1` a `4` enviam o _rating_. O sistema intercepta o comportamento nativo do navegador (`e.preventDefault()`) para impedir o salto de rolagem (_Scroll Jump_) (Levantamento de Requisitos, UI04; Revisor de Código Sênior, Seção 18).
-- **Performance e Segurança:** O NestJS opera com o Prisma ORM e GraphQL protegidos por _Guards_ e `ValidationPipe`. Consultas pesadas adotam o padrão _Zero-Overfetching_, e a memória RAM do _frontend_ é ativamente expurgada (`client.clearStore()`) nos fluxos de _Logout_ (Revisor de Código Sênior, Seção 4 e 17).
+## 3. Regras de Negócio do MVP
 
-## 3. Regras de Negócio do MVP (Implementação Ativa)
+- **Limites Diários e Priorização de Fila (RN01):** Ordenação estrita da fila de agendamento (1º Atrasados, 2º Hoje, 3º Novos) limitando cargas diárias extremas quantitativamente.
+- **Prevenção de Envenenamento de Dados (RN02):** Modal obrigatório "Resetar Progresso de Estudo" perante a alteração de conteúdos que possuem histórico. O reset retorna o cartão para o estado 'New', anulando as métricas de Stability, Difficulty e Retrievability.
+- **Isolamento Atômico do Conhecimento (RN03):** Flashcards devem imperativamente transitar pela "Fase de Aprendizado" inicial antes da gradação para intervalos longos.
+- **Envio de Notificações (RN04):** O sistema aciona rotinas de agendador (cron jobs) para disparar notificações baseadas na modelagem comportamental de Fogg a usuários com pendências.
+- **Sincronização Temporal e Rollover de Sessão (RN06):** Novo dia de estudo é calculado localmente baseado no fuso do cliente, contendo um Offset estabelecido fixamente às 04:00 AM para consolidação natural pelo sono.
+- **Leech Protection e Suspensão de Cartões (RN07):** Cartões detentores de falhas consecutivas além do limite (ex: 8) sofrem suspensão automatizada (Hardcoded via `SUSPENDED_STATE = 4` e due date `2099-12-31`).
+- **Flag de Fadiga Cognitiva (RN08):** O sistema assinala metadados estocásticos em logs contendo a flag `isFatiguedReview = true` nos eventos que extrapolem 100% da carga orgânica recomendada diária, ignorando estas execuções na otimização por gradiente descendente do modelo estocástico FSRS.
 
-As regras matemáticas que governam o motor do FSRS na Fase 1 e sua representação real no _schema_ do Prisma:
+## 4. Requisitos de Interface e Experiência (UX/UI)
 
-- **RN01 - Limites Diários e Priorização de Fila:** O _backend_ constrói a fila de estudos limitando a sobrecarga. A priorização técnica imposta nas _queries_ SQL obedece estritamente à ordem: 1º Atrasados (_Overdue_), 2º Revisão do dia (_Review_), 3º Novos (_New_). Os cartões novos são limitados por um teto diário parametrizável (Levantamento de Requisitos, RN01).
-- **RN03 - Isolamento Atômico do Conhecimento:** Um cartão recém-criado ingressa obrigatoriamente na "Fase de Aprendizado". No _schema_, isto é mapeado diretamente no campo `CardFSRSData.state`, garantindo que o algoritmo diferencie o cálculo de intervalos curtos da estabilização de longo prazo (Levantamento de Requisitos, RN03).
-- **RN06 - Sincronização Temporal (Rollover):** O algoritmo anula o fuso horário passivo UTC do banco. O _backend_ processa o fechamento diário considerando a consolidação da memória no sono, aplicando um _offset_ de 4 horas, em que o "novo dia" só se inicia às 04:00 AM do fuso local do usuário (Levantamento de Requisitos, RN06).
-- **RN08 - Flag de Fadiga Cognitiva:** Se o estudante ultrapassar 100% da carga diária estipulada, o log salva a interação com o campo `ReviewLog.isFatiguedReview = true`. Esta _flag_ atua como um escudo, ordenando ao motor que isole essas falhas e não envenene o gradiente de otimização do algoritmo (Levantamento de Requisitos, RN08).
-
-## 4. Fluxos de Interface do Núcleo
-
-O mapeamento das rotas operacionais garantidas no MVP, encapsuladas em _Dumb Components_ isolados:
-
-1. **Login:** Formulário não-controlado integrado ao `Supabase Auth`, implementando _Rate Limiting_ no backend e operando com purga de sessões antigas na RAM.
-2. **Criação de Deck:** Modal focado no "Padrão Bouncer" com validação _Code-First_. Rejeita criações vazias localmente e atualiza a UI otimisticamente (`Optimistic UI`) em custo O(1) através do `cache.modify`.
-3. **Criação de Flashcard:** Suporta curadoria visual em tempo real (Preview do _Abstract Syntax Tree_ do Markdown) sem bloquear a _thread_ principal.
-4. **Sessão de Estudo & Avaliação:** O orquestrador central. Apresenta o cartão, monitora a latência em modo furtivo (`useRef`) e envia os _ratings_ (1 a 4). Resoluções executam transição de estado síncrona entre cartões, sem telas de carregamento intermediárias.
-
-## 5. Fora do Escopo (Fases 2 e 3)
-
-Embora a fundação arquitetural e o _schema_ do banco de dados (Prisma) já estejam estruturados para comportar o escalonamento do produto, os seguintes recursos estão **categoricamente excluídos** do esforço de desenvolvimento e estabilização do MVP (Fase 1). Estes itens serão tratados e desenvolvidos nas Fases 2 e 3:
-
-- **RN05 (Modo Chaos - Interleaving Global):** A modalidade é registrada sob o campo `StudySession.studyMode` (campo String estrito com valores controlados — decisão deliberada do projeto, convertido de Enum nativo do Prisma para String). O _backend_ já possui fundação de Modo Chaos implementada (incluindo o cálculo de `chaosTz` e a invocação de `RolloverService.getStudyDayBounds(chaosTz)` no `study.service.ts`). A exclusão do MVP refere-se estritamente à construção da interface visual e ao roteamento no frontend (Levantamento de Requisitos, RF09).
-- **RN09 (Modulação de Cartões Novos / Prevenção de Sobrecarga):** A suspensão sistêmica do deck diário baseada em índices de exaustão do dia anterior será automatizada apenas na Fase 2 (Levantamento de Requisitos, RN09).
-- **RN13 (Anti-Cramming / Rendimentos Decrescentes):** A penalidade gamificada em pontos para o estudo excessivo de véspera é uma regra de escala comercial mapeada para a Fase 3 (Levantamento de Requisitos, RN13).
-- **Módulos Visuais e Estruturais Futuros:** _Dashboard_ de Estatísticas e _Streaks_ (RF06), Empacotamento _Progressive Web App_ para funcionamento _Offline_ via IndexedDB (RNF07), Upload de Mídias/Imagens via Object Storage (RF11), Integrações IoT para carga guiada por biometria (RF17), Geração de conteúdo por IAs/LLMs (RF13) e Módulo de Pagamentos/Marketplace (RF08).
-
----
-
-## PRÓXIMOS PASSOS
-
-- **Pendência:** Revisão final do autor.
+- **Estruturação de Layout Flexível e Previsibilidade (UI01):** Posicionamentos definidos arquiteturalmente via Flexbox. A adoção das lógicas em CSS Grid é expressamente proibida no projeto.
+- **Componentes de Ancoragem Estática (UI02):** Configuração em modo invariável para cor e estilo de Header e Footer evitando inversões temáticas em temas dark/light.
+- **Fluxo de Orientação Mínima (UI03):** Interface de tela cheia sem fragmentações desnecessárias durante a revisão.
+- **Navegação Integrada por Teclado (UI04):** Redução da necessidade de interações via mouse mapeando atalhos nativos (Espaço para abrir e 1, 2, 3, 4 para avaliação qualificada).
+- **Tela de Curadoria Visual (UI05):** Renderização de bloco de visualização (preview responsivo) antes de inclusões definitivas.
