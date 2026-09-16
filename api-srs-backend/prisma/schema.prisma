@@ -26,7 +26,7 @@ model User {
 
   // Gamificação e Configurações (DRY: Agora existem apenas aqui)
   totalXp           Int   @default(0)
-  fsrsWeights       Json? // Pesos otimizados do ML para este usuário
+  fsrsWeights       Json? // Pesos otimizados do modelo estocástico FSRS (otimização por gradiente descendente) para este usuário
   dailyNewCardLimit Int   @default(20)
   maxDailyReviews   Int   @default(100)
   currentStreak     Int   @default(0)
@@ -166,6 +166,10 @@ model CardFSRSData {
   lapses        Int   @default(0)
 
   state      Int       @default(0) // State: 0: NEW, 1: LEARNING, 2: REVIEW, 3: RELEARNING (FSRS Default)
+                                 // A faixa 0–3 é a única reconhecida pelo ts-fsrs (FSRS-6).
+                                 // SUSPENDED_STATE = 4 está FORA desta faixa: é aplicado por código
+                                 // no study.service.ts (Leech Protection, com due = 2099-12-31)
+                                 // e jamais entra no pipeline do algoritmo.
   lastReview DateTime?
 
   //B-Tree Indexed para O(log n)
