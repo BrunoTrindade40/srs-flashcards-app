@@ -216,7 +216,8 @@ model ReviewLog {
   due           DateTime
   createdAt     DateTime @default(now())
 
-  version   Int    @default(1) // 🟢 Concorrência PWA Offline (UC13)
+  version   Int    @default(1) // 🟢 Concorrência PWA Offline (RNF07) — ordenação de eventos; idempotência via UUID no cliente
+
   // 🔴 CORREÇÃO CRÍTICA: Convertido de Enum nativo para String estrita
   studyMode String @default("STANDARD") // STANDARD, CHAOS // 🟢 STANDARD, CHAOS (UC10)
 
