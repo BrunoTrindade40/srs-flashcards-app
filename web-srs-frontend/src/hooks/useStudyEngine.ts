@@ -1,10 +1,49 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useSuspenseQuery } from "@apollo/client/react";
 import { useNavigate } from "react-router-dom";
-import type { Reference } from "@apollo/client/core";
+import type { ApolloCache, Reference } from "@apollo/client";
 
 import { GET_DUE_FLASHCARDS, SUBMIT_REVIEW } from "../lib/graphql/study";
+import { type CardState } from "../gql/graphql"; // enum gerado pelo codegen
 import { useToast } from "./useToast";
+
+// Constante de segurança contra sessão infinita (aplica-se às duas regras)
+const MAX_REENQUEUES_PER_CARD = 3;
+
+// Condição única: card ainda em learning steps.
+// rating === 1 é subconjunto disso (Again nunca gradua); state 4 (leech) fica excluído.
+// Aceita null: no passe otimista do update o data ainda não chegou.
+// DEPOIS (PascalCase — nomes gerados pelo codegen)
+const isStillLearning = (state: CardState | null): boolean =>
+  state === "LEARNING" || state === "RELEARNING";
+
+// Helper compartilhado de atualização da fila (dueFlashcards e, futuramente, getChaosStudyQueue).
+// Apollo Client 4.x: readField vem das options do field modifier; ApolloCache não é genérico.
+const updateSessionQueue = (
+  cache: ApolloCache,
+  queueField: "dueFlashcards" | "getChaosStudyQueue",
+  reviewedId: string,
+  shouldReenqueue: boolean,
+  reenqueueCounts: Map<string, number>,
+): void => {
+  cache.modify({
+    fields: {
+      [queueField](existingRefs: readonly Reference[] = [], { readField }) {
+        const reviewedRef = existingRefs.find(
+          (ref) => readField("id", ref) === reviewedId,
+        );
+        const withoutReviewed = existingRefs.filter(
+          (ref) => readField("id", ref) !== reviewedId,
+        );
+        if (!shouldReenqueue || !reviewedRef) return withoutReviewed;
+        const count = reenqueueCounts.get(reviewedId) ?? 0;
+        if (count >= MAX_REENQUEUES_PER_CARD) return withoutReviewed;
+        reenqueueCounts.set(reviewedId, count + 1);
+        return [...withoutReviewed, reviewedRef]; // volta ao FINAL da fila
+      },
+    },
+  });
+};
 
 export const useStudyEngine = (deckId: string | null) => {
   const navigate = useNavigate();
@@ -15,11 +54,11 @@ export const useStudyEngine = (deckId: string | null) => {
     fetchPolicy: "cache-and-network",
   });
 
-  // ALERTA CORRIGIDO: Extração da referência para uma constante estabilizada,
+  // Extração da referência para uma constante estabilizada,
   // prevenindo o uso de Optional Chaining dinâmico no array de dependências.
   const rawDueFlashcards = data?.dueFlashcards ?? null;
 
-  // ALERTA CORRIGIDO: Captura do timestamp inicial com Lazy Initialization.
+  // Captura do timestamp inicial com Lazy Initialization.
   // Impede execuções impuras (Date.now()) repetitivas na fase de renderização do React.
   const [currentMs] = useState(() => Date.now());
 
@@ -39,6 +78,8 @@ export const useStudyEngine = (deckId: string | null) => {
 
   const [isFlipped, setIsFlipped] = useState<boolean>(false);
   const startTimeRef = useRef<number>(0);
+  const reenqueueCountsRef = useRef<Map<string, number>>(new Map());
+
   const [submitReviewMutation] = useMutation(SUBMIT_REVIEW);
 
   const currentCardId = currentCard?.id ?? null;
@@ -49,6 +90,11 @@ export const useStudyEngine = (deckId: string | null) => {
       startTimeRef.current = performance.now();
     }
   }, [currentCardId]);
+
+  // Reset por sessão (nova navegação / troca de deck)
+  useEffect(() => {
+    reenqueueCountsRef.current.clear();
+  }, [deckId]);
 
   const handleShowAnswer = useCallback(() => {
     if (!isFlipped && hasCurrentCard) {
@@ -78,29 +124,23 @@ export const useStudyEngine = (deckId: string | null) => {
           },
           optimisticResponse: {
             __typename: "Mutation",
-            submitReview: true,
+            submitReview: {
+              __typename: "ReviewResult",
+              state: "REVIEW",
+            }, // neutro
           },
-          update(cache) {
-            cache.modify({
-              fields: {
-                dueFlashcards(
-                  existingRefs: readonly Reference[] = [],
-                  { readField },
-                ) {
-                  const targetRef = existingRefs.find(
-                    (ref) => readField("id", ref) === currentCardId,
-                  );
-                  const filteredRefs = existingRefs.filter(
-                    (ref) => readField("id", ref) !== currentCardId,
-                  );
+          update(cache, { data }) {
+            // Normaliza undefined (passe otimista) para null — convenção do projeto
+            const resultingState = data?.submitReview?.state ?? null;
+            const shouldReenqueue = isStillLearning(resultingState);
 
-                  if (rating === 1 && targetRef) {
-                    return [...filteredRefs, targetRef];
-                  }
-                  return filteredRefs;
-                },
-              },
-            });
+            updateSessionQueue(
+              cache,
+              "dueFlashcards",
+              currentCardId,
+              shouldReenqueue,
+              reenqueueCountsRef.current,
+            );
           },
         });
       } catch (err: unknown) {

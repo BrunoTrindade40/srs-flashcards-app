@@ -13,11 +13,17 @@ export const GET_DUE_FLASHCARDS = graphql(`
 `);
 
 export const SUBMIT_REVIEW = graphql(`
-  mutation SubmitReview($flashcardId: ID!, $rating: Int!, $reviewDurationMs: Int!) {
+  mutation SubmitReview(
+    $flashcardId: ID!
+    $rating: Int!
+    $reviewDurationMs: Int!
+  ) {
     submitReview(
-      flashcardId: $flashcardId, 
-      rating: $rating, 
-      reviewDurationMs: $reviewDurationMs 
-    )
+      flashcardId: $flashcardId
+      rating: $rating
+      reviewDurationMs: $reviewDurationMs
+    ) {
+      state
+    }
   }
 `);

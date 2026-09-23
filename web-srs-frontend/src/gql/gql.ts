@@ -25,7 +25,7 @@ const documents = {
     "\n  mutation UpdateMySettings($data: UpdateUserSettingsInput!) {\n    updateMySettings(data: $data) {\n      id\n      dailyNewCardLimit\n      maxDailyReviews\n      timezone\n      dailyRolloverTime\n    }\n  }\n": types.UpdateMySettingsDocument,
     "\n  mutation AnonymizeMe {\n    anonymizeMe\n  }\n": types.AnonymizeMeDocument,
     "\n  query GetDueFlashcards($deckId: ID!) {\n    dueFlashcards(deckId: $deckId) {\n      id\n      frontContent\n      backContent\n      sourceContext\n      due\n    }\n  }\n": types.GetDueFlashcardsDocument,
-    "\n  mutation SubmitReview($flashcardId: ID!, $rating: Int!, $reviewDurationMs: Int!) {\n    submitReview(\n      flashcardId: $flashcardId, \n      rating: $rating, \n      reviewDurationMs: $reviewDurationMs \n    )\n  }\n": types.SubmitReviewDocument,
+    "\n  mutation SubmitReview(\n    $flashcardId: ID!\n    $rating: Int!\n    $reviewDurationMs: Int!\n  ) {\n    submitReview(\n      flashcardId: $flashcardId\n      rating: $rating\n      reviewDurationMs: $reviewDurationMs\n    ) {\n      state\n    }\n  }\n": types.SubmitReviewDocument,
 };
 
 /**
@@ -93,7 +93,7 @@ export function graphql(source: "\n  query GetDueFlashcards($deckId: ID!) {\n   
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function graphql(source: "\n  mutation SubmitReview($flashcardId: ID!, $rating: Int!, $reviewDurationMs: Int!) {\n    submitReview(\n      flashcardId: $flashcardId, \n      rating: $rating, \n      reviewDurationMs: $reviewDurationMs \n    )\n  }\n"): (typeof documents)["\n  mutation SubmitReview($flashcardId: ID!, $rating: Int!, $reviewDurationMs: Int!) {\n    submitReview(\n      flashcardId: $flashcardId, \n      rating: $rating, \n      reviewDurationMs: $reviewDurationMs \n    )\n  }\n"];
+export function graphql(source: "\n  mutation SubmitReview(\n    $flashcardId: ID!\n    $rating: Int!\n    $reviewDurationMs: Int!\n  ) {\n    submitReview(\n      flashcardId: $flashcardId\n      rating: $rating\n      reviewDurationMs: $reviewDurationMs\n    ) {\n      state\n    }\n  }\n"): (typeof documents)["\n  mutation SubmitReview(\n    $flashcardId: ID!\n    $rating: Int!\n    $reviewDurationMs: Int!\n  ) {\n    submitReview(\n      flashcardId: $flashcardId\n      rating: $rating\n      reviewDurationMs: $reviewDurationMs\n    ) {\n      state\n    }\n  }\n"];
 
 export function graphql(source: string) {
   return (documents as any)[source] ?? {};

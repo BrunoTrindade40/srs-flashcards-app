@@ -1,4 +1,5 @@
 import { Field, ID, Int, ObjectType } from '@nestjs/graphql';
+import { CardState } from '@prisma/client';
 
 @ObjectType()
 export class Flashcard {
@@ -43,6 +44,10 @@ export class Flashcard {
   @Field(() => Date, { nullable: true, description: 'Data agendada pelo FSRS' })
   due?: Date | null;
 
-  @Field(() => Int, { nullable: true, description: '0=NEW, 1=LEARN, 2=REVIEW, 3=RELEARN' })
-  state?: number | null;
+  @Field(() => CardState, {
+    nullable: true,
+    description:
+      'Estado FSRS do card: NEW · LEARNING · REVIEW · RELEARNING · SUSPENDED (leech)',
+  })
+  state?: CardState | null;
 }

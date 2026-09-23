@@ -42,8 +42,21 @@ type Flashcard {
   """Data agendada pelo FSRS"""
   due: DateTime
 
-  """0=NEW, 1=LEARN, 2=REVIEW, 3=RELEARN"""
-  state: Int
+  """
+  Estado FSRS do card: NEW · LEARNING · REVIEW · RELEARNING · SUSPENDED (leech)
+  """
+  state: CardState
+}
+
+"""
+Estado FSRS do card após leech protection. NEW · LEARNING · REVIEW · RELEARNING · SUSPENDED (leech).
+"""
+enum CardState {
+  NEW
+  LEARNING
+  REVIEW
+  RELEARNING
+  SUSPENDED
 }
 
 """Agregador de contagem de relações do baralho"""
@@ -86,6 +99,10 @@ type Deck {
   flashcards: [Flashcard!]
 }
 
+type ReviewResult {
+  state: CardState!
+}
+
 type Query {
   me: User!
   myDecks: [Deck!]!
@@ -107,7 +124,7 @@ type Mutation {
   createFlashcard(data: CreateFlashcardInput!): Flashcard!
   updateFlashcard(data: UpdateFlashcardInput!): Flashcard!
   removeFlashcard(id: ID!): Flashcard!
-  submitReview(flashcardId: ID!, rating: Int!, reviewDurationMs: Int! = 0): Boolean!
+  submitReview(flashcardId: ID!, rating: Int!, reviewDurationMs: Int! = 0): ReviewResult!
 }
 
 input UpdateUserSettingsInput {

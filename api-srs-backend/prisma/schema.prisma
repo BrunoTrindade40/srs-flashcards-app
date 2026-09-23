@@ -7,6 +7,17 @@ datasource db {
   provider = "postgresql"
 }
 
+// CardState — estados do card no fluxo FSRS.
+// 0: NEW · 1: LEARNING · 2: REVIEW · 3: RELEARNING (FSRS-6)
+// 4: SUSPENDED — FORA da faixa FSRS, aplicado por código (leech protection, due=2099-12-31)
+enum CardState {
+  NEW
+  LEARNING
+  REVIEW
+  RELEARNING
+  SUSPENDED
+}
+
 // --- Modelos de Dados ---
 // -----------------------------------------------------------------------------
 // CAMADA 1: IDENTIDADE, GAMIFICAÇÃO E CONFIGURAÇÕES
@@ -165,7 +176,7 @@ model CardFSRSData {
   reps          Int   @default(0)
   lapses        Int   @default(0)
 
-  state      Int       @default(0) // State: 0: NEW, 1: LEARNING, 2: REVIEW, 3: RELEARNING (FSRS Default)
+  state         CardState @default(NEW) // State: 0: NEW, 1: LEARNING, 2: REVIEW, 3: RELEARNING (FSRS Default)
                                  // A faixa 0–3 é a única reconhecida pelo ts-fsrs (FSRS-6).
                                  // SUSPENDED_STATE = 4 está FORA desta faixa: é aplicado por código
                                  // no study.service.ts (Leech Protection, com due = 2099-12-31)

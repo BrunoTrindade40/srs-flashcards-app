@@ -1,5 +1,14 @@
 import { UseGuards } from '@nestjs/common';
-import { Args, ID, Int, Mutation, Parent, Query, ResolveField, Resolver } from '@nestjs/graphql';
+import {
+  Args,
+  ID,
+  Int,
+  Mutation,
+  Parent,
+  Query,
+  ResolveField,
+  Resolver,
+} from '@nestjs/graphql';
 // 🔴 CORREÇÃO CRÍTICA: Padrão Alias estabelecido como única fonte da verdade
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { GqlAuthGuard } from '../auth/guards/gql-auth.guard';
@@ -8,14 +17,17 @@ import { CreateFlashcardInput } from './dto/create-flashcard.input';
 import { UpdateFlashcardInput } from './dto/update-flashcard.input';
 import { FlashcardService } from './flashcard.service';
 import { FsrsDataLoader } from './dataloaders/fsrs.dataloader';
-import {
-  Flashcard,
-} from './models/flashcard.model';
+import { Flashcard } from './models/flashcard.model';
+import { CardState } from '@prisma/client';
+import { toFsrsState } from '../study/models/card-state.mapper';
 
 @Resolver(() => Flashcard)
 @UseGuards(GqlAuthGuard)
 export class FlashcardResolver {
-  constructor(private readonly flashcardService: FlashcardService, private readonly fsrsLoader: FsrsDataLoader) { }
+  constructor(
+    private readonly flashcardService: FlashcardService,
+    private readonly fsrsLoader: FsrsDataLoader,
+  ) {}
 
   @Mutation(() => Flashcard)
   async createFlashcard(
@@ -63,16 +75,15 @@ export class FlashcardResolver {
     return fsrs?.due || null;
   }
 
-  // 🔵 RESOLVER VIRTUAL: FSRS State
-  @ResolveField(() => Int, { nullable: true })
+  @ResolveField(() => CardState, { nullable: true })
   async state(
     @Parent() flashcard: Flashcard,
     @CurrentUser() user: User,
-  ): Promise<number | null> {
+  ): Promise<CardState> {
     const fsrs = await this.fsrsLoader.loader.load({
       flashcardId: flashcard.id,
       userId: user.id,
     });
-    return fsrs?.state ?? 0; // Se não existir log, é novo (0)
+    return fsrs?.state ?? CardState.NEW; // sem log = novo (NEW)
   }
 }

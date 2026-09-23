@@ -18,6 +18,14 @@ export type Scalars = {
   DateTime: { input: any; output: any; }
 };
 
+/** Estado FSRS do card após leech protection. NEW · LEARNING · REVIEW · RELEARNING · SUSPENDED (leech). */
+export type CardState =
+  | 'LEARNING'
+  | 'NEW'
+  | 'RELEARNING'
+  | 'REVIEW'
+  | 'SUSPENDED';
+
 export type CreateDeckInput = {
   description?: InputMaybe<Scalars['String']['input']>;
   sourceLanguage?: InputMaybe<Scalars['String']['input']>;
@@ -84,8 +92,8 @@ export type Flashcard = {
   isEditedAfterAi: Scalars['Boolean']['output'];
   isPublished: Scalars['Boolean']['output'];
   sourceContext?: Maybe<Scalars['String']['output']>;
-  /** 0=NEW, 1=LEARN, 2=REVIEW, 3=RELEARN */
-  state?: Maybe<Scalars['Int']['output']>;
+  /** Estado FSRS do card: NEW · LEARNING · REVIEW · RELEARNING · SUSPENDED (leech) */
+  state?: Maybe<CardState>;
   updatedAt: Scalars['DateTime']['output'];
 };
 
@@ -97,7 +105,7 @@ export type Mutation = {
   enrollInDeck: Scalars['Boolean']['output'];
   removeDeck: Scalars['Boolean']['output'];
   removeFlashcard: Flashcard;
-  submitReview: Scalars['Boolean']['output'];
+  submitReview: ReviewResult;
   toggleDeckArchive: Deck;
   unenrollFromDeck: Scalars['Boolean']['output'];
   updateDeck: Deck;
@@ -190,6 +198,11 @@ export type QueryDeckFlashcardsArgs = {
 
 export type QueryDueFlashcardsArgs = {
   deckId: Scalars['ID']['input'];
+};
+
+export type ReviewResult = {
+  __typename?: 'ReviewResult';
+  state: CardState;
 };
 
 export type UpdateDeckInput = {
@@ -326,7 +339,7 @@ export type SubmitReviewMutationVariables = Exact<{
 }>;
 
 
-export type SubmitReviewMutation = { __typename?: 'Mutation', submitReview: boolean };
+export type SubmitReviewMutation = { __typename?: 'Mutation', submitReview: { __typename?: 'ReviewResult', state: CardState } };
 
 
 export const GetMyDecksDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetMyDecks"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"myDecks"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"title"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"sourceLanguage"}},{"kind":"Field","name":{"kind":"Name","value":"targetLanguage"}},{"kind":"Field","name":{"kind":"Name","value":"isArchived"}},{"kind":"Field","name":{"kind":"Name","value":"_count"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"flashcards"}}]}}]}}]}}]} as unknown as DocumentNode<GetMyDecksQuery, GetMyDecksQueryVariables>;
@@ -341,4 +354,4 @@ export const GetMeDocument = {"kind":"Document","definitions":[{"kind":"Operatio
 export const UpdateMySettingsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"UpdateMySettings"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"data"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UpdateUserSettingsInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"updateMySettings"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"data"},"value":{"kind":"Variable","name":{"kind":"Name","value":"data"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"dailyNewCardLimit"}},{"kind":"Field","name":{"kind":"Name","value":"maxDailyReviews"}},{"kind":"Field","name":{"kind":"Name","value":"timezone"}},{"kind":"Field","name":{"kind":"Name","value":"dailyRolloverTime"}}]}}]}}]} as unknown as DocumentNode<UpdateMySettingsMutation, UpdateMySettingsMutationVariables>;
 export const AnonymizeMeDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"AnonymizeMe"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"anonymizeMe"}}]}}]} as unknown as DocumentNode<AnonymizeMeMutation, AnonymizeMeMutationVariables>;
 export const GetDueFlashcardsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetDueFlashcards"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"deckId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"dueFlashcards"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"deckId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"deckId"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"frontContent"}},{"kind":"Field","name":{"kind":"Name","value":"backContent"}},{"kind":"Field","name":{"kind":"Name","value":"sourceContext"}},{"kind":"Field","name":{"kind":"Name","value":"due"}}]}}]}}]} as unknown as DocumentNode<GetDueFlashcardsQuery, GetDueFlashcardsQueryVariables>;
-export const SubmitReviewDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"SubmitReview"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"flashcardId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"rating"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"reviewDurationMs"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"submitReview"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"flashcardId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"flashcardId"}}},{"kind":"Argument","name":{"kind":"Name","value":"rating"},"value":{"kind":"Variable","name":{"kind":"Name","value":"rating"}}},{"kind":"Argument","name":{"kind":"Name","value":"reviewDurationMs"},"value":{"kind":"Variable","name":{"kind":"Name","value":"reviewDurationMs"}}}]}]}}]} as unknown as DocumentNode<SubmitReviewMutation, SubmitReviewMutationVariables>;
+export const SubmitReviewDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"SubmitReview"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"flashcardId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"rating"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"reviewDurationMs"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"submitReview"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"flashcardId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"flashcardId"}}},{"kind":"Argument","name":{"kind":"Name","value":"rating"},"value":{"kind":"Variable","name":{"kind":"Name","value":"rating"}}},{"kind":"Argument","name":{"kind":"Name","value":"reviewDurationMs"},"value":{"kind":"Variable","name":{"kind":"Name","value":"reviewDurationMs"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"state"}}]}}]}}]} as unknown as DocumentNode<SubmitReviewMutation, SubmitReviewMutationVariables>;
