@@ -1,10 +1,16 @@
-import React, { useCallback, useState } from "react";
+import React, {
+  useCallback,
+  useState,
+  useMemo,
+  type PropsWithChildren,
+} from "react";
 import { ToastContext, type Toast, type ToastType } from "./ToastContext";
 
-export function ToastProvider({ children }: { children: React.ReactNode }) {
+export const ToastProvider: React.FC<PropsWithChildren> = ({ children }) => {
   const [toasts, setToasts] = useState<Toast[]>([]);
 
   const showToast = useCallback((message: string, type: ToastType = "info") => {
+    // Math.random envelopado de forma pura perante o Handler, preservando a imutabilidade do DOM Principal
     const id = Math.random().toString(36).substring(2, 9);
     setToasts((prev) => [...prev, { id, message, type }]);
 
@@ -17,10 +23,22 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     setToasts((prev) => prev.filter((toast) => toast.id !== id));
   }, []);
 
+  const contextValue = useMemo(() => ({ showToast }), [showToast]);
+
+  // CORREÇÃO: Consumo enxuto direto do objeto de Contexto (Padrão React 19)
   return (
-    <ToastContext value={{ showToast }}>
+    <ToastContext value={contextValue}>
       {children}
-      <div className="fixed bottom-5 right-5 z-50 flex flex-col gap-2 max-w-sm w-full px-4 pointer-events-none">
+
+      {/* 
+        Container fixo para Toasts operando apenas via Flexbox (UI01).
+        CORREÇÃO a11y: Injeção de aria-live="polite" informando mudanças aos Screen Readers
+        de forma não invasiva e orgânica ao navegador.
+      */}
+      <div
+        aria-live="polite"
+        className="fixed bottom-5 right-5 z-50 flex flex-col gap-2 max-w-sm w-full px-4 pointer-events-none"
+      >
         {toasts.map((toast) => (
           <div
             key={toast.id}
@@ -35,7 +53,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
             <div className="flex items-center gap-3">
               <span className="text-lg">
                 {toast.type === "error"
-                  ? "⚠️"
+                  ? "❌"
                   : toast.type === "success"
                     ? "✅"
                     : "ℹ️"}
@@ -54,4 +72,4 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       </div>
     </ToastContext>
   );
-}
+};

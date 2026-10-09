@@ -1,283 +1,198 @@
-import { useMutation, useQuery } from "@apollo/client/react";
-import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import React, { useEffect, useCallback, useState } from "react";
+import { Link, useParams, useNavigate } from "react-router-dom";
+
 import { ConfirmModal } from "../components/ConfirmModal";
 import { CreateFlashcardModal } from "../components/CreateFlashcardModal";
 import { EditDeckModal } from "../components/EditDeckModal";
 import { EditFlashcardModal } from "../components/EditFlashcardModal";
-import { useToast } from "../hooks/useToast";
-import { GET_DECK_DETAILS, UPDATE_DECK } from "../lib/graphql/deck"; // Alterado para UPDATE_DECK
-import { REMOVE_FLASHCARD } from "../lib/graphql/flashcard";
+import { DeckHeader } from "../components/DeckHeader";
+import { FlashcardList } from "../components/FlashcardList";
 
-export function DeckDetails() {
+import { useDeckDetails, type EditingCardState } from "../hooks/useDeckDetails";
+import { useToast } from "../hooks/useToast";
+
+export const DeckDetails: React.FC = () => {
   const { deckId } = useParams<{ deckId: string }>();
   const navigate = useNavigate();
   const { showToast } = useToast();
 
-  const [isCardModalOpen, setIsCardModalOpen] = useState(false);
-  const [isAnonymizeDeckModalOpen, setIsAnonymizeDeckModalOpen] =
-    useState(false); // Renomeado por clareza arquitetural
-  const [isEditDeckModalOpen, setIsEditDeckModalOpen] = useState(false);
-  const [cardToDeleteId, setCardToDeleteId] = useState<string | null>(null);
-  const [flashcardToEdit, setFlashcardToEdit] = useState<{
-    id: string;
-    front: string;
-    back: string;
-  } | null>(null);
+  // Tratamento declarativo de fallback em O(1) sem coerções
+  const resolvedDeckId = deckId ?? "";
 
-  const { data, loading, error, refetch } = useQuery(GET_DECK_DETAILS, {
-    variables: { id: deckId || "" },
-    skip: !deckId,
-  });
+  // 1. Fonte Única da Verdade em Dados (SSOT) isolada
+  const {
+    deck,
+    loading,
+    error,
+    hasMore,
+    visibleFlashcards,
+    handleLoadMore,
+    deletingDeck,
+    handleSaveEdit,
+    handleConfirmDeleteCard,
+    handleConfirmDeleteDeck,
+    handleToggleArchive,
+  } = useDeckDetails(resolvedDeckId);
 
-  // Alterado o motor para a mutação de atualização
-  const [anonymizeDeck, { loading: anonymizingDeck }] =
-    useMutation(UPDATE_DECK);
-  const [deleteFlashcard, { loading: deletingCard }] =
-    useMutation(REMOVE_FLASHCARD);
+  // 2. Transição Limpa: UI States isolados do Motor Apollo
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isEditDeckOpen, setIsEditDeckOpen] = useState(false);
+  const [editingCard, setEditingCard] = useState<EditingCardState | null>(null);
+  const [deletingCardId, setDeletingCardId] = useState<string | null>(null);
+  const [isDeletingDeck, setIsDeletingDeck] = useState(false);
 
   useEffect(() => {
     if (error) {
-      showToast(`Erro ao carregar deck: ${error.message}`, "error");
+      showToast(`Erro ao carregar detalhes do deck: ${error.message}`, "error");
     }
   }, [error, showToast]);
 
-  const deck = data?.deck;
+  // 3. Estabilização Referencial (Prevenção de Thrashing)
+  // Utiliza-se useCallback para garantir a mesma referência de memória,
+  // impedindo a remontagem destrutiva de Event Listeners nos Modais filhos.
+  const openCreateModal = useCallback(() => setIsCreateOpen(true), []);
+  const closeCreateModal = useCallback(() => setIsCreateOpen(false), []);
 
-  const handleAnonymizeDeck = async () => {
-    if (!deckId) return;
+  const openEditDeckModal = useCallback(() => setIsEditDeckOpen(true), []);
+  const closeEditDeckModal = useCallback(() => setIsEditDeckOpen(false), []);
 
-    try {
-      await anonymizeDeck({
-        variables: {
-          data: {
-            id: deckId,
-            isArchived: true, // Aciona o gatilho da anonimização no NestJS
-          },
-        },
-        update(cache) {
-          // Limpeza imperativa: Rompe a referência do objeto localmente e limpa a lixeira do Apollo
-          cache.evict({
-            id: cache.identify({ __typename: "Deck", id: deckId }),
-          });
-          cache.gc();
-        },
-      });
-      showToast("Baralho anonimizado e removido com sucesso!", "success");
-      navigate("/dashboard", { replace: true });
-    } catch (err: unknown) {
-      if (err instanceof Error) {
-        showToast(`Falha ao remover o deck: ${err.message}`, "error");
-      }
+  const openDeleteDeckModal = useCallback(() => setIsDeletingDeck(true), []);
+  const closeDeleteDeckModal = useCallback(() => setIsDeletingDeck(false), []);
+
+  const closeEditingCard = useCallback(() => setEditingCard(null), []);
+  const closeDeletingCard = useCallback(() => setDeletingCardId(null), []);
+
+  // 4. Handlers Intermediários para Inversão de Controle e Tear-down
+  // Handlers Intermediários para Inversão de Controle e Tear-down
+  const onSaveEdit = useCallback(
+    (
+      frontContent: string,
+      backContent: string,
+      sourceContext: string | null, // Tipagem idêntica à assinatura do Modal
+      resetProgress: boolean, // Tipagem idêntica à assinatura do Modal
+    ): void => {
+      // Regra 6: Padrão Booleano Absoluto para objetos mutáveis
+      if (editingCard === null) return;
+
+      handleSaveEdit(
+        editingCard.id,
+        frontContent,
+        backContent,
+        sourceContext,
+        resetProgress,
+      );
+      setEditingCard(null);
+    },
+    [editingCard, handleSaveEdit],
+  );
+
+  const onConfirmDeleteCard = useCallback(async () => {
+    if (!deletingCardId) return;
+    const success = await handleConfirmDeleteCard(deletingCardId);
+    if (success) setDeletingCardId(null);
+  }, [deletingCardId, handleConfirmDeleteCard]);
+
+  const onConfirmDeleteDeck = useCallback(async () => {
+    const success = await handleConfirmDeleteDeck();
+    if (success) {
+      setIsDeletingDeck(false);
+      navigate("/dashboard");
     }
-  };
+  }, [handleConfirmDeleteDeck, navigate]);
 
-  const handleDeleteFlashcard = async () => {
-    if (!cardToDeleteId) return;
-    try {
-      await deleteFlashcard({
-        variables: { id: cardToDeleteId },
-        // 🔵 SUGESTÃO APLICADA: Manipulação direta da Store (Zero Latência)
-        update(cache) {
-          cache.evict({
-            id: cache.identify({ __typename: "Flashcard", id: cardToDeleteId }),
-          });
-          cache.gc(); // Garbage collector recolhe o nó destruído
-        },
-      });
-      showToast("Flashcard excluído com sucesso!", "success");
-      setCardToDeleteId(null);
-
-      // Remova (ou comente) a linha 'refetch()'
-      // refetch();
-    } catch (err: unknown) {
-      if (err instanceof Error) {
-        showToast(`Falha ao excluir o flashcard: ${err.message}`, "error");
-      }
-    }
-  };
-
-  if (loading) {
+  // Padrão Bouncer: Degradação visual protegida via early-return
+  if (loading && !deck) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="w-8 h-8 border-4 border-amber-500 border-t-transparent rounded-full animate-spin" />
+      <div className="flex flex-col items-center justify-center min-h-[50vh] w-full">
+        <div className="text-amber-500 font-bold animate-pulse text-lg">
+          Carregando detalhes do deck...
+        </div>
       </div>
     );
   }
 
   if (error || !deck) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
-        <p className="text-rose-400 font-medium">Deck não encontrado.</p>
-        <Link
-          to="/dashboard"
-          className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-sm transition"
-        >
-          Voltar ao Dashboard
-        </Link>
+      <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4 p-6 text-center w-full">
+        <h2 className="text-xl font-bold text-rose-500">
+          Erro ao carregar baralho.
+        </h2>
       </div>
     );
   }
 
+  // Renderização principal isolada utilizando Flexbox (sem Grid)
   return (
-    <div className="max-w-4xl mx-auto px-4 py-6 flex flex-col gap-6">
-      {/* Cabeçalho do Deck */}
-      <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 border-b border-slate-800 pb-6">
-        <div className="flex flex-col gap-2">
-          <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-md border border-amber-500/20 w-fit">
-            {deck.flashcards?.length || 0} Cartões
-          </span>
-          <h1 className="text-2xl font-bold text-slate-100">{deck.title}</h1>
-          {deck.description && (
-            <p className="text-sm text-slate-400 max-w-2xl">
-              {deck.description}
-            </p>
-          )}
-        </div>
-
-        {/* Grupo de Ações (Flexbox) */}
-        <div className="flex flex-wrap items-center gap-2 shrink-0">
-          <button
-            onClick={() => setIsEditDeckModalOpen(true)}
-            className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold rounded-xl text-sm transition cursor-pointer"
-          >
-            Editar Deck
-          </button>
-          <button
-            onClick={() => setIsCardModalOpen(true)}
-            className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-sm transition shadow-lg cursor-pointer"
-          >
-            + Criar Card
-          </button>
-          <button
-            onClick={() => setIsAnonymizeDeckModalOpen(true)}
-            className="px-4 py-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 font-medium rounded-xl text-sm transition cursor-pointer"
-          >
-            Remover
-          </button>
-        </div>
+    <div className="flex flex-col w-full max-w-5xl mx-auto gap-6 p-6 animate-fadeIn">
+      <div className="flex items-center w-full">
+        <Link
+          to="/dashboard"
+          className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-slate-200 transition-colors bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg border border-slate-700 shadow-sm"
+        >
+          <span> Voltar ao Dashboard</span>
+        </Link>
       </div>
 
-      {/* Lista de Flashcards */}
-      <div className="flex flex-col gap-4">
-        <h2 className="text-lg font-semibold text-slate-200">
-          Cartões do Deck
-        </h2>
+      <DeckHeader
+        deckId={deck.id}
+        title={deck.title}
+        description={deck.description ?? null}
+        isArchived={deck.isArchived}
+        flashcardsCount={deck.flashcards?.length ?? 0}
+        onToggleArchive={handleToggleArchive}
+        onEditDeck={openEditDeckModal}
+        onDeleteDeck={openDeleteDeckModal}
+        onCreateCard={openCreateModal}
+      />
 
-        {!deck.flashcards || deck.flashcards.length === 0 ? (
-          <div className="text-center py-12 bg-slate-900/50 border border-slate-800/80 rounded-2xl">
-            <p className="text-slate-400 text-sm">
-              Este deck ainda não possui flashcards.
-            </p>
-            <button
-              onClick={() => setIsCardModalOpen(true)}
-              className="mt-3 text-amber-400 hover:text-amber-300 text-sm font-bold transition cursor-pointer"
-            >
-              Adicionar o primeiro cartão
-            </button>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-3">
-            {deck.flashcards.map((card) => (
-              <div
-                key={card.id}
-                className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col sm:flex-row items-start justify-between gap-4 group hover:border-slate-600 transition-colors"
-              >
-                <div className="flex flex-col gap-3 flex-1 w-full">
-                  <div>
-                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                      Frente
-                    </span>
-                    <p className="text-sm text-slate-200 font-medium whitespace-pre-wrap mt-1">
-                      {card.front}
-                    </p>
-                  </div>
-                  <div className="pt-3 border-t border-slate-800/60">
-                    <span className="text-[10px] font-bold text-amber-500/80 uppercase tracking-wider">
-                      Verso
-                    </span>
-                    <p className="text-sm text-slate-400 whitespace-pre-wrap mt-1">
-                      {card.back}
-                    </p>
-                  </div>
-                </div>
+      <FlashcardList
+        flashcards={visibleFlashcards}
+        hasMore={hasMore}
+        onLoadMore={handleLoadMore}
+        onEditCard={setEditingCard}
+        onDeleteCard={setDeletingCardId}
+      />
 
-                <div className="flex sm:flex-col items-center gap-2 pt-2 sm:pt-0 shrink-0 w-full sm:w-auto justify-end border-t sm:border-t-0 border-slate-800 sm:border-transparent mt-2 sm:mt-0">
-                  <button
-                    onClick={() => setFlashcardToEdit(card)}
-                    className="p-2 bg-slate-800/50 hover:bg-blue-500/20 text-slate-400 hover:text-blue-400 rounded-lg transition-colors cursor-pointer"
-                    title="Editar Flashcard"
-                  >
-                    ✏️
-                  </button>
-                  <button
-                    onClick={() => setCardToDeleteId(card.id)}
-                    className="p-2 bg-slate-800/50 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 rounded-lg transition-colors cursor-pointer"
-                    title="Excluir Flashcard"
-                  >
-                    🗑️
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Modais Aninhados */}
-      {isCardModalOpen && deckId && (
-        <CreateFlashcardModal
-          deckId={deckId}
-          isOpen={isCardModalOpen}
-          onClose={() => setIsCardModalOpen(false)}
-          onSuccess={() => refetch()}
-        />
+      {/* Montagem Condicional Estrita dos Modais - Tear-down assegurado */}
+      {isCreateOpen && (
+        <CreateFlashcardModal deckId={deck.id} onClose={closeCreateModal} />
       )}
 
-      {isEditDeckModalOpen && (
-        <EditDeckModal
-          isOpen={isEditDeckModalOpen}
-          onClose={() => setIsEditDeckModalOpen(false)}
-          deck={deck}
-        />
-      )}
-
-      {flashcardToEdit && (
+      {editingCard !== null && (
         <EditFlashcardModal
-          isOpen={!!flashcardToEdit}
-          onClose={() => setFlashcardToEdit(null)}
-          flashcard={flashcardToEdit}
+          initialFrontContent={editingCard.frontContent}
+          initialBackContent={editingCard.backContent}
+          initialSourceContext={editingCard.sourceContext}
+          onClose={closeEditingCard}
+          onSave={onSaveEdit}
         />
       )}
 
-      {isAnonymizeDeckModalOpen && (
-        <ConfirmModal
-          isOpen={isAnonymizeDeckModalOpen}
-          title="Remover Baralho (Anonimização)"
-          message="Tem certeza que deseja remover este baralho? Para proteger sua privacidade, o baralho será irreversivelmente anonimizado e removido da sua interface, mantendo apenas métricas estatísticas impessoais para a calibração do algoritmo."
-          confirmText="Anonimizar e Remover"
-          isDanger
-          loading={anonymizingDeck}
-          onConfirm={handleAnonymizeDeck}
-          onClose={() => setIsAnonymizeDeckModalOpen(false)}
-        />
+      {isEditDeckOpen && (
+        <EditDeckModal deck={deck} onClose={closeEditDeckModal} />
       )}
 
-      {/* Modal de Delete de Flashcard original */}
-      {cardToDeleteId && (
+      {deletingCardId !== null && (
         <ConfirmModal
-          isOpen={!!cardToDeleteId}
           title="Excluir Flashcard"
-          message="Tem certeza que deseja excluir este cartão de forma permanente?"
-          confirmText="Excluir Card"
-          isDanger
-          loading={deletingCard}
-          onConfirm={handleDeleteFlashcard}
-          onClose={() => setCardToDeleteId(null)}
+          message="Tem certeza que deseja remover este cartão do baralho?"
+          onClose={closeDeletingCard}
+          onConfirm={onConfirmDeleteCard}
+          isDanger={true}
+        />
+      )}
+
+      {isDeletingDeck && (
+        <ConfirmModal
+          loading={deletingDeck}
+          title="Excluir Baralho Inteiro"
+          message={`Esta ação apagará permanentemente o baralho "${deck.title}". O algoritmo FSRS perderá o histórico. Prosseguir?`}
+          confirmText="Sim, Apagar Tudo"
+          isDanger={true}
+          onClose={closeDeleteDeckModal}
+          onConfirm={onConfirmDeleteDeck}
         />
       )}
     </div>
   );
-}
-
-export default DeckDetails;
+};

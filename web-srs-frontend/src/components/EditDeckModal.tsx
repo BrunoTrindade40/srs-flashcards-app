@@ -1,60 +1,78 @@
 import { useMutation } from "@apollo/client/react";
 import React, { useEffect, useState } from "react";
 import { useToast } from "../hooks/useToast";
-import { UPDATE_DECK, type Deck } from "../lib/graphql/deck";
-
-interface EditDeckModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  // Rigor na Tipagem: Assumimos que o objeto parcial possui os dados mapeados em graphql/deck.ts
-  deck: Partial<Deck> & { id: string; title: string };
-}
+import { UPDATE_DECK } from "../lib/graphql/deck";
+import { validateDeckInput } from "../domain/validators";
+import type { EditDeckModalProps } from "./EditDeckModal.types";
 
 export const EditDeckModal: React.FC<EditDeckModalProps> = ({
-  isOpen,
   onClose,
   deck,
 }) => {
   const [title, setTitle] = useState(deck.title);
-  const [description, setDescription] = useState(deck.description || "");
+  const [description, setDescription] = useState(deck.description ?? "");
   const [sourceLanguage, setSourceLanguage] = useState(
-    deck.sourceLanguage || "pt-BR",
+    deck.sourceLanguage ?? "pt-BR",
   );
   const [targetLanguage, setTargetLanguage] = useState(
-    deck.targetLanguage || "",
+    deck.targetLanguage ?? "",
   );
+
   const { showToast } = useToast();
+  // Removido o bloqueio stateful de 'loading'.
+  const [updateDeck] = useMutation(UPDATE_DECK);
 
-  const [updateDeck, { loading }] = useMutation(UPDATE_DECK, {
-    onCompleted: () => {
-      showToast("Deck atualizado com sucesso!", "success");
-      onClose();
-    },
-  });
-
-  const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
+  const handleSubmit = (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!title.trim() || loading) return;
 
-    try {
-      await updateDeck({
-        variables: {
-          data: {
-            id: deck.id,
-            title: title.trim(),
-            // 🔴 CRÍTICO CORRIGIDO: Forçando o envio do valor `null` quando o usuário limpa o campo.
-            // O operador '|| null' garante que strings vazias ("") engatilhem a remoção do dado no banco.
-            description: description.trim() || null,
-            sourceLanguage: sourceLanguage || null,
-            targetLanguage: targetLanguage || null,
-          },
-        },
-      });
-    } catch (err: unknown) {
-      if (err instanceof Error) {
-        showToast(`Erro ao atualizar deck: ${err.message}`, "error");
-      }
+    const safeTitle = title.trim();
+    const safeDescription = description.trim() ? description.trim() : null;
+    const safeSourceLanguage = sourceLanguage ? sourceLanguage : null;
+    const safeTargetLanguage = targetLanguage ? targetLanguage : null;
+
+    // Acionamento Estrito da Validação (SSOT - Padrão Bouncer)
+    const validationError = validateDeckInput(safeTitle, description ?? "");
+    if (validationError !== null) {
+      showToast(validationError, "error");
+      return;
     }
+
+    // Execução Otimista (Fire and Forget seguro via Apollo Cache)
+    updateDeck({
+      variables: {
+        data: {
+          id: deck.id,
+          title: safeTitle,
+          description: safeDescription,
+          sourceLanguage: safeSourceLanguage,
+          targetLanguage: safeTargetLanguage,
+        },
+      },
+      optimisticResponse: {
+        __typename: "Mutation",
+        updateDeck: {
+          __typename: "Deck",
+          id: deck.id,
+          title: safeTitle,
+          description: safeDescription,
+          sourceLanguage: safeSourceLanguage,
+          targetLanguage: safeTargetLanguage,
+          isArchived: deck.isArchived, // Preservado do estado local atual
+        },
+      },
+    }).catch((err: unknown) => {
+      // Regra 16: Alerta claro e explícito de rollback otimista
+      if (err instanceof Error) {
+        showToast(
+          `Erro de rede. A ação foi revertida: ${err.message}`,
+          "error",
+        );
+      }
+    });
+
+    // Interface avança em 0ms (Zero-Latency)
+    showToast("Deck atualizado com sucesso!", "success");
+    onClose();
   };
 
   useEffect(() => {
@@ -64,8 +82,6 @@ export const EditDeckModal: React.FC<EditDeckModalProps> = ({
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
-
-  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
@@ -80,7 +96,7 @@ export const EditDeckModal: React.FC<EditDeckModalProps> = ({
             className="text-slate-500 hover:text-slate-300 text-sm p-1 transition-colors cursor-pointer"
             aria-label="Fechar modal"
           >
-            ✕
+            ✖
           </button>
         </div>
 
@@ -94,7 +110,6 @@ export const EditDeckModal: React.FC<EditDeckModalProps> = ({
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               required
-              disabled={loading}
               className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 text-sm focus:outline-none focus:border-amber-500 transition-colors"
             />
           </div>
@@ -107,12 +122,10 @@ export const EditDeckModal: React.FC<EditDeckModalProps> = ({
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
-              disabled={loading}
               className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 text-sm resize-none focus:outline-none focus:border-amber-500 transition-colors"
             />
           </div>
 
-          {/* Seção de Idiomas: Replicando o design consistente (DRY visual) */}
           <div className="flex flex-col sm:flex-row gap-4 border-t border-slate-800/50 pt-3 mt-1">
             <div className="flex flex-col gap-1.5 flex-1">
               <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
@@ -121,7 +134,6 @@ export const EditDeckModal: React.FC<EditDeckModalProps> = ({
               <select
                 value={sourceLanguage}
                 onChange={(e) => setSourceLanguage(e.target.value)}
-                disabled={loading}
                 className="w-full px-3 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 text-sm focus:outline-none focus:border-amber-500 transition-colors appearance-none cursor-pointer"
               >
                 <option value="pt-BR">Português (Brasil)</option>
@@ -137,7 +149,6 @@ export const EditDeckModal: React.FC<EditDeckModalProps> = ({
               <select
                 value={targetLanguage}
                 onChange={(e) => setTargetLanguage(e.target.value)}
-                disabled={loading}
                 className="w-full px-3 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 text-sm focus:outline-none focus:border-amber-500 transition-colors appearance-none cursor-pointer"
               >
                 <option value="">Não Especificado</option>
@@ -153,17 +164,16 @@ export const EditDeckModal: React.FC<EditDeckModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              disabled={loading}
               className="px-4 py-2 text-xs font-medium text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              disabled={loading || !title.trim()}
-              className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-xs transition-all cursor-pointer disabled:opacity-50"
+              disabled={title.trim().length === 0}
+              className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-xs transition-all cursor-pointer disabled:opacity-50 shadow-sm"
             >
-              {loading ? "Salvando..." : "Salvar Alterações"}
+              Salvar Alterações
             </button>
           </div>
         </form>

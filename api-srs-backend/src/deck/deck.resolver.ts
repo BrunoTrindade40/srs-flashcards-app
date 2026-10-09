@@ -50,6 +50,17 @@ export class DeckResolver {
     return this.deckService.update(data, user.id);
   }
 
+  /**
+   * NOVO: Mutation GraphQL com Escopo e Responsabilidade Única (Arquivamento vs Deleção)
+   */
+  @Mutation(() => Deck, { name: 'toggleDeckArchive' })
+  async toggleDeckArchive(
+    @Args('id', { type: () => ID }) id: string,
+    @CurrentUser() user: User,
+  ) {
+    return this.deckService.toggleArchive(id, user.id);
+  }
+
   @Mutation(() => Boolean, { name: 'removeDeck' })
   async removeDeck(
     @Args('id', { type: () => ID }) id: string,
@@ -58,18 +69,28 @@ export class DeckResolver {
     return this.deckService.remove(id, user.id);
   }
 
-  /**
-   * RESOLVER VIRTUAL (_count)
-   * Verifica se a agregação já veio pronta do Prisma para economizar requisições no DB.
-   */
   @ResolveField(() => DeckCount, { name: '_count', nullable: true })
   async getCount(@Parent() deck: Deck): Promise<DeckCount> {
     if (deck._count && typeof deck._count.flashcards === 'number') {
-      return deck._count; // Zero Overhead / Cache Hit
+      return deck._count;
     }
-
-    // Fallback: Busca ativamente se faltar na query original
     const count = await this.deckService.countFlashcards(deck.id);
     return { flashcards: count };
+  }
+
+  @Mutation(() => Boolean, { name: 'enrollInDeck' })
+  async enrollInDeck(
+    @Args('deckId', { type: () => ID }) deckId: string,
+    @CurrentUser() user: User,
+  ): Promise<boolean> {
+    return this.deckService.enrollInDeck(deckId, user.id);
+  }
+
+  @Mutation(() => Boolean, { name: 'unenrollFromDeck' })
+  async unenrollFromDeck(
+    @Args('deckId', { type: () => ID }) deckId: string,
+    @CurrentUser() user: User,
+  ): Promise<boolean> {
+    return this.deckService.unenrollFromDeck(deckId, user.id);
   }
 }

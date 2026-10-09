@@ -1,11 +1,17 @@
 @import "tailwindcss";
 
 /* Injeção do plugin Typography diretamente via CSS,
-  conforme especificação nativa do Tailwind v4.
-*/
+   conforme especificação nativa do Tailwind v4. */
 @plugin "@tailwindcss/typography";
 
-/* SRP / KISS: Mantenha este arquivo limpo.
-  Não crie classes personalizadas com @apply.
-  Utilize os utilitários diretamente nas propriedades className dos componentes React.
-*/
+/* SRP / KISS: Arquivo mantido limpo. Remoção total do @apply.
+   Utilizamos as variáveis CSS nativas expostas pelo Tailwind v4 
+   para garantir o fundo escuro global e prevenir o Bounce Bar. */
+@layer base {
+  body {
+    background-color: var(--color-slate-950);
+    color: var(--color-slate-100);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}

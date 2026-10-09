@@ -1,102 +1,87 @@
-import { gql } from "@apollo/client/core";
+import { type Reference } from "@apollo/client/core";
 import { useMutation } from "@apollo/client/react";
-import React, { useEffect, useState } from "react";
-import { useToast } from "../hooks/useToast";
-import { CREATE_DECK } from "../lib/graphql/deck";
+// 🔵 SUGESTÃO: Injeção do React para tipagem do FC
+import React, { useState, type SyntheticEvent } from "react";
 
-interface CreateDeckModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onSuccess?: () => void;
-}
+import { useToast } from "../hooks/useToast";
+import { useFocusTrap } from "../hooks/useFocusTrap";
+import { CREATE_DECK } from "../lib/graphql/deck";
+import { validateDeckInput } from "../domain/validators";
+// 🟢 CORRIGIDO (Regra 11): Importação tipada isolando a AST visual
+import type { CreateDeckModalProps } from "./CreateDeckModal.types";
 
 export const CreateDeckModal: React.FC<CreateDeckModalProps> = ({
-  isOpen,
   onClose,
-  onSuccess,
 }) => {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [sourceLanguage, setSourceLanguage] = useState("pt-BR");
   const [targetLanguage, setTargetLanguage] = useState("");
+
   const { showToast } = useToast();
 
   const [createDeck, { loading }] = useMutation(CREATE_DECK, {
-    update(cache, { data }) {
-      if (!data?.createDeck) return;
+    update(cache, { data: mutationData }) {
+      if (!mutationData?.createDeck) return;
       cache.modify({
         fields: {
-          myDecks(existingDeckRefs = []) {
-            const newDeckRef = cache.writeFragment({
-              data: data.createDeck,
-              fragment: gql`
-                fragment NewDeck on Deck {
-                  id
-                  title
-                  description
-                  sourceLanguage
-                  targetLanguage
-                  _count {
-                    flashcards
-                  }
-                }
-              `,
-            });
-            return [...existingDeckRefs, newDeckRef];
+          myDecks(
+            existingDeckRefs: readonly Reference[] = [],
+            { toReference },
+          ) {
+            const newDeckRef = toReference(mutationData.createDeck);
+            if (!newDeckRef) return existingDeckRefs;
+            return [newDeckRef, ...existingDeckRefs];
           },
         },
       });
     },
-    onCompleted: () => {
-      showToast("Deck criado com sucesso!", "success");
-      setTitle("");
-      setDescription("");
-      setSourceLanguage("pt-BR");
-      setTargetLanguage("");
-      onSuccess?.();
-      onClose();
-    },
-    onError: (err) => {
-      showToast(`Erro ao criar deck: ${err.message}`, "error");
-    },
   });
 
-  const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
+  const modalRef = useFocusTrap(!loading, onClose);
+
+  const handleSubmit = async (e: SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!title.trim() || loading) return;
+    if (loading) return;
+
+    const validationError = validateDeckInput(title, description);
+
+    if (validationError) {
+      showToast(validationError, "error");
+      return;
+    }
 
     try {
-      await createDeck({
+      const response = await createDeck({
         variables: {
           data: {
-            // 🔴 CRÍTICO CORRIGIDO: Removido o envio do 'id'. Na criação, o payload não possui identificador.
             title: title.trim(),
-            description: description.trim() || null,
+            description: description.trim() ? description.trim() : null,
             sourceLanguage: sourceLanguage || null,
             targetLanguage: targetLanguage || null,
           },
         },
       });
-    } catch (err: unknown) {
-      if (err instanceof Error) {
-        console.error("Erro na submissão de deck:", err.message);
+
+      if (response.data?.createDeck) {
+        showToast("Deck criado com sucesso!", "success");
+        onClose();
+      }
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        showToast(`Falha ao criar deck: ${error.message}`, "error");
       }
     }
   };
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
-
-  if (!isOpen) return null;
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
-      <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl flex flex-col gap-6">
+      <div
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl flex flex-col gap-6"
+      >
         <div className="flex items-center justify-between border-b border-slate-800 pb-4">
           <div className="flex items-center gap-2">
             <span className="text-xl">📚</span>
@@ -109,7 +94,7 @@ export const CreateDeckModal: React.FC<CreateDeckModalProps> = ({
             className="text-slate-500 hover:text-slate-300 text-sm p-1 transition-colors cursor-pointer"
             aria-label="Fechar Modal"
           >
-            ✕
+            ❌
           </button>
         </div>
 
@@ -129,7 +114,7 @@ export const CreateDeckModal: React.FC<CreateDeckModalProps> = ({
               placeholder="Ex: Vocabulário de Inglês..."
               required
               disabled={loading}
-              className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 text-sm placeholder-slate-600 focus:outline-none focus:border-amber-500 transition-colors"
+              className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 text-sm placeholder-slate-600 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-colors"
             />
           </div>
 
@@ -147,11 +132,10 @@ export const CreateDeckModal: React.FC<CreateDeckModalProps> = ({
               placeholder="Breve resumo do conteúdo..."
               rows={3}
               disabled={loading}
-              className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 text-sm placeholder-slate-600 resize-none focus:outline-none focus:border-amber-500 transition-colors"
+              className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 text-sm placeholder-slate-600 resize-none focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-colors"
             />
           </div>
 
-          {/* Seção de Idiomas: Flexbox Responsivo Puro */}
           <div className="flex flex-col sm:flex-row gap-4 border-t border-slate-800/50 pt-3 mt-1">
             <div className="flex flex-col gap-1.5 flex-1">
               <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
@@ -161,7 +145,7 @@ export const CreateDeckModal: React.FC<CreateDeckModalProps> = ({
                 value={sourceLanguage}
                 onChange={(e) => setSourceLanguage(e.target.value)}
                 disabled={loading}
-                className="w-full px-3 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 text-sm focus:outline-none focus:border-amber-500 transition-colors appearance-none cursor-pointer"
+                className="w-full px-3 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 text-sm focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-colors appearance-none cursor-pointer"
               >
                 <option value="pt-BR">Português (Brasil)</option>
                 <option value="en-US">Inglês (EUA)</option>
@@ -177,7 +161,7 @@ export const CreateDeckModal: React.FC<CreateDeckModalProps> = ({
                 value={targetLanguage}
                 onChange={(e) => setTargetLanguage(e.target.value)}
                 disabled={loading}
-                className="w-full px-3 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 text-sm focus:outline-none focus:border-amber-500 transition-colors appearance-none cursor-pointer"
+                className="w-full px-3 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 text-sm focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-colors appearance-none cursor-pointer"
               >
                 <option value="">Não Especificado</option>
                 <option value="en-US">Inglês (EUA)</option>
@@ -200,7 +184,7 @@ export const CreateDeckModal: React.FC<CreateDeckModalProps> = ({
             <button
               type="submit"
               disabled={loading || !title.trim()}
-              className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-xs transition-all cursor-pointer disabled:opacity-50"
+              className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-xs transition-all cursor-pointer disabled:opacity-50 shadow-sm"
             >
               {loading ? "Criando..." : "Criar Baralho"}
             </button>

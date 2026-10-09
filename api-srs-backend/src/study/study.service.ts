@@ -1,195 +1,363 @@
+import { ForbiddenException, Injectable } from '@nestjs/common';
 import {
-  ForbiddenException,
-  Injectable,
-} from '@nestjs/common';
-import { Prisma, Flashcard as PrismaFlashcard } from '@prisma/client';
-import { createEmptyCard, FSRS, Card as FSRSCard } from 'ts-fsrs';
+  Flashcard as PrismaFlashcard,
+  CardFSRSData,
+  CardState,
+} from '@prisma/client';
+import {
+  createEmptyCard,
+  FSRS,
+  Card as FSRSCard,
+  Grade,
+  RecordLogItem,
+} from 'ts-fsrs';
 import { PrismaService } from '../../prisma/prisma.service';
-
-import dayjs from 'dayjs';
-import timezone from 'dayjs/plugin/timezone';
-import utc from 'dayjs/plugin/utc';
 import { ANONYMIZED_PAYLOAD } from '../common/constants/domain.constants';
+import { RolloverService } from '../common/services/rollover.service';
+import { toCardState, toFsrsState } from './models/card-state.mapper';
 
-dayjs.extend(utc);
-dayjs.extend(timezone);
+import { ReviewResult } from './models/review-result.model';
 
-type FSRSRecordWithFlashcard = Prisma.CardFSRSDataGetPayload<{
-  include: { flashcard: { include: { deck: true } } };
-}>;
+// 🟡 ALERTA CORRIGIDO: Interface para aplicar Duck Typing e eliminar o 'any'
+interface StreakDataPayload {
+  isFirstStudyOfDay: boolean;
+  current: number;
+  longest: number;
+}
+
+// -----------------------------------------------------------------------------
+// FUNÇÕES PURAS (Stateless) - Isolamento de Domínio e Otimização de Memória
+// -----------------------------------------------------------------------------
+
+const shuffleArray = <T>(array: T[]): T[] => {
+  const shuffled = [...array];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+};
+
+const RATING_XP_MAP: Record<number, number> = {
+  1: 3,
+  2: 5,
+  3: 10,
+  4: 15,
+};
+
+const computeNextFsrsState = (
+  rating: number,
+  fsrsDataRecord: CardFSRSData | null,
+  fsrsWeights: any, // 🟡 fora do escopo: tipar como Prisma.JsonValue depois
+): RecordLogItem => {
+  let activeFsrs = new FSRS({});
+  if (fsrsWeights && Array.isArray(fsrsWeights)) {
+    activeFsrs = new FSRS({ w: fsrsWeights as number[] });
+  }
+
+  const now = new Date(); // ✅ 'now' definido
+
+  const currentFsrsCard: FSRSCard = !fsrsDataRecord
+    ? createEmptyCard(now) // ✅ factory: state = State.New, due = now
+    : {
+        due: fsrsDataRecord.due,
+        stability: fsrsDataRecord.stability,
+        difficulty: fsrsDataRecord.difficulty,
+        elapsed_days: fsrsDataRecord.elapsedDays,
+        scheduled_days: fsrsDataRecord.scheduledDays,
+        reps: fsrsDataRecord.reps,
+        lapses: fsrsDataRecord.lapses,
+        state: toFsrsState(fsrsDataRecord.state), // CardState -> State (0-3)
+        last_review: fsrsDataRecord.lastReview ?? undefined,
+        learning_steps: 0,
+      };
+
+  return activeFsrs.next(currentFsrsCard, new Date(), rating as Grade);
+};
+
+// -----------------------------------------------------------------------------
+// SERVIÇO PRINCIPAL - Focado em Orquestração e Transações (SRP)
+// -----------------------------------------------------------------------------
 
 @Injectable()
 export class StudyService {
-  private fsrs = new FSRS({});
+  // 🔴 CRÍTICO CORRIGIDO: Fonte Única da Verdade para RN07 (Leech Protection)
+  private readonly LEECH_THRESHOLD = 8;
+  private readonly SUSPENDED_DUE_DATE = new Date('2099-12-31T23:59:59.999Z');
 
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly rolloverService: RolloverService,
+  ) {}
 
-  private getRolloverThreshold(userTimezone: string = 'America/Sao_Paulo'): Date {
-    return dayjs().tz(userTimezone).endOf('day').toDate();
-  }
-
-  private getStartOfStudyDay(userTimezone: string = 'America/Sao_Paulo'): Date {
-    let localTime = dayjs().tz(userTimezone);
-
-    if (localTime.hour() < 4) {
-      localTime = localTime.subtract(1, 'day');
-    }
-
-    return localTime.hour(4).minute(0).second(0).millisecond(0).toDate();
-  }
-
-  private mapFsrsToCard(records: FSRSRecordWithFlashcard[]): PrismaFlashcard[] {
-    return records.map((record) => {
-      const { flashcard, ...fsrsMetadata } = record;
-      return {
-        ...flashcard,
-        fsrsData: [fsrsMetadata],
-      } as PrismaFlashcard;
-    });
-  }
-
+  /**
+   * RF04: Construção rigorosa da Fila de Estudos diária (Fase 1 - MVP).
+   */
   async dueFlashcards(
     userId: string,
     deckId: string,
   ): Promise<PrismaFlashcard[]> {
-    const deck = await this.prisma.deck.findUnique({
-      where: { id: deckId },
-      select: { creatorId: true, isArchived: true },
-    });
-
-    if (!deck || deck.creatorId !== userId || deck.isArchived) {
-      throw new ForbiddenException('Acesso negado ou Baralho arquivado.');
-    }
+    await this.validateEnrollmentAccess(userId, deckId);
 
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { dailyNewCardLimit: true, maxDailyReviews: true, timezone: true },
+      select: {
+        dailyNewCardLimit: true,
+        maxDailyReviews: true,
+        timezone: true,
+      },
     });
 
     const baseNewCardLimit = user?.dailyNewCardLimit ?? 20;
     const maxDailyReviews = user?.maxDailyReviews ?? 100;
+    const defaultTz = user?.timezone ?? 'America/Sao_Paulo';
 
-    const now = new Date();
-    const rolloverThreshold = this.getRolloverThreshold(user?.timezone);
-    const todayStart = this.getStartOfStudyDay(user?.timezone);
+    const { start: todayStart, end: rolloverThreshold } =
+      this.rolloverService.getStudyDayBounds(defaultTz);
 
-    const distinctCardsReviewedToday = await this.prisma.reviewLog.groupBy({
-      by: ['flashcardId'],
-      where: { userId, createdAt: { gte: todayStart } },
-    });
+    const overdueCards = await this.fetchOverdueCards(
+      userId,
+      deckId,
+      rolloverThreshold,
+    );
+    const newCards = await this.fetchNewCards(
+      userId,
+      deckId,
+      todayStart,
+      maxDailyReviews,
+      baseNewCardLimit,
+      overdueCards.length,
+    );
 
-    const reviewsDoneToday = distinctCardsReviewedToday.length;
-    const remainingReviewsQuota = Math.max(0, maxDailyReviews - reviewsDoneToday);
-
-    const criticalRecords = await this.prisma.cardFSRSData.findMany({
-      where: {
-        userId,
-        due: { lte: now },
-        state: { in: [1, 3] },
-        flashcard: { deckId, front: { not: ANONYMIZED_PAYLOAD } },
-      },
-      orderBy: { due: 'asc' },
-      include: { flashcard: { include: { deck: true } } },
-    });
-
-    let reviewRecords: FSRSRecordWithFlashcard[] = [];
-    let effectiveNewCardLimit = baseNewCardLimit;
-
-    if (remainingReviewsQuota > 0) {
-      const pendingReviewsCount = await this.prisma.cardFSRSData.count({
-        where: {
-          userId,
-          due: { lte: rolloverThreshold },
-          state: 2,
-          flashcard: { deckId, front: { not: ANONYMIZED_PAYLOAD } },
-        },
-      });
-
-      if (pendingReviewsCount >= maxDailyReviews) {
-        effectiveNewCardLimit = 0;
-      } else if (pendingReviewsCount > (maxDailyReviews * 0.8)) {
-        effectiveNewCardLimit = Math.min(baseNewCardLimit, maxDailyReviews - pendingReviewsCount);
-      }
-
-      reviewRecords = await this.prisma.cardFSRSData.findMany({
-        where: {
-          userId,
-          due: { lte: rolloverThreshold },
-          state: 2,
-          flashcard: { deckId, front: { not: ANONYMIZED_PAYLOAD } },
-        },
-        orderBy: { due: 'asc' },
-        take: remainingReviewsQuota,
-        include: { flashcard: { include: { deck: true } } },
-      });
-    } else {
-      effectiveNewCardLimit = 0;
-    }
-
-    let newRecords: FSRSRecordWithFlashcard[] = [];
-    if (effectiveNewCardLimit > 0) {
-      newRecords = await this.prisma.cardFSRSData.findMany({
-        where: {
-          userId,
-          state: 0,
-          flashcard: { deckId, front: { not: ANONYMIZED_PAYLOAD } },
-        },
-        orderBy: { createdAt: 'asc' },
-        take: effectiveNewCardLimit,
-        include: { flashcard: { include: { deck: true } } },
-      });
-    }
-
-    const combinedQueue: PrismaFlashcard[] = [
-      ...this.mapFsrsToCard(criticalRecords),
-      ...this.mapFsrsToCard(reviewRecords),
-      ...this.mapFsrsToCard(newRecords),
-    ];
-
-    return this.shuffleArray(combinedQueue);
+    return shuffleArray([...overdueCards, ...newCards]);
   }
 
   /**
-   * RF05: Avaliação de Retenção (FSRS) + Transação Atômica + Gamificação
+   * RF05: Avaliação de Retenção (FSRS) + Transação Atômica + Gamificação + Fadiga (RN08)
    */
   async submitReview(
     userId: string,
     flashcardId: string,
     rating: number,
     reviewDurationMs: number,
-  ): Promise<boolean> {
-    // RESOLUÇÃO DE LINTER (KISS): Usamos Array de números primitivos
-    const validRatings = [1, 2, 3, 4];
-    if (!validRatings.includes(rating)) {
-      throw new ForbiddenException('Avaliação inválida. Use 1 (Again) a 4 (Easy).');
+  ): Promise<ReviewResult> {
+    if (![1, 2, 3, 4].includes(rating)) {
+      throw new ForbiddenException(
+        'Avaliação inválida. Use 1 (Again) a 4 (Easy).',
+      );
     }
 
-    const flashcard = await this.prisma.flashcard.findUnique({
-      where: { id: flashcardId },
-      include: { deck: { select: { creatorId: true } } },
-    });
+    const sanitizedDurationMs = Math.max(
+      0,
+      Math.min(Math.round(reviewDurationMs), 60000),
+    );
+    await this.validateFlashcardAccess(flashcardId, userId);
 
-    if (!flashcard || flashcard.deck.creatorId !== userId) {
-      throw new ForbiddenException('Cartão não encontrado ou acesso negado.');
-    }
-
-    // Busca o status do cartão e os dados de perfil do usuário simultaneamente
+    // 1. Coleta inicial de registros e projeção estrita de usuário
     const [fsrsDataRecord, userRecord] = await Promise.all([
       this.prisma.cardFSRSData.findUnique({
         where: { flashcardId_userId: { flashcardId, userId } },
       }),
       this.prisma.user.findUnique({
         where: { id: userId },
-        select: { fsrsWeights: true, timezone: true, currentStreak: true, longestStreak: true },
+        // 🟡 ALERTA CORRIGIDO: Inclusão de maxDailyReviews na projeção
+        select: {
+          fsrsWeights: true,
+          timezone: true,
+          currentStreak: true,
+          longestStreak: true,
+          maxDailyReviews: true,
+        },
       }),
     ]);
 
-    // --- 1. LÓGICA DE GAMIFICAÇÃO (Ofensiva / XP) ---
-    let nextCurrentStreak = userRecord?.currentStreak ?? 0;
-    let nextLongestStreak = userRecord?.longestStreak ?? 0;
-    let isFirstStudyOfDay = false;
+    const userTz = userRecord?.timezone ?? 'America/Sao_Paulo';
+    const { start: todayStart } =
+      this.rolloverService.getStudyDayBounds(userTz);
 
-    const todayStart = this.getStartOfStudyDay(userRecord?.timezone || 'America/Sao_Paulo');
+    // 2. 🔵 SUGESTÃO APLICADA: Delegação de I/O em paralelo para otimização de latência
+    const [streakData, todayReviewCount] = await Promise.all([
+      this.resolveStreak(userId, userRecord, todayStart),
+      this.prisma.reviewLog.count({
+        where: { userId, createdAt: { gte: todayStart } },
+      }),
+    ]);
+
+    // 3. 🟡 ALERTA CORRIGIDO: Cálculo matemático da Fadiga Cognitiva (RN08)
+    const maxDailyReviews = userRecord?.maxDailyReviews ?? 100;
+    const isFatiguedReview = todayReviewCount >= maxDailyReviews;
+
+    const gainedXp = RATING_XP_MAP[rating] ?? 0;
+
+    // Cálculo Matemático Puro
+    const reviewResult = computeNextFsrsState(
+      rating,
+      fsrsDataRecord,
+      userRecord?.fsrsWeights,
+    );
+    const nextState = reviewResult.card;
+
+    // 4. Orquestração da Transação
+    // executeReviewTransaction já aplica leech protection internamente;
+    // agora ele retorna o estado EFETIVO (pós-leech) — fonte única da verdade.
+    // executeReviewTransaction retorna o estado EFETIVO (pós-leech protection)
+    const effectiveState = await this.executeReviewTransaction(
+      userId,
+      flashcardId,
+      rating,
+      sanitizedDurationMs,
+      nextState,
+      fsrsDataRecord,
+      gainedXp,
+      streakData,
+      isFatiguedReview,
+    );
+
+    return { state: effectiveState };
+  }
+
+  /**
+   * UC10 - Modo Chaos (Interleaving)
+   */
+  async getChaosStudyQueue(
+    userId: string,
+    limit: number = 50,
+  ): Promise<PrismaFlashcard[]> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { timezone: true },
+    });
+
+    const chaosTz = user?.timezone ?? 'America/Sao_Paulo';
+    const { end: rolloverThreshold } =
+      this.rolloverService.getStudyDayBounds(chaosTz);
+
+    const dueFsrsRecords = await this.prisma.cardFSRSData.findMany({
+      where: {
+        userId: userId,
+        due: { lte: rolloverThreshold },
+        state: { notIn: [CardState.NEW, CardState.SUSPENDED] },
+        flashcard: {
+          frontContent: { not: ANONYMIZED_PAYLOAD },
+          deck: {
+            isArchived: false,
+            enrollments: { some: { userId, status: 'ACTIVE' } },
+          },
+        },
+      },
+      include: { flashcard: true },
+      orderBy: { due: 'asc' },
+      take: limit,
+    });
+
+    return shuffleArray(dueFsrsRecords.map((r) => r.flashcard));
+  }
+
+  // -----------------------------------------------------------------------------
+  // MÉTODOS PRIVADOS AUXILIARES (Delegação e Legibilidade)
+  // -----------------------------------------------------------------------------
+
+  private async validateEnrollmentAccess(
+    userId: string,
+    deckId: string,
+  ): Promise<void> {
+    const enrollment = await this.prisma.enrollment.findFirst({
+      where: { userId, deckId, status: 'ACTIVE', deck: { isArchived: false } },
+    });
+    if (!enrollment)
+      throw new ForbiddenException(
+        'Acesso negado: Matrícula inativa ou Baralho arquivado.',
+      );
+  }
+
+  private async validateFlashcardAccess(
+    flashcardId: string,
+    userId: string,
+  ): Promise<void> {
+    const flashcard = await this.prisma.flashcard.findFirst({
+      where: {
+        id: flashcardId,
+        deck: { enrollments: { some: { userId, status: 'ACTIVE' } } },
+      },
+    });
+    if (!flashcard)
+      throw new ForbiddenException(
+        'Cartão não encontrado ou matrícula inativa.',
+      );
+  }
+
+  private async fetchOverdueCards(
+    userId: string,
+    deckId: string,
+    threshold: Date,
+  ) {
+    const overdueFsrsRecords = await this.prisma.cardFSRSData.findMany({
+      where: {
+        userId,
+        due: { lte: threshold },
+        state: {
+          in: [CardState.NEW, CardState.LEARNING, CardState.RELEARNING],
+        },
+        flashcard: {
+          deckId,
+          frontContent: { not: ANONYMIZED_PAYLOAD },
+          isPublished: true,
+        },
+      },
+      orderBy: { due: 'asc' },
+      include: { flashcard: true },
+    });
+    return overdueFsrsRecords.map((record) => record.flashcard);
+  }
+
+  private async fetchNewCards(
+    userId: string,
+    deckId: string,
+    todayStart: Date,
+    maxDaily: number,
+    baseLimit: number,
+    overdueCount: number,
+  ) {
+    const distinctCardsReviewedToday = await this.prisma.reviewLog.groupBy({
+      by: ['flashcardId'],
+      where: { userId, createdAt: { gte: todayStart } },
+    });
+
+    const newCardsIntroducedToday = await this.prisma.reviewLog.groupBy({
+      by: ['flashcardId'],
+      where: { userId, createdAt: { gte: todayStart }, stabilityBefore: 0 },
+    });
+
+    const totalWorkloadToday = distinctCardsReviewedToday.length + overdueCount;
+    const remainingTotalQuota = Math.max(0, maxDaily - totalWorkloadToday);
+    const remainingNewQuota = Math.max(
+      0,
+      baseLimit - newCardsIntroducedToday.length,
+    );
+    const allowedNewCards = Math.min(remainingTotalQuota, remainingNewQuota);
+
+    if (allowedNewCards <= 0) return [];
+
+    return this.prisma.flashcard.findMany({
+      where: {
+        deckId,
+        frontContent: { not: ANONYMIZED_PAYLOAD },
+        isPublished: true,
+        fsrsData: { none: { userId } },
+      },
+      orderBy: { createdAt: 'asc' },
+      take: allowedNewCards,
+    });
+  }
+
+  private async resolveStreak(
+    userId: string,
+    userRecord: any,
+    todayStart: Date,
+  ) {
+    let current = userRecord?.currentStreak ?? 0;
+    let longest = userRecord?.longestStreak ?? 0;
+    let isFirstStudyOfDay = false;
 
     const hasStudiedToday = await this.prisma.reviewLog.findFirst({
       where: { userId, createdAt: { gte: todayStart } },
@@ -198,60 +366,41 @@ export class StudyService {
 
     if (!hasStudiedToday) {
       isFirstStudyOfDay = true;
-      const yesterdayStart = dayjs(todayStart).subtract(1, 'day').toDate();
-
+      const yesterdayStart = new Date(
+        todayStart.getTime() - 24 * 60 * 60 * 1000,
+      );
       const hasStudiedYesterday = await this.prisma.reviewLog.findFirst({
         where: { userId, createdAt: { gte: yesterdayStart, lt: todayStart } },
         select: { id: true },
       });
 
-      if (hasStudiedYesterday) {
-        nextCurrentStreak += 1;
-      } else {
-        nextCurrentStreak = 1;
-      }
-
-      if (nextCurrentStreak > nextLongestStreak) {
-        nextLongestStreak = nextCurrentStreak;
-      }
+      current = hasStudiedYesterday ? current + 1 : 1;
+      if (current > longest) longest = current;
     }
 
-    // RESOLUÇÃO DE LINTER (KISS): Comparamos diretamente os números (1, 2, 3, 4)
-    const gainedXp = rating === 1 ? 3 : rating === 2 ? 5 : rating === 3 ? 10 : 15;
+    return { isFirstStudyOfDay, current, longest };
+  }
 
-    // --- 2. LÓGICA FSRS ---
-    let activeFsrs = this.fsrs;
-    if (userRecord?.fsrsWeights && Array.isArray(userRecord.fsrsWeights)) {
-      activeFsrs = new FSRS({ w: userRecord.fsrsWeights as number[] });
-    }
+  private async executeReviewTransaction(
+    userId: string,
+    flashcardId: string,
+    rating: number,
+    durationMs: number,
+    nextState: FSRSCard,
+    prevData: CardFSRSData | null,
+    gainedXp: number,
+    streakData: StreakDataPayload, // Tipagem Estrutural aplicada
+    isFatiguedReview: boolean, // Recebimento estrito com tipagem forte
+  ): Promise<CardState> {
+    // Análise de Cartões Parasitas
+    const isLeech = nextState.lapses >= this.LEECH_THRESHOLD;
 
-    let currentFsrsCard: FSRSCard;
-    if (!fsrsDataRecord) {
-      currentFsrsCard = createEmptyCard();
-    } else {
-      currentFsrsCard = {
-        ...createEmptyCard(),
-        due: fsrsDataRecord.due,
-        stability: fsrsDataRecord.stability,
-        difficulty: fsrsDataRecord.difficulty,
-        elapsed_days: fsrsDataRecord.elapsedDays,
-        scheduled_days: fsrsDataRecord.scheduledDays,
-        reps: fsrsDataRecord.reps,
-        lapses: fsrsDataRecord.lapses,
-        state: fsrsDataRecord.state,
-        last_review: fsrsDataRecord.lastReview || undefined,
-      };
-    }
+    // Suspensão Lógica ("Far Future"): Respeita a restrição de não-nulidade do Schema
+    const effectiveDue = isLeech ? this.SUSPENDED_DUE_DATE : nextState.due;
+    const effectiveState: CardState = isLeech
+      ? CardState.SUSPENDED // 4 era mágico; agora é o enum
+      : toCardState(nextState.state); // State (0-3) -> CardState
 
-    const now = new Date();
-
-    // TYPE ASSERTION SEGURO: Convertemos forçadamente para o Enum apenas na entrega para a lib
-    const reviewResult = activeFsrs.next(currentFsrsCard, now, rating);
-    const nextState = reviewResult.card;
-
-    const sanitizedDurationMs = Math.min(reviewDurationMs, 60000);
-
-    // --- 3. A TRANSAÇÃO ATÔMICA ---
     await this.prisma.$transaction([
       this.prisma.cardFSRSData.upsert({
         where: { flashcardId_userId: { flashcardId, userId } },
@@ -262,9 +411,9 @@ export class StudyService {
           scheduledDays: nextState.scheduled_days,
           reps: nextState.reps,
           lapses: nextState.lapses,
-          state: nextState.state,
+          state: effectiveState,
           lastReview: nextState.last_review,
-          due: nextState.due,
+          due: effectiveDue,
         },
         create: {
           flashcardId,
@@ -275,82 +424,46 @@ export class StudyService {
           scheduledDays: nextState.scheduled_days,
           reps: nextState.reps,
           lapses: nextState.lapses,
-          state: nextState.state,
+          state: effectiveState,
           lastReview: nextState.last_review,
-          due: nextState.due,
+          due: effectiveDue,
         },
       }),
       this.prisma.reviewLog.create({
         data: {
           flashcardId,
           userId,
-          rating, // Salvamos o número nativo no banco
-          reviewDurationMs: sanitizedDurationMs,
-          elapsedDays: nextState.elapsed_days,
-          stabilityBefore: currentFsrsCard.stability,
-          difficultyBefore: currentFsrsCard.difficulty,
+          rating,
+          reviewDurationMs: durationMs,
+          studyMode: 'STANDARD',
+          state: prevData
+            ? toFsrsState(prevData.state)
+            : toFsrsState(CardState.NEW), // ✅ ANTES: CardState.NEW (string) em campo Int
+          stabilityBefore: prevData?.stability ?? 0,
           stabilityAfter: nextState.stability,
+          difficultyBefore: prevData?.difficulty ?? 0,
           difficultyAfter: nextState.difficulty,
-          isFatiguedReview: false,
+          elapsedDays: nextState.elapsed_days,
+          scheduledDays: nextState.scheduled_days,
+          due: prevData?.due ?? new Date(),
+          version: 1,
+          reps: nextState.reps,
+          lapses: nextState.lapses,
+          // 🔴 APLICAÇÃO CRÍTICA DO STATUS DE EXAUSTÃO
+          isFatiguedReview,
         },
       }),
       this.prisma.user.update({
         where: { id: userId },
         data: {
           totalXp: { increment: gainedXp },
-          ...(isFirstStudyOfDay && {
-            currentStreak: nextCurrentStreak,
-            longestStreak: nextLongestStreak,
+          ...(streakData.isFirstStudyOfDay && {
+            currentStreak: streakData.current,
+            longestStreak: streakData.longest,
           }),
         },
       }),
     ]);
-
-    return true;
-  }
-
-  /**
-   * UC10 - Modo Chaos (Interleaving)
-   */
-  async getChaosStudyQueue(userId: string, limit: number = 50): Promise<PrismaFlashcard[]> {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { timezone: true },
-    });
-
-    const rolloverThreshold = this.getRolloverThreshold(user?.timezone);
-
-    const dueFsrsRecords = await this.prisma.cardFSRSData.findMany({
-      where: {
-        userId: userId,
-        due: { lte: rolloverThreshold },
-        state: { not: 0 },
-        flashcard: {
-          front: { not: ANONYMIZED_PAYLOAD },
-          deck: {
-            creatorId: userId,
-            isArchived: false,
-          },
-        },
-      },
-      include: {
-        flashcard: {
-          include: { deck: true },
-        },
-      },
-      orderBy: { due: 'asc' },
-      take: limit,
-    });
-
-    return this.shuffleArray(this.mapFsrsToCard(dueFsrsRecords));
-  }
-
-  private shuffleArray<T>(array: T[]): T[] {
-    const shuffled = [...array];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
-    return shuffled;
+    return effectiveState;
   }
 }

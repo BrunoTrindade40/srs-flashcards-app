@@ -1,60 +1,64 @@
+import React, {
+  useState,
+  useEffect,
+  useMemo,
+  useCallback,
+  type PropsWithChildren,
+} from "react";
 import type { Session, User } from "@supabase/supabase-js";
-import React, { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
+import { client } from "../lib/apollo"; // SSOT: Instância central do Apollo importada
 import { AuthContext } from "./AuthContext";
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+// SRP ESTRITO: O módulo exporta unicamente o Provedor lógico.
+// A interface visual (Header) foi isolada fisicamente.
+export const AuthProvider: React.FC<PropsWithChildren> = ({ children }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
-  // O loading inicia como true para bloquear a renderização das rotas protegidas
-  // até que o Supabase responda se existe uma sessão ativa no storage do navegador.
   const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
-    let mounted = true;
+    // Avaliação Tardia (Lazy) e síncrona do estado
+    supabase.auth.getSession().then(({ data: { session: activeSession } }) => {
+      setSession(activeSession);
+      setUser(activeSession?.user ?? null);
+      setLoading(false);
+    });
 
-    async function getInitialSession() {
-      try {
-        const { data, error } = await supabase.auth.getSession();
-        if (error) throw error;
+    // Inscrição reativa para mutações de autorização
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, activeSession) => {
+      setSession(activeSession);
+      setUser(activeSession?.user ?? null);
+      setLoading(false);
+    });
 
-        if (mounted) {
-          setSession(data.session);
-          setUser(data.session?.user ?? null);
-        }
-      } catch (error: unknown) {
-        if (error instanceof Error) {
-          console.error("Erro ao buscar sessão inicial:", error.message);
-        } else {
-          console.error("Erro desconhecido ao buscar sessão inicial.");
-        }
-      } finally {
-        if (mounted) {
-          setLoading(false);
-        }
-      }
-    }
-
-    getInitialSession();
-
-    // Inscreve a aplicação inteira para escutar mudanças de estado do Supabase
-    const { data: authListener } = supabase.auth.onAuthStateChange(
-      (_event, newSession) => {
-        setSession(newSession);
-        setUser(newSession?.user ?? null);
-        setLoading(false);
-      },
-    );
-
-    // Cleanup function para evitar memory leaks caso o provider seja desmontado
+    // Tear-down estrito prevenindo Stale Closures (Regra 6)
     return () => {
-      mounted = false;
-      authListener.subscription.unsubscribe();
+      subscription.unsubscribe();
     };
   }, []);
 
-  return (
-    /* React 19: Objeto AuthContext atua nativamente como Provider */
-    <AuthContext value={{ session, user, loading }}>{children}</AuthContext>
+  // Delegação Estrita de Destruição (Regra 44)
+  const logout = useCallback(async (): Promise<void> => {
+    try {
+      await supabase.auth.signOut();
+      await client.clearStore(); // Purga física e síncrona do cache GraphQL na RAM
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        console.error("Falha no colapso sistêmico da sessão:", error.message);
+      }
+      throw error; // Transfere o controle de falha visual para a UI invocadora
+    }
+  }, []);
+
+  // Memoização rigorosa para bloqueio de re-renders na árvore (Regra 42)
+  const contextValue = useMemo(
+    () => ({ session, user, loading, logout }),
+    [session, user, loading, logout],
   );
-}
+
+  // Utilização nativa da API de Contexto do React 19
+  return <AuthContext value={contextValue}>{children}</AuthContext>;
+};

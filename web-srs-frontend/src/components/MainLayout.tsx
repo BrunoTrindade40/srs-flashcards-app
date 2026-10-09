@@ -1,7 +1,9 @@
 import { Outlet } from "react-router-dom";
 import { Header } from "./Header";
 
-export function MainLayout() {
+// UI02: Ancoragem estática clara preservada internamente no <Header />,
+// enquanto o invólucro da aplicação adota o tema escuro exigido.
+export const MainLayout: React.FC = () => {
   return (
     <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100">
       <Header />
@@ -10,6 +12,4 @@ export function MainLayout() {
       </main>
     </div>
   );
-}
-
-export default MainLayout;
+};

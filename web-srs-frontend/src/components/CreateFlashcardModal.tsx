@@ -1,282 +1,194 @@
-import { gql } from "@apollo/client/core";
-import { useMutation } from "@apollo/client/react";
-import React, { useEffect, useState } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import { useToast } from "../hooks/useToast";
-import { CREATE_FLASHCARD } from "../lib/graphql/flashcard";
-
-interface CreateFlashcardModalProps {
-  deckId: string;
-  isOpen?: boolean;
-  onClose: () => void;
-  onSuccess?: () => void;
-}
+import React from "react";
+import { useCreateFlashcardModal } from "../hooks/useCreateFlashcardModal";
+import { MarkdownRenderer } from "./MarkdownRenderer";
+// Correção: Hook de Focus Trap importado
+import { useFocusTrap } from "../hooks/useFocusTrap";
+// 🟢 CORRIGIDO: Importação tipada pura garantindo que a AST contenha apenas a UI
+import type { CreateFlashcardModalProps } from "./CreateFlashcardModal.types";
 
 export const CreateFlashcardModal: React.FC<CreateFlashcardModalProps> = ({
   deckId,
-  isOpen = true,
   onClose,
-  onSuccess,
 }) => {
-  const { showToast } = useToast();
+  const {
+    front,
+    setFront,
+    back,
+    setBack,
+    sourceContext,
+    setSourceContext,
+    isPreviewMode,
+    setIsPreviewMode,
+    loading,
+    handleSubmit,
+    handleClose,
+  } = useCreateFlashcardModal({ deckId, onClose });
 
-  const [front, setFront] = useState("");
-  const [back, setBack] = useState("");
-  const [sourceContext, setSourceContext] = useState("");
-  const [imageUrl, setImageUrl] = useState("");
-  const [audioUrl, setAudioUrl] = useState("");
-
-  const [isPreviewMode, setIsPreviewMode] = useState(false);
-  const [showAdvanced, setShowAdvanced] = useState(false);
-
-  const [createFlashcard, { loading }] = useMutation(CREATE_FLASHCARD, {
-    update(cache, { data }) {
-      if (!data?.createFlashcard) return;
-
-      cache.modify({
-        id: cache.identify({ __typename: "Deck", id: deckId }),
-        fields: {
-          flashcards(existingFlashcardRefs = []) {
-            const newFlashcardRef = cache.writeFragment({
-              data: data.createFlashcard,
-              fragment: gql`
-                fragment NewFlashcard on Flashcard {
-                  id
-                  front
-                  back
-                  sourceContext
-                  imageUrl
-                  audioUrl
-                }
-              `,
-            });
-            return [...existingFlashcardRefs, newFlashcardRef];
-          },
-        },
-      });
-    },
-  });
-
-  const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!front.trim() || !back.trim() || loading) return;
-
-    try {
-      await createFlashcard({
-        variables: {
-          data: {
-            deckId,
-            front: front.trim(),
-            back: back.trim(),
-            sourceContext: sourceContext.trim() || undefined,
-            imageUrl: imageUrl.trim() || undefined,
-            audioUrl: audioUrl.trim() || undefined,
-          },
-        },
-      });
-      showToast("Flashcard criado com sucesso!", "success");
-      onSuccess?.();
-      onClose();
-    } catch (err: unknown) {
-      if (err instanceof Error) {
-        showToast(`Falha ao criar cartão: ${err.message}`, "error");
-      }
-    }
-  };
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
-
-  if (!isOpen) return null;
+  // Correção CRÍTICA: Aplicação do Focus Trap atrelada ao carregamento visual
+  const modalRef = useFocusTrap(!loading, handleClose);
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-fade-in">
-      <div className="flex flex-col w-full max-w-3xl bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden">
-        {/* Header */}
-        <div className="flex flex-row items-center justify-between p-5 border-b border-slate-800">
-          <h2 className="text-lg font-bold text-slate-100">
-            Criar Novo Flashcard
-          </h2>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-fadeIn">
+      {/* Correção de A11y: Injeção da referência do DOM e declaração ARIA */}
+      <div
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        className="flex flex-col w-full max-w-4xl bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden max-h-[90vh]"
+      >
+        {/* Cabeçalho */}
+        <div className="flex justify-between items-center px-6 py-4 border-b border-slate-800 bg-slate-900/50">
+          <div className="flex items-center gap-3">
+            <span className="text-xl">🗂️</span>
+            <h2 className="text-lg font-bold text-slate-100">
+              Criar Novo Flashcard
+            </h2>
+          </div>
           <button
-            onClick={onClose}
-            className="text-slate-500 hover:text-slate-300 font-bold p-1 transition-colors cursor-pointer"
+            onClick={handleClose}
+            className="text-slate-400 hover:text-slate-200 transition-colors p-1 rounded-lg hover:bg-slate-800 cursor-pointer"
+            title="Fechar (ESC)"
           >
             ✕
           </button>
         </div>
 
-        {/* Tabs */}
-        <div className="flex flex-row w-full border-b border-slate-800 bg-slate-900/50">
+        {/* UI05 - Alternador de Curadoria Visual (Edição vs Preview AST) */}
+        <div className="flex border-b border-slate-800 bg-slate-950/40 px-6 py-2 gap-2">
           <button
             type="button"
-            className={`flex-1 py-3 text-xs uppercase tracking-wider font-bold transition-colors cursor-pointer ${
-              !isPreviewMode
-                ? "text-amber-400 border-b-2 border-amber-500"
-                : "text-slate-500 hover:bg-slate-800"
-            }`}
             onClick={() => setIsPreviewMode(false)}
+            className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+              !isPreviewMode
+                ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                : "text-slate-400 hover:text-slate-200"
+            }`}
           >
-            Edição
+            ✏️ Edição
           </button>
           <button
             type="button"
-            className={`flex-1 py-3 text-xs uppercase tracking-wider font-bold transition-colors cursor-pointer ${
-              isPreviewMode
-                ? "text-amber-400 border-b-2 border-amber-500"
-                : "text-slate-500 hover:bg-slate-800"
-            }`}
             onClick={() => setIsPreviewMode(true)}
+            className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+              isPreviewMode
+                ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                : "text-slate-400 hover:text-slate-200"
+            }`}
           >
-            Preview Visual
+            👁️ Curadoria Visual (Preview AST)
           </button>
         </div>
 
-        {/* Body */}
-        <div className="flex flex-col p-6 h-[55vh] overflow-y-auto custom-scrollbar">
+        {/* Corpo do Modal em Flexbox */}
+        <form
+          onSubmit={handleSubmit}
+          className="flex flex-col flex-1 overflow-y-auto p-6 gap-6"
+        >
           {!isPreviewMode ? (
-            <form
-              id="create-card-form"
-              onSubmit={handleSubmit}
-              className="flex flex-col grow gap-5"
-            >
-              <div className="flex flex-col gap-2 flex-1">
-                <label className="text-xs font-bold text-slate-300 uppercase tracking-wider">
-                  Frente (Pergunta / Estímulo) *
+            /* Modo de Edição Lado a Lado / Empilhado via Flexbox */
+            <div className="flex flex-col md:flex-row gap-6 w-full flex-1">
+              <div className="flex flex-col flex-1 gap-2">
+                <label className="text-xs font-bold text-amber-500 uppercase tracking-wider flex justify-between items-center">
+                  <span>Frente (Pergunta / Estímulo) *</span>
+                  <span className="text-[10px] text-slate-500 lowercase font-normal">
+                    Markdown & LaTeX
+                  </span>
                 </label>
                 <textarea
-                  className="flex-1 w-full p-4 bg-slate-950 border border-slate-800 rounded-xl resize-none focus:outline-none focus:border-amber-500 transition-colors font-mono text-sm text-slate-100 placeholder-slate-600"
-                  placeholder="Pergunta (Suporta Markdown: **negrito**, `código`)"
                   value={front}
                   onChange={(e) => setFront(e.target.value)}
-                  disabled={loading}
+                  placeholder="Ex: Qual a identidade de Euler? $e^{i\pi} + 1 = 0$"
+                  className="flex-1 min-h-36 p-4 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 text-sm focus:outline-none focus:border-amber-500/50 transition-all resize-none font-mono"
                   required
                 />
               </div>
-
-              <div className="flex flex-col gap-2 flex-1">
-                <label className="text-xs font-bold text-slate-300 uppercase tracking-wider">
-                  Verso (Resposta / Explicação) *
+              <div className="flex flex-col flex-1 gap-2">
+                <label className="text-xs font-bold text-emerald-500 uppercase tracking-wider flex justify-between items-center">
+                  <span>Verso (Resposta / Explicação) *</span>
+                  <span className="text-[10px] text-slate-500 lowercase font-normal">
+                    Markdown & LaTeX
+                  </span>
                 </label>
                 <textarea
-                  className="flex-1 w-full p-4 bg-slate-950 border border-slate-800 rounded-xl resize-none focus:outline-none focus:border-amber-500 transition-colors font-mono text-sm text-slate-100 placeholder-slate-600"
-                  placeholder="Resposta detalhada"
                   value={back}
                   onChange={(e) => setBack(e.target.value)}
-                  disabled={loading}
+                  placeholder="Digite a resposta ou explicação detalhada."
+                  className="flex-1 min-h-36 p-4 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 text-sm focus:outline-none focus:border-emerald-500/50 transition-all resize-none font-mono"
                   required
                 />
               </div>
-
-              {/* Seção KISS para Multimídia */}
-              <div className="flex flex-col gap-3 mt-2 border-t border-slate-800 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setShowAdvanced(!showAdvanced)}
-                  className="text-xs font-bold text-amber-500 hover:text-amber-400 self-start cursor-pointer transition-colors"
-                >
-                  {showAdvanced
-                    ? "− Ocultar Campos de Multimídia/Contexto"
-                    : "+ Adicionar Multimídia ou Contexto (Opcional)"}
-                </button>
-
-                {showAdvanced && (
-                  <div className="flex flex-col gap-4 animate-fade-in bg-slate-800/30 p-4 rounded-xl border border-slate-800/60">
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                        Referência / Contexto
-                      </label>
-                      <input
-                        type="text"
-                        value={sourceContext}
-                        onChange={(e) => setSourceContext(e.target.value)}
-                        placeholder="Ex: Livro X, Página 42 / Aula 5"
-                        disabled={loading}
-                        className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-slate-200 text-xs focus:outline-none focus:border-amber-500 transition-colors"
-                      />
-                    </div>
-                    <div className="flex flex-col sm:flex-row gap-4">
-                      <div className="flex flex-col gap-1.5 flex-1">
-                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                          URL da Imagem
-                        </label>
-                        <input
-                          type="url"
-                          value={imageUrl}
-                          onChange={(e) => setImageUrl(e.target.value)}
-                          placeholder="https://exemplo.com/imagem.png"
-                          disabled={loading}
-                          className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-slate-200 text-xs focus:outline-none focus:border-amber-500 transition-colors"
-                        />
-                      </div>
-                      <div className="flex flex-col gap-1.5 flex-1">
-                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                          URL do Áudio
-                        </label>
-                        <input
-                          type="url"
-                          value={audioUrl}
-                          onChange={(e) => setAudioUrl(e.target.value)}
-                          placeholder="https://exemplo.com/audio.mp3"
-                          disabled={loading}
-                          className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-slate-200 text-xs focus:outline-none focus:border-amber-500 transition-colors"
-                        />
-                      </div>
-                    </div>
-                  </div>
+            </div>
+          ) : (
+            /* UI05 - Modo de Curadoria Visual (Preview do AST) */
+            <div className="flex flex-col md:flex-row gap-6 w-full flex-1">
+              <div className="flex flex-col flex-1 gap-2 bg-slate-950 p-5 rounded-xl border border-slate-800 min-h-48 overflow-y-auto">
+                <span className="text-xs font-bold text-amber-500 uppercase tracking-wider border-b border-slate-800/80 pb-2 mb-1">
+                  Frente (Preview AST)
+                </span>
+                {front.trim() ? (
+                  <MarkdownRenderer content={front} />
+                ) : (
+                  <span className="text-xs text-slate-600 italic">
+                    Nenhum conteúdo digitado para a frente.
+                  </span>
                 )}
               </div>
-            </form>
-          ) : (
-            <div className="flex flex-col grow gap-6">
-              <div className="flex flex-col flex-1 p-5 bg-slate-950 rounded-xl border border-slate-800 overflow-y-auto">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3 border-b border-slate-800 pb-1">
-                  Frente
+              <div className="flex flex-col flex-1 gap-2 bg-slate-950 p-5 rounded-xl border border-slate-800 min-h-48 overflow-y-auto">
+                <span className="text-xs font-bold text-emerald-500 uppercase tracking-wider border-b border-slate-800/80 pb-2 mb-1">
+                  Verso (Preview AST)
                 </span>
-                <div className="prose prose-invert max-w-none text-slate-200">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {front || "*Frente vazia*"}
-                  </ReactMarkdown>
-                </div>
-              </div>
-              <div className="flex flex-col flex-1 p-5 bg-amber-500/5 rounded-xl border border-amber-500/20 overflow-y-auto">
-                <span className="text-xs font-bold text-amber-500/80 uppercase tracking-widest mb-3 border-b border-amber-500/20 pb-1">
-                  Verso
-                </span>
-                <div className="prose prose-invert prose-a:text-amber-400 max-w-none text-slate-200">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {back || "*Verso vazio*"}
-                  </ReactMarkdown>
-                </div>
+                {back.trim() ? (
+                  <MarkdownRenderer content={back} />
+                ) : (
+                  <span className="text-xs text-slate-600 italic">
+                    Nenhum conteúdo digitado para o verso.
+                  </span>
+                )}
               </div>
             </div>
           )}
-        </div>
 
-        {/* Footer */}
-        <div className="flex flex-row items-center justify-end p-5 border-t border-slate-800 bg-slate-900 gap-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-5 py-2.5 rounded-xl text-slate-400 font-medium hover:text-slate-200 hover:bg-slate-800 transition-colors text-xs cursor-pointer"
-            disabled={loading}
-          >
-            Cancelar
-          </button>
-          <button
-            type="submit"
-            form="create-card-form"
-            className="flex flex-row items-center justify-center px-7 py-2.5 bg-amber-500 text-slate-950 font-bold rounded-xl shadow-md hover:bg-amber-600 transition-all text-xs disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-            disabled={loading || !front.trim() || !back.trim()}
-          >
-            {loading ? "Salvando..." : "Salvar Flashcard"}
-          </button>
-        </div>
+          {/* Contexto de Origem Opcional */}
+          <div className="flex flex-col gap-2 pt-2 border-t border-slate-800/60">
+            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+              Contexto de Origem (Opcional)
+            </label>
+            <input
+              type="text"
+              value={sourceContext}
+              onChange={(e) => setSourceContext(e.target.value)}
+              placeholder="Ex: Capítulo 3 do livro X, Aula de Física..."
+              className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-slate-200 text-xs focus:outline-none focus:border-slate-700 transition-all"
+            />
+          </div>
+
+          {/* Ações do Rodapé */}
+          <div className="flex justify-between items-center pt-4 border-t border-slate-800">
+            <span className="text-[11px] text-slate-500">
+              Pressione{" "}
+              <kbd className="px-1.5 py-0.5 bg-slate-800 rounded border border-slate-700 text-slate-400 font-mono">
+                ESC
+              </kbd>{" "}
+              para cancelar
+            </span>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={handleClose}
+                className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs rounded-xl border border-slate-700 transition-all cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={loading || !front.trim() || !back.trim()}
+                className="px-6 py-2.5 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-bold text-xs rounded-xl transition-all shadow-md shadow-amber-500/10 cursor-pointer"
+              >
+                {loading ? "Salvando..." : "Confirmar e Criar Card"}
+              </button>
+            </div>
+          </div>
+        </form>
       </div>
     </div>
   );

@@ -1,197 +1,186 @@
-import { useMutation } from "@apollo/client/react";
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
+import { validateFlashcardInput } from "../domain/validators";
 import { useToast } from "../hooks/useToast";
-import { UPDATE_FLASHCARD, type Flashcard } from "../lib/graphql/flashcard";
-
-interface EditFlashcardModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  // Utilizando o contrato estrito para forçar as tipagens corretas no Frontend
-  flashcard: Flashcard;
-}
+// Correção: Hook de Focus Trap importado
+import { useFocusTrap } from "../hooks/useFocusTrap";
+import type { EditFlashcardModalProps } from "./EditFlashcardModal.types";
 
 export const EditFlashcardModal: React.FC<EditFlashcardModalProps> = ({
-  isOpen,
+  initialFrontContent,
+  initialBackContent,
+  initialSourceContext,
   onClose,
-  flashcard,
+  onSave,
 }) => {
   const { showToast } = useToast();
-
-  const [front, setFront] = useState(flashcard.front);
-  const [back, setBack] = useState(flashcard.back);
+  const [frontContent, setFrontContent] = useState(initialFrontContent);
+  const [backContent, setBackContent] = useState(initialBackContent);
   const [sourceContext, setSourceContext] = useState(
-    flashcard.sourceContext || "",
+    initialSourceContext ?? "",
   );
-  const [imageUrl, setImageUrl] = useState(flashcard.imageUrl || "");
-  const [audioUrl, setAudioUrl] = useState(flashcard.audioUrl || "");
+  const [step, setStep] = useState<1 | 2>(1);
 
-  const [showAdvanced, setShowAdvanced] = useState(
-    !!flashcard.sourceContext || !!flashcard.imageUrl || !!flashcard.audioUrl,
-  );
+  // Correção CRÍTICA: Aplicação incondicional do Focus Trap no ciclo de edição
+  const modalRef = useFocusTrap(true, onClose);
 
-  const [updateFlashcard, { loading }] = useMutation(UPDATE_FLASHCARD);
-
-  const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
+  const handleFirstSubmit = (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!front.trim() || !back.trim() || loading) return;
 
-    try {
-      await updateFlashcard({
-        variables: {
-          data: {
-            id: flashcard.id,
-            front: front.trim(),
-            back: back.trim(),
-            sourceContext: sourceContext.trim() || undefined,
-            imageUrl: imageUrl.trim() || undefined,
-            audioUrl: audioUrl.trim() || undefined,
-          },
-        },
-      });
-      showToast("Flashcard atualizado com sucesso!", "success");
-      onClose();
-    } catch (err: unknown) {
-      if (err instanceof Error) {
-        showToast(`Erro ao atualizar flashcard: ${err.message}`, "error");
-      }
+    const validationError = validateFlashcardInput(
+      frontContent,
+      backContent,
+      sourceContext,
+    );
+
+    if (validationError) {
+      showToast(validationError, "error");
+      return;
     }
+
+    setStep(2);
   };
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
-
-  if (!isOpen) return null;
+  const handleFinalSubmit = (resetProgress: boolean) => {
+    onSave(
+      frontContent.trim(),
+      backContent.trim(),
+      sourceContext.trim() ? sourceContext.trim() : null,
+      resetProgress,
+    );
+  };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
-      <div className="w-full max-w-2xl bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl flex flex-col gap-6">
-        <div className="flex items-center justify-between border-b border-slate-800 pb-4">
-          <div className="flex items-center gap-2">
-            <span className="text-xl">✏️</span>
-            <h2 className="text-lg font-bold text-slate-100">
-              Editar Flashcard
-            </h2>
-          </div>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fadeIn">
+      {/* Correção de A11y: Injeção da referência do DOM e declaração ARIA */}
+      <div
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        className="w-full max-w-2xl bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden"
+      >
+        <div className="flex items-center justify-between border-b border-slate-800 p-5 shrink-0 bg-slate-900/50">
+          <h2 className="text-lg font-bold text-slate-100">
+            {step === 1
+              ? "Editar Flashcard"
+              : "Atenção: Impacto no Aprendizado"}
+          </h2>
           <button
             onClick={onClose}
-            className="text-slate-500 hover:text-slate-300 text-sm p-1 transition-colors cursor-pointer"
-            aria-label="Fechar modal"
+            className="text-slate-500 hover:text-slate-300 transition-colors p-1 cursor-pointer"
           >
             ✕
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
-              Frente (Pergunta) *
-            </label>
-            <textarea
-              value={front}
-              onChange={(e) => setFront(e.target.value)}
-              required
-              rows={3}
-              disabled={loading}
-              className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 text-sm font-mono resize-none focus:outline-none focus:border-amber-500 transition-colors"
-            />
-          </div>
+        {step === 1 ? (
+          <form
+            onSubmit={handleFirstSubmit}
+            className="p-6 flex flex-col gap-5 overflow-y-auto"
+          >
+            <div className="flex flex-col gap-2">
+              <label className="text-xs font-semibold text-amber-500 uppercase tracking-wider">
+                Frente (Estímulo)
+              </label>
+              <textarea
+                value={frontContent}
+                onChange={(e) => setFrontContent(e.target.value)}
+                className="w-full h-28 px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 text-sm focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/50 resize-none font-mono transition-colors"
+                required
+              />
+            </div>
 
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
-              Verso (Resposta) *
-            </label>
-            <textarea
-              value={back}
-              onChange={(e) => setBack(e.target.value)}
-              required
-              rows={4}
-              disabled={loading}
-              className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 text-sm font-mono resize-none focus:outline-none focus:border-amber-500 transition-colors"
-            />
-          </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-xs font-semibold text-emerald-500 uppercase tracking-wider">
+                Verso (Resposta Oculta)
+              </label>
+              <textarea
+                value={backContent}
+                onChange={(e) => setBackContent(e.target.value)}
+                className="w-full h-32 px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 text-sm focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 resize-none font-mono transition-colors"
+                required
+              />
+            </div>
 
-          {/* Seção Avançada de Edição */}
-          <div className="flex flex-col gap-3 mt-1 border-t border-slate-800 pt-4">
-            <button
-              type="button"
-              onClick={() => setShowAdvanced(!showAdvanced)}
-              className="text-xs font-bold text-amber-500 hover:text-amber-400 self-start cursor-pointer transition-colors"
-            >
-              {showAdvanced
-                ? "− Ocultar Campos de Multimídia/Contexto"
-                : "+ Editar Multimídia ou Contexto"}
-            </button>
+            <div className="flex flex-col gap-2">
+              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                Contexto de Origem / Referencial (Opcional)
+              </label>
+              <input
+                type="text"
+                value={sourceContext}
+                onChange={(e) => setSourceContext(e.target.value)}
+                className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 text-sm focus:outline-none focus:border-slate-700 font-sans transition-colors"
+              />
+            </div>
 
-            {showAdvanced && (
-              <div className="flex flex-col gap-4 animate-fade-in bg-slate-800/30 p-4 rounded-xl border border-slate-800/60">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                    Referência / Contexto
-                  </label>
-                  <input
-                    type="text"
-                    value={sourceContext}
-                    onChange={(e) => setSourceContext(e.target.value)}
-                    placeholder="Ex: Livro X, Página 42"
-                    disabled={loading}
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-slate-200 text-xs focus:outline-none focus:border-amber-500 transition-colors"
-                  />
-                </div>
-                <div className="flex flex-col sm:flex-row gap-4">
-                  <div className="flex flex-col gap-1.5 flex-1">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                      URL da Imagem
-                    </label>
-                    <input
-                      type="url"
-                      value={imageUrl}
-                      onChange={(e) => setImageUrl(e.target.value)}
-                      placeholder="https://exemplo.com/imagem.png"
-                      disabled={loading}
-                      className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-slate-200 text-xs focus:outline-none focus:border-amber-500 transition-colors"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1.5 flex-1">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                      URL do Áudio
-                    </label>
-                    <input
-                      type="url"
-                      value={audioUrl}
-                      onChange={(e) => setAudioUrl(e.target.value)}
-                      placeholder="https://exemplo.com/audio.mp3"
-                      disabled={loading}
-                      className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-slate-200 text-xs focus:outline-none focus:border-amber-500 transition-colors"
-                    />
-                  </div>
-                </div>
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 text-xs font-medium text-slate-400 hover:text-slate-200 cursor-pointer transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={!frontContent.trim() || !backContent.trim()}
+                className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs transition-all cursor-pointer disabled:opacity-50 shadow-sm"
+              >
+                Avançar
+              </button>
+            </div>
+          </form>
+        ) : (
+          <div className="p-6 flex flex-col gap-6 overflow-y-auto">
+            <div className="flex flex-col gap-3">
+              <p className="text-sm text-slate-300 leading-relaxed">
+                Você alterou o conteúdo deste cartão. Alterações significativas
+                mudam o conceito e exigem reiniciar o agendamento cognitivo.
+              </p>
+              <div className="p-4 bg-amber-950/20 border border-amber-900/50 rounded-xl flex flex-col gap-2">
+                <span className="text-xs font-bold text-amber-500">
+                  SE FOI UMA MUDANÇA ESTRUTURAL:
+                </span>
+                <p className="text-xs text-amber-200/70">
+                  Mudou o conceito primário. O histórico será limpo e o cartão
+                  voltará para a fila de "Novos".
+                </p>
               </div>
-            )}
+              <div className="flex flex-col gap-2 p-4 bg-emerald-950/20 border border-emerald-900/50 rounded-xl">
+                <span className="text-xs font-bold text-emerald-500">
+                  SE FOI APENAS CORREÇÃO DE ERRO:
+                </span>
+                <p className="text-xs text-emerald-200/70">
+                  Pequenas correções ortográficas. O progresso estatístico e o
+                  agendamento atual serão preservados.
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-col sm:flex-row items-center justify-end gap-3 pt-4 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setStep(1)}
+                className="w-full sm:w-auto px-4 py-2 text-xs font-medium text-slate-400 hover:text-slate-200 cursor-pointer transition-colors"
+              >
+                Voltar
+              </button>
+              <button
+                type="button"
+                onClick={() => handleFinalSubmit(false)}
+                className="w-full sm:w-auto px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-emerald-800/50 font-bold rounded-xl text-xs transition-all cursor-pointer shadow-sm"
+              >
+                Manter Progresso
+              </button>
+              <button
+                type="button"
+                onClick={() => handleFinalSubmit(true)}
+                className="w-full sm:w-auto px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-xs transition-all cursor-pointer shadow-sm"
+              >
+                Resetar Progresso
+              </button>
+            </div>
           </div>
-
-          <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800 mt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={loading}
-              className="px-4 py-2 text-xs font-medium text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={loading || !front.trim() || !back.trim()}
-              className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-xs transition-all cursor-pointer disabled:opacity-50"
-            >
-              {loading ? "Salvando..." : "Salvar Alterações"}
-            </button>
-          </div>
-        </form>
+        )}
       </div>
     </div>
   );

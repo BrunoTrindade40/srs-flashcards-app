@@ -9,6 +9,7 @@ type User {
   isAnonymized: Boolean!
   totalXp: Int!
   timezone: String!
+  dailyRolloverTime: String
   lastDataExportAt: DateTime
   lastNotificationSentAt: DateTime
   createdAt: DateTime!
@@ -24,27 +25,38 @@ A date-time string at UTC, such as 2019-12-03T09:54:33Z, compliant with the date
 """
 scalar DateTime
 
-type CardFSRSData {
-  stability: Float!
-  difficulty: Float!
-  reps: Int!
-  lapses: Int!
-  state: Int!
-  due: DateTime!
-}
-
 type Flashcard {
   id: ID!
-  front: String!
-  back: String!
+  deckId: String!
+  frontContent: String!
+  backContent: String!
   sourceContext: String
   imageUrl: String
   audioUrl: String
-  deckId: ID!
-  deck: Deck
+  isPublished: Boolean!
+  isEditedAfterAi: Boolean!
+  aiModelSource: String
   createdAt: DateTime!
   updatedAt: DateTime!
-  fsrsData: [CardFSRSData!]
+
+  """Data agendada pelo FSRS"""
+  due: DateTime
+
+  """
+  Estado FSRS do card: NEW · LEARNING · REVIEW · RELEARNING · SUSPENDED (leech)
+  """
+  state: CardState
+}
+
+"""
+Estado FSRS do card após leech protection. NEW · LEARNING · REVIEW · RELEARNING · SUSPENDED (leech).
+"""
+enum CardState {
+  NEW
+  LEARNING
+  REVIEW
+  RELEARNING
+  SUSPENDED
 }
 
 """Agregador de contagem de relações do baralho"""
@@ -87,6 +99,10 @@ type Deck {
   flashcards: [Flashcard!]
 }
 
+type ReviewResult {
+  state: CardState!
+}
+
 type Query {
   me: User!
   myDecks: [Deck!]!
@@ -98,19 +114,24 @@ type Query {
 
 type Mutation {
   updateMySettings(data: UpdateUserSettingsInput!): User!
+  anonymizeMe: Boolean!
   createDeck(data: CreateDeckInput!): Deck!
   updateDeck(data: UpdateDeckInput!): Deck!
+  toggleDeckArchive(id: ID!): Deck!
   removeDeck(id: ID!): Boolean!
+  enrollInDeck(deckId: ID!): Boolean!
+  unenrollFromDeck(deckId: ID!): Boolean!
   createFlashcard(data: CreateFlashcardInput!): Flashcard!
   updateFlashcard(data: UpdateFlashcardInput!): Flashcard!
   removeFlashcard(id: ID!): Flashcard!
-  submitReview(flashcardId: ID!, rating: Int!, reviewDurationMs: Int! = 0): Boolean!
+  submitReview(flashcardId: ID!, rating: Int!, reviewDurationMs: Int! = 0): ReviewResult!
 }
 
 input UpdateUserSettingsInput {
   dailyNewCardLimit: Int
   maxDailyReviews: Int
   timezone: String
+  dailyRolloverTime: String
 }
 
 input CreateDeckInput {
@@ -131,19 +152,25 @@ input UpdateDeckInput {
 }
 
 input CreateFlashcardInput {
-  front: String!
-  back: String!
+  deckId: String!
+  frontContent: String!
+  backContent: String!
   sourceContext: String
   imageUrl: String
   audioUrl: String
-  deckId: ID!
+  isEditedAfterAi: Boolean = false
+  aiModelSource: String
 }
 
 input UpdateFlashcardInput {
-  front: String
-  back: String
+  deckId: String
+  frontContent: String
+  backContent: String
   sourceContext: String
   imageUrl: String
   audioUrl: String
-  id: ID!
+  isEditedAfterAi: Boolean = false
+  aiModelSource: String
+  id: String!
+  resetProgress: Boolean
 }

@@ -1,115 +1,80 @@
-import { useApolloClient } from "@apollo/client/react";
-import { useState } from "react";
+import React, { useState, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
-import { useToast } from "../hooks/useToast";
-import { supabase } from "../lib/supabaseClient";
 import { SettingsModal } from "./SettingsModal";
 
-export function Header() {
+// SRP ESTRITO: O Header passa a atuar estritamente como Ancoragem Visual.
+export const Header: React.FC = () => {
+  const { user, logout } = useAuth();
+  const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const navigate = useNavigate();
-  const client = useApolloClient(); // Instância oficial do Apollo Client v4.x
-  const { user } = useAuth();
-  const { showToast } = useToast();
 
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isLoggingOut, setIsLoggingOut] = useState(false);
-
+  // Inversão de Controle: UI apenas emite intenções e roteia mediante sucesso
   const handleLogout = async () => {
-    if (isLoggingOut) return;
-    setIsLoggingOut(true);
-
     try {
-      // 1. LIMPEZA DE SEGURANÇA: Exclui todo o cache do Apollo para evitar vazamento entre contas
-      await client.clearStore();
-
-      // 2. AUTENTICAÇÃO: Encerra a sessão ativa no Supabase Auth
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
-
-      showToast("Sessão encerrada com sucesso.", "info");
-      navigate("/login", { replace: true });
+      await logout();
+      navigate("/"); // Redirecionamento blindado pela garantia da camada lógica
     } catch (error: unknown) {
       if (error instanceof Error) {
-        console.error("Erro ao realizar logout:", error.message);
-        showToast(`Erro ao encerrar sessão: ${error.message}`, "error");
-      } else {
-        console.error("Erro desconhecido ao realizar logout:", error);
-        showToast("Erro inesperado ao encerrar a sessão.", "error");
+        console.error(
+          "Falha visual ao despachar a intenção de logout:",
+          error.message,
+        );
       }
-    } finally {
-      setIsLoggingOut(false);
     }
   };
 
+  // Estabilização Referencial (O(1)) combatendo Thrashing de DOM no modal filho
+  const closeSettings = useCallback(() => setIsSettingsOpen(false), []);
+
   return (
-    <header className="bg-slate-900 border-b border-slate-800 sticky top-0 z-40">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-        {/* Logo e Branding */}
-        <div className="flex items-center gap-6">
-          <Link
-            to="/dashboard"
-            className="flex items-center gap-2 text-amber-400 font-bold text-lg hover:opacity-90 transition-opacity"
-          >
-            <span className="text-xl">⚡</span>
-            <span className="tracking-tight text-slate-100">
-              SRS Flashcards
+    <header className="w-full bg-white border-b border-slate-200 px-4 py-3 shadow-sm sticky top-0 z-40">
+      <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
+        <Link
+          to="/dashboard"
+          className="flex items-center gap-2 group transition-all"
+        >
+          <span className="text-2xl">🧠</span>
+          <span className="font-extrabold text-slate-900 text-lg group-hover:text-amber-600 transition-colors">
+            FlashCards{" "}
+            <span className="text-amber-600 text-xs font-mono font-normal">
+              FSRS
             </span>
-          </Link>
+          </span>
+        </Link>
 
-          {/* Navegação Principal */}
-          <nav className="hidden sm:flex items-center gap-4">
-            <Link
-              to="/dashboard"
-              className="text-xs font-semibold uppercase tracking-wider text-slate-400 hover:text-amber-400 transition-colors py-1 px-2 rounded-md hover:bg-slate-800/60"
+        {/* Padrão Booleano Absoluto contra vazamento numérico no React 19 */}
+        {user !== null && (
+          <div className="flex items-center gap-3">
+            <button
+              disabled
+              title="Funcionalidade mapeada para a Fase 2 (TCC 2)"
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 text-slate-400 border border-slate-200 rounded-lg text-xs font-bold cursor-not-allowed opacity-75"
             >
-              Dashboard
-            </Link>
-            <Link
-              to="/chaos"
-              className="text-xs font-semibold uppercase tracking-wider text-amber-400/90 hover:text-amber-300 transition-colors py-1 px-2 rounded-md bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/20"
+              <span>🎲 Modo Caos (Em Breve)</span>
+            </button>
+
+            <button
+              onClick={() => setIsSettingsOpen(true)}
+              className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 rounded-lg border border-slate-200 transition-colors cursor-pointer text-xs font-semibold flex items-center gap-1.5"
+              title="Configurações e Limites Cognitivos"
             >
-              Modo Chaos ⚡
-            </Link>
-          </nav>
-        </div>
+              <span>⚙️</span>
+              <span className="hidden md:inline">Ajustes</span>
+            </button>
 
-        {/* Informações do Usuário e Ações */}
-        <div className="flex items-center gap-3">
-          {user?.email && (
-            <span className="hidden md:inline-block text-xs font-medium text-slate-400 bg-slate-950 px-3 py-1.5 rounded-lg border border-slate-800">
-              {user.email}
-            </span>
-          )}
-
-          <button
-            onClick={() => setIsSettingsOpen(true)}
-            className="p-2 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
-            title="Configurações de Estudo"
-            aria-label="Abrir Configurações"
-          >
-            ⚙️
-          </button>
-
-          <button
-            onClick={handleLogout}
-            disabled={isLoggingOut}
-            className="px-3.5 py-1.5 bg-slate-800 hover:bg-rose-500/10 hover:text-rose-400 border border-slate-700 hover:border-rose-500/30 text-slate-300 font-medium text-xs rounded-xl transition-all cursor-pointer disabled:opacity-50"
-          >
-            {isLoggingOut ? "Saindo..." : "Sair"}
-          </button>
-        </div>
+            <button
+              onClick={handleLogout}
+              className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 hover:text-red-700 rounded-lg border border-red-200 transition-colors cursor-pointer text-xs font-bold"
+            >
+              Sair
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* Modal de Configurações */}
-      {isSettingsOpen && (
-        <SettingsModal
-          isOpen={isSettingsOpen}
-          onClose={() => setIsSettingsOpen(false)}
-        />
-      )}
+      {/* Montagem Condicional: Desmontagem estrita de Tear-Down na Memória RAM */}
+      {isSettingsOpen && <SettingsModal onClose={closeSettings} />}
     </header>
   );
-}
-
-export default Header;
+};

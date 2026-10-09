@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { User as PrismaUser } from '@prisma/client';
+import { randomUUID } from 'crypto'; // 🔵 IMPORTANTE: Biblioteca nativa do Node.js
 import { PrismaService } from '../../prisma/prisma.service';
 import { UpdateUserSettingsInput } from './models/user.model';
 
@@ -50,5 +51,27 @@ export class UserService {
       where: { id: userId },
       data,
     });
+  }
+
+  /**
+   * 🟢 REGRA APLICADA: Anonimização Irreversível (UC08 - LGPD)
+   * Substitui os dados sensíveis por hashes para liberar o e-mail/authId original,
+   * permitindo que o usuário recrie a conta no futuro se desejar, mas mantendo
+   * os dados de telemetria (ReviewLog) intactos para o algoritmo de Machine Learning.
+   */
+  async anonymizeUser(userId: string): Promise<boolean> {
+    const randomHash = randomUUID();
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        isAnonymized: true,
+        name: 'Usuário Anonimizado (LGPD)',
+        email: `anon_${randomHash}@deleted.local`,
+        authId: `deleted_${randomHash}`,
+      },
+    });
+
+    return true;
   }
 }

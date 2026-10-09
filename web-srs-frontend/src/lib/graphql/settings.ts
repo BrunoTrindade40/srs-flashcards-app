@@ -1,63 +1,34 @@
-import { gql, type TypedDocumentNode } from '@apollo/client/core';
+// Padrão Estrito: Utilização exclusiva da função gerada pelo GraphQL Codegen Client Preset
+import { graphql } from "../../gql";
 
-export interface UserSettings {
-  id: string;
-  dailyNewCardLimit: number;
-  maxDailyReviews: number;
-  timezone: string;
-  totalXp: number;
-  currentStreak: number;
-  longestStreak: number;
-}
-
-// --- QUERY: Get Me (Obter usuário logado, configurações e métricas de gamificação) ---
-export interface GetMeResponse {
-  me: UserSettings;
-}
-
-export const GET_ME: TypedDocumentNode<
-  GetMeResponse,
-  Record<string, never>
-> = gql`
+export const GET_ME = graphql(`
   query GetMe {
     me {
       id
+      name
+      currentStreak
       dailyNewCardLimit
       maxDailyReviews
       timezone
-      totalXp
-      currentStreak
-      longestStreak
+      dailyRolloverTime
     }
   }
-`;
+`);
 
-// --- MUTATION: Update Settings ---
-export interface UpdateMySettingsResponse {
-  updateMySettings: UserSettings;
-}
-
-export interface UpdateMySettingsVariables {
-  data: {
-    dailyNewCardLimit?: number;
-    maxDailyReviews?: number;
-    timezone?: string;
-  };
-}
-
-export const UPDATE_MY_SETTINGS: TypedDocumentNode<
-  UpdateMySettingsResponse,
-  UpdateMySettingsVariables
-> = gql`
+export const UPDATE_MY_SETTINGS = graphql(`
   mutation UpdateMySettings($data: UpdateUserSettingsInput!) {
     updateMySettings(data: $data) {
       id
       dailyNewCardLimit
       maxDailyReviews
       timezone
-      totalXp
-      currentStreak
-      longestStreak
+      dailyRolloverTime
     }
   }
-`;
+`);
+
+export const ANONYMIZE_ME = graphql(`
+  mutation AnonymizeMe {
+    anonymizeMe
+  }
+`);
